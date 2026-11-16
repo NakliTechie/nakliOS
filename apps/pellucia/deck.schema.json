@@ -35,7 +35,7 @@
     "w",
     "h"
    ],
-   "description": "Stage size in px; 16:9 is 1920x1080, 4:3 is 1440x1080"
+   "description": "Stage size in px; 16:9 is 1920x1080, 4:3 is 1440x1080, A4 is 1920x1358, 1:1 is 1440x1440, 9:16 is 1080x1920"
   },
   "theme": {
    "type": "object",
@@ -62,6 +62,18 @@
     }
    }
   },
+  "master": {
+   "type": "object",
+   "properties": {
+    "background": {
+     "type": [
+      "object",
+      "null"
+     ]
+    }
+   },
+   "description": "The slide master; its elements have slideId \"_master\""
+  },
   "layouts": {
    "type": "array",
    "items": {
@@ -73,11 +85,18 @@
      "name": {
       "type": "string"
      },
-     "placeholders": {
-      "type": "array"
+     "showMaster": {
+      "type": "boolean"
+     },
+     "background": {
+      "type": [
+       "object",
+       "null"
+      ]
      }
     }
-   }
+   },
+   "description": "Layouts in menu order; each one's elements have slideId \"_L_<id>\", and its placeholders carry ph { id, type } and phStyle"
   },
   "footer": {
    "type": "object",
@@ -219,7 +238,11 @@
         "enum": [
          "none",
          "fade",
-         "push"
+         "push",
+         "wipe",
+         "cover",
+         "zoom",
+         "morph"
         ]
        },
        "duration": {
@@ -267,7 +290,10 @@
        "line",
        "arrow",
        "image",
-       "table"
+       "table",
+       "chart",
+       "icon",
+       "media"
       ]
      },
      "x": {
@@ -422,6 +448,54 @@
      "cells": {
       "type": "array"
      }
+    }
+   }
+  },
+  "fonts": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "family": {
+      "type": "string"
+     },
+     "mediaId": {
+      "type": "string"
+     },
+     "weight": {
+      "type": "number"
+     },
+     "style": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "grid": {
+   "type": "object",
+   "properties": {
+    "size": {
+     "type": "number"
+    },
+    "show": {
+     "type": "boolean"
+    },
+    "snap": {
+     "type": "boolean"
+    },
+    "guides": {
+     "type": "array"
+    }
+   }
+  },
+  "show": {
+   "type": "object",
+   "properties": {
+    "loop": {
+     "type": "boolean"
+    },
+    "useTimings": {
+     "type": "boolean"
     }
    }
   },

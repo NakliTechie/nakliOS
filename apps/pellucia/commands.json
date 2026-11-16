@@ -6,12 +6,20 @@
       "extensions": [
         ".pellucia",
         ".json",
+        ".pptx",
+        ".md",
         ".png",
         ".jpg",
         ".jpeg",
         ".webp",
         ".gif",
-        ".svg"
+        ".svg",
+        ".mp4",
+        ".webm",
+        ".mp3",
+        ".m4a",
+        ".wav",
+        ".ogg"
       ]
     }
   ],
@@ -171,7 +179,7 @@
     {
       "name": "layout.list",
       "label": "List layouts",
-      "description": "The slide layouts this deck offers: id, name and placeholders (id, type title|subtitle|body|picture).",
+      "description": "The slide layouts this deck offers, in menu order: id, name and placeholders (id, type title|subtitle|body|content|picture|date|footer|slideNumber). content takes text or, through placeholder.fill, a table or picture.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -221,7 +229,10 @@
             "description": "16:9 or 4:3",
             "enum": [
               "16:9",
-              "4:3"
+              "4:3",
+              "A4",
+              "1:1",
+              "9:16"
             ]
           },
           "theme": {
@@ -269,20 +280,28 @@
     {
       "name": "deck.export",
       "label": "Export…",
-      "description": "Export the deck: format pdf (the browser print dialog, one slide per page; needs a person), png (one slide, or every slide as a ZIP), pptx (PowerPoint) or pellucia. slides limits it to some slides. scale is 1 to 3 for png. Returns where it went.",
+      "description": "Export the deck: format pdf (the browser print dialog, one slide per page; needs a person), notes or handouts (print dialog too), png (one slide, or every slide as a ZIP), pptx (PowerPoint), markdown (Marp, text only), html (one file that presents without Pellucia) or pellucia. slides limits it to some slides. scale is 1 to 3 for png. Returns where it went.",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {
           "format": {
             "type": "string",
-            "description": "pdf, png, pptx or pellucia",
+            "description": "pdf, png, pptx, pellucia, notes (notes pages PDF), handouts (PDF, perPage 1, 2, 3, 4, 6 or 9), markdown (Marp) or html (a self-contained deck that presents)",
             "enum": [
               "pdf",
               "png",
               "pptx",
-              "pellucia"
+              "pellucia",
+              "notes",
+              "handouts",
+              "markdown",
+              "html"
             ]
+          },
+          "perPage": {
+            "type": "integer",
+            "description": "Handout slides per page"
           },
           "slides": {
             "type": "array",
@@ -359,7 +378,10 @@
             "description": "16:9 or 4:3",
             "enum": [
               "16:9",
-              "4:3"
+              "4:3",
+              "A4",
+              "1:1",
+              "9:16"
             ]
           }
         },
@@ -608,7 +630,11 @@
             "enum": [
               "none",
               "fade",
-              "push"
+              "push",
+              "wipe",
+              "cover",
+              "zoom",
+              "morph"
             ]
           },
           "duration": {
@@ -658,14 +684,14 @@
     {
       "name": "slide.go",
       "label": "Go to slide",
-      "description": "Show a slide in the editor: by id, or by number n (1 is first).",
+      "description": "Show a slide in the editor: by id, or by number n (1 is first). In master view, slide may also be _master or _L_<layout id>.",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "slide": {
             "type": "string",
-            "description": "Slide id"
+            "description": "Slide id, or _master or _L_<layout id> in master view"
           },
           "n": {
             "type": "integer",
@@ -678,7 +704,7 @@
     {
       "name": "slide.next",
       "label": "Next slide",
-      "description": "Show the next slide in the editor.",
+      "description": "Show the next slide in the editor (in master view, the next layout).",
       "scope": "read",
       "input": {
         "type": "object",
@@ -690,7 +716,7 @@
     {
       "name": "slide.prev",
       "label": "Previous slide",
-      "description": "Show the previous slide in the editor.",
+      "description": "Show the previous slide in the editor (in master view, the previous layout).",
       "scope": "read",
       "input": {
         "type": "object",
@@ -719,7 +745,10 @@
               "line",
               "arrow",
               "image",
-              "table"
+              "table",
+              "chart",
+              "icon",
+              "media"
             ]
           },
           "slide": {
@@ -1415,7 +1444,7 @@
           },
           "into": {
             "type": "string",
-            "description": "Picture placeholder element id"
+            "description": "An empty picture placeholder, or an empty content placeholder, element id"
           },
           "x": {
             "type": "number",
@@ -1891,6 +1920,973 @@
           }
         },
         "required": []
+      }
+    },
+    {
+      "name": "slide.reset",
+      "label": "Reset slide",
+      "description": "Reset slides to their layout, as PowerPoint's Reset does: placeholders return to the layout's position, size and formatting, and deleted placeholders come back empty. Text is kept.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "placeholder.fill",
+      "label": "Fill placeholder",
+      "description": "Put a table (rows, cols) or a chart into an empty content placeholder, taking its box; for a picture use image.insert with into. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Empty placeholder element id"
+          },
+          "kind": {
+            "type": "string",
+            "description": "table or chart",
+            "enum": [
+              "table",
+              "chart"
+            ]
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Table rows (default 3)"
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Table columns (default 3)"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "layout.add",
+      "label": "Insert layout",
+      "description": "Add a layout to the deck (master view), copied from an existing layout (default Title and Content), with a name. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Layout id to copy"
+          },
+          "name": {
+            "type": "string",
+            "description": "Layout name"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "layout.update",
+      "label": "Layout settings",
+      "description": "Rename a layout, show or hide the master's graphics on it (showMaster), or set its background ({ color } | { gradient } | { mediaId } | null).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Layout id"
+          },
+          "name": {
+            "type": "string",
+            "description": "New name"
+          },
+          "showMaster": {
+            "type": "boolean",
+            "description": "Show master graphics"
+          },
+          "background": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Background"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "layout.delete",
+      "label": "Delete layout",
+      "description": "Delete a layout no slide uses (undo brings it back).",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Layout id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "layout.move",
+      "label": "Move layout",
+      "description": "Move a layout to position `index` in the Layout menu (0 is first).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Layout id"
+          },
+          "index": {
+            "type": "integer",
+            "description": "New position from 0"
+          }
+        },
+        "required": [
+          "id",
+          "index"
+        ]
+      }
+    },
+    {
+      "name": "layout.placeholder",
+      "label": "Insert placeholder",
+      "description": "Add a placeholder to a layout or the master (master view): type title, subtitle, body, content, picture, date, footer or slideNumber, with an optional box. Style it with element.update props.phStyle { font, size, bold, italic, color, align, valign, list, levels }. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "layout": {
+            "type": "string",
+            "description": "Layout id, or _master"
+          },
+          "type": {
+            "type": "string",
+            "description": "Placeholder type"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          },
+          "w": {
+            "type": "number",
+            "description": "Width"
+          },
+          "h": {
+            "type": "number",
+            "description": "Height"
+          }
+        },
+        "required": [
+          "layout",
+          "type"
+        ]
+      }
+    },
+    {
+      "name": "master.set",
+      "label": "Master background",
+      "description": "Set the slide master's background, which every layout and slide inherits unless it sets its own.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "{ color } | { gradient } | { mediaId } | null"
+          }
+        },
+        "required": [
+          "background"
+        ]
+      }
+    },
+    {
+      "name": "view.master",
+      "label": "Slide Master",
+      "description": "Open or close master view: edit the slide master and its layouts (placeholders, fixed elements, backgrounds). Elements there have slideId _master or _L_<layout id>; the element commands work on them with slide set to that id.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Alt+M"
+    },
+    {
+      "name": "template.list",
+      "label": "Templates",
+      "description": "The built-in templates: id, name, description and the number of sample slides.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "template.new",
+      "label": "New from template",
+      "description": "Start a new deck from a built-in template (template.list): its theme, master, all layouts and sample slides. The current deck stays in its file and the recovery copy.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Template id"
+          },
+          "size": {
+            "type": "string",
+            "description": "16:9 or 4:3",
+            "enum": [
+              "16:9",
+              "4:3",
+              "A4",
+              "1:1",
+              "9:16"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "template.save",
+      "label": "Save as template…",
+      "description": "Save the deck's theme, master and layouts (and its slides as samples) as a template file (.pellucia with template: true) in NakliOS storage or a file you pick.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template name"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "template.open",
+      "label": "Open template…",
+      "description": "Start a new deck from a template file on this computer or in NakliOS storage.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "slide.section",
+      "label": "Section",
+      "description": "Start a named section at a slide (the rail groups slides under it), rename it, or remove it with name null.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id (default: the current slide)"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Section name, or null to remove"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "element.lock",
+      "label": "Lock",
+      "description": "Lock or unlock elements (default: toggle). A locked element cannot be selected by a click, moved or edited until unlocked.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "true locks, false unlocks (default: toggle)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+L"
+    },
+    {
+      "name": "style.copy",
+      "label": "Copy style",
+      "description": "Format painter: copy the look of an element (fill, outline, shadow, text formatting) to paste onto others with style.paste.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Element id (default: the selected element)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Alt+C"
+    },
+    {
+      "name": "style.paste",
+      "label": "Paste style",
+      "description": "Format painter: put the copied look (style.copy, or `style` given here) onto elements.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "style": {
+            "type": "object",
+            "description": "A style from style.copy (optional)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Alt+V"
+    },
+    {
+      "name": "table.merge",
+      "label": "Merge cells",
+      "description": "Merge a rectangle of cells starting at row, col and spanning rows by cols; their text joins in the top-left cell.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "row": {
+            "type": "integer",
+            "description": "Top row from 0"
+          },
+          "col": {
+            "type": "integer",
+            "description": "Left column from 0"
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Rows to span"
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Columns to span"
+          }
+        },
+        "required": [
+          "id",
+          "row",
+          "col",
+          "rows",
+          "cols"
+        ]
+      }
+    },
+    {
+      "name": "table.unmerge",
+      "label": "Split cells",
+      "description": "Split the merged range whose top-left cell is at row, col.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "row": {
+            "type": "integer",
+            "description": "Row from 0"
+          },
+          "col": {
+            "type": "integer",
+            "description": "Column from 0"
+          }
+        },
+        "required": [
+          "id",
+          "row",
+          "col"
+        ]
+      }
+    },
+    {
+      "name": "image.replace",
+      "label": "Change picture…",
+      "description": "Replace a picture, keeping its box, crop and mask: dataUrl or a same-origin url; with no source a person picks a file.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Image element id (default: the selected picture)"
+          },
+          "dataUrl": {
+            "type": "string",
+            "description": "A data: URL"
+          },
+          "url": {
+            "type": "string",
+            "description": "A same-origin URL"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "media.insert",
+      "label": "Video or audio…",
+      "description": "Insert a video or audio file on a slide (stored in the deck; plays while presenting): dataUrl or a same-origin url; with no source a person picks a file. Returns { id, mediaId }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "A data: URL"
+          },
+          "url": {
+            "type": "string",
+            "description": "A same-origin URL"
+          },
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          },
+          "autoplay": {
+            "type": "boolean",
+            "description": "Play when the slide shows"
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "Loop"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "font.add",
+      "label": "Add font…",
+      "description": "Add a font file (woff2, woff, ttf or otf) to the deck so text can use its family on every computer; dataUrl, or a person picks a file. Returns { family }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "A data: URL"
+          },
+          "family": {
+            "type": "string",
+            "description": "Family name (default: from the file name)"
+          },
+          "weight": {
+            "type": "integer",
+            "description": "400 or 700"
+          },
+          "style": {
+            "type": "string",
+            "description": "normal or italic"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "font.remove",
+      "label": "Remove font",
+      "description": "Remove a font the deck carries; text that used it falls back to the theme font.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "family": {
+            "type": "string",
+            "description": "Family name"
+          }
+        },
+        "required": [
+          "family"
+        ]
+      }
+    },
+    {
+      "name": "chartella.insert",
+      "label": "Chartella board…",
+      "description": "Insert a Chartella board or frame as a picture: a person picks a Chartella PNG or SVG export from NakliOS storage or this computer.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "view.grid",
+      "label": "Grid and guides",
+      "description": "Show the grid, snap to it, set its size in stage px, or set guides [{ axis x|y, at }]; saved with the deck. With no input it toggles the grid.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "show": {
+            "type": "boolean",
+            "description": "Show the grid"
+          },
+          "snap": {
+            "type": "boolean",
+            "description": "Snap to the grid"
+          },
+          "size": {
+            "type": "number",
+            "description": "Grid size in stage px"
+          },
+          "guides": {
+            "type": "array",
+            "description": "Guides"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+'"
+    },
+    {
+      "name": "view.rulers",
+      "label": "Rulers",
+      "description": "Show or hide the rulers.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Shift+R"
+    },
+    {
+      "name": "view.selection",
+      "label": "Selection pane",
+      "description": "Show or hide the selection pane: every element on the slide in drawing order, to select, rename, hide, lock and reorder.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Alt+5"
+    },
+    {
+      "name": "view.find",
+      "label": "Find and replace",
+      "description": "Open the find and replace bar (searches slides and notes).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+F",
+        "Mod+Alt+F"
+      ]
+    },
+    {
+      "name": "view.palette",
+      "label": "Command palette",
+      "description": "Open the command palette: type to find and run any command.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+K"
+    },
+    {
+      "name": "view.animations",
+      "label": "Animation pane",
+      "description": "Show or hide the animation pane: the slide's builds in order, with their effects and timing.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "element.build",
+      "label": "Animate",
+      "description": "Give elements a build (null removes it): type entrance (appear, fade, zoom, wipe, fly, float, split), emphasis (pulse, grow, spin, teeter, tint) or exit (disappear, fade, zoom, fly); start click, with (the previous build) or after; by object or paragraph (bullet by bullet); duration and delay in ms; from left|right|top|bottom for fly and wipe. Builds run in `order`, lowest first; new builds go last.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "build": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "{ type, effect, start, by, duration, delay, from }"
+          }
+        },
+        "required": [
+          "build"
+        ]
+      }
+    },
+    {
+      "name": "build.order",
+      "label": "Reorder animations",
+      "description": "Set the order of a slide's builds: ids in the order they play.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids with builds, in play order"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "slide.timing",
+      "label": "Slide timing",
+      "description": "Set rehearsed times (ms per slide; null clears): { timings: { slideId: ms } }. Rehearse Timings writes these.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "timings": {
+            "type": "object",
+            "description": "{ slideId: ms or null }"
+          }
+        },
+        "required": [
+          "timings"
+        ]
+      }
+    },
+    {
+      "name": "slide.advance",
+      "label": "Advance slide",
+      "description": "Advance slides automatically after `after` ms (null: only on a click), and whether a click also advances (onClick). all: true applies it to every slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "Apply to every slide"
+          },
+          "after": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Milliseconds or null"
+          },
+          "onClick": {
+            "type": "boolean",
+            "description": "Advance on a click too (default true)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "deck.show",
+      "label": "Set up slide show",
+      "description": "Slide show settings: loop (run until Esc, for a kiosk) and useTimings (advance by rehearsed timings and slide.advance).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "loop": {
+            "type": "boolean",
+            "description": "Loop until Esc"
+          },
+          "useTimings": {
+            "type": "boolean",
+            "description": "Use timings"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "present.rehearse",
+      "label": "Rehearse timings",
+      "description": "Present from the start with a timer that records the time on each slide; at the end, keep the timings or not.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "deck.import",
+      "label": "Import…",
+      "description": "Import a PowerPoint (.pptx) or Markdown (Marp or Slidev .md) file as a new deck, with a list of what could not be kept.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "theme.import",
+      "label": "Import theme…",
+      "description": "Take the theme colours, fonts and layouts from a PowerPoint (.pptx) file a person picks, and apply them to this deck.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "ai.alt",
+      "label": "Write alt text",
+      "description": "Write alt text for pictures (default: the selected ones, else every picture without alt text) with the NakliOS model, when it can see images. Shown for review unless apply is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Picture ids"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Apply without review"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ai.chat",
+      "label": "Chat",
+      "description": "Open the chat pane: ask the NakliOS model to change the deck; it uses these commands (or a JSON plan on models without tools), and each turn is one undo step.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Shift+K"
+    },
+    {
+      "name": "ai.image",
+      "label": "Generate picture",
+      "description": "Generate a picture from a prompt with the NakliOS model (only when it offers image generation) and put it in a picture or content placeholder (into) or on the slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "What to draw"
+          },
+          "into": {
+            "type": "string",
+            "description": "Placeholder element id"
+          },
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "ai.restyle",
+      "label": "Suggest design",
+      "description": "Ask the NakliOS model for a better layout per slide and a theme for the deck; shown for review unless apply is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these slides (default: all)"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Apply without review"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ai.document",
+      "label": "Deck from document…",
+      "description": "Turn a document (text given here, or a file a person picks: .txt, .md, .html, or a Lectella source) into slides with notes; shown for review unless apply is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Document text"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Slides wanted (default 8)",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Apply without review"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "deck.guide",
+      "label": "Agent guide",
+      "description": "How to edit a Pellucia deck well as an agent: the rules (read first, address by id, one change at a time, use layouts and theme tokens, never coordinates for placeholders) and the command habits.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "a11y.check",
+      "label": "Check accessibility",
+      "description": "Check the deck: pictures without alt text, slides without a title, duplicate titles, low-contrast text, empty placeholders, and reading order (the order a screen reader takes, which is drawing order). Returns [{ slide, element?, rule, message }].",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these slides"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.reading_order",
+      "label": "Reading order",
+      "description": "Set the reading order of a slide's elements (the order screen readers take, which is also the drawing order): ids from first read to last.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids in reading order"
+          }
+        },
+        "required": [
+          "ids"
+        ]
       }
     },
     {

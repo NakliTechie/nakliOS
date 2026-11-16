@@ -8547,27 +8547,27 @@
       "id": "pellucia",
       "repo": "NakliTechie/pellucia",
       "requestedRef": "main",
-      "resolvedCommit": "9383e581654ea7cf8d149e7e127cccc823a39c20",
+      "resolvedCommit": "1d83394c84f8904e0e768f8002ef70be1d76a7b3",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2428614d2515a1a590192000ed5a085ae27f413e58545db90a73c425e6da7dd7",
-          "bytes": 1242484,
-          "originalSourceSha256": "35bfa6c6c2fe842748952c615414d57a307d5466bc855b03a9e067249b482ebd",
+          "sha256": "d4758021ec05b787039e65d0f112f1081e5c301d5abc40e403bd6b3da1ab15f3",
+          "bytes": 2317679,
+          "originalSourceSha256": "60b596bbfa12c06d4735201249f9a55888e45f8b83940b690b1bfa1c77016972",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "63732b8335cda7a338592370495a3b4d53d9f20a4e084099ef48ba5455aa3dcd",
-          "bytes": 56824
+          "sha256": "e270aecb3d1dde26cc214860bc8d7f654801043c8671f94a8edea5063ccec1a1",
+          "bytes": 85826
         },
         {
           "source": "deck.schema.json",
           "destination": "deck.schema.json",
-          "sha256": "d529ed0e2d3b4fce0e2dd64047cc18237bd3918c61b0ea44d584d47845ad9c92",
-          "bytes": 8169
+          "sha256": "010f88c135222323be44c0b83ffd597694792274ca3f6ef022c19b62153cb96e",
+          "bytes": 9474
         },
         {
           "source": "sw.js",
