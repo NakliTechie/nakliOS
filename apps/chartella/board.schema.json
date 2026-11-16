@@ -94,7 +94,8 @@
        "image",
        "ink",
        "path",
-       "table"
+       "table",
+       "stamp"
       ]
      },
      "x": {
@@ -401,6 +402,23 @@
      "tree": {
       "type": "boolean",
       "description": "Arrow: a mind-map link from parent (start) to child (end)"
+     },
+     "link": {
+      "oneOf": [
+       {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "A frame this shape links to: a click while presenting (or Cmd/Ctrl+click) goes there"
+     },
+     "emoji": {
+      "type": "string",
+      "maxLength": 32,
+      "description": "Stamp: the emoji it shows"
      },
      "crop": {
       "oneOf": [
