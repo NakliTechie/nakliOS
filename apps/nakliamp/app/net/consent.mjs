@@ -6,6 +6,12 @@
 // origin is not granted. Grants live in localStorage (`nakliamp:network`); blocked
 // storage means no grants, so the player stays offline.
 //
+// On a shared origin (naklios.dev) other apps can write that key. With a `vault`
+// (app/net/vault.mjs) the record carries an HMAC signature made with a key no page can
+// export, and a record whose signature fails is not trusted (N15): its grants stay off
+// and are listed as `unconfirmed` until the person turns them on again in the Network
+// panel. Until the signature is checked (`ready`), nothing is granted.
+//
 // No audio ever leaves the page. KNOWN_ORIGINS lists, for each provider, exactly what
 // it receives, so the Settings screen can say so before the person turns it on.
 
@@ -67,36 +73,74 @@ export function originOf(urlOrOrigin) {
 
 const storedGrants = parsed => (parsed && typeof parsed === 'object' && parsed.grants && typeof parsed.grants === 'object' ? parsed.grants : {});
 
-function readGrants(storage) {
+/** The stored record: `{ grants, sig }`, with every origin checked. */
+function readRecord(storage) {
   try {
     const raw = storage?.getItem(NETWORK_KEY);
-    if (!raw) return {};
-    const grants = storedGrants(JSON.parse(raw));
+    if (!raw) return { grants: {}, sig: null };
+    const parsed = JSON.parse(raw);
     const out = {};
-    for (const [origin, value] of Object.entries(grants)) {
+    for (const [origin, value] of Object.entries(storedGrants(parsed))) {
       try { if (originOf(origin) === origin) out[origin] = { grantedAt: Number(value?.grantedAt) || 0 }; } catch { /* drop */ }
     }
-    return out;
-  } catch { return {}; }
+    return { grants: out, sig: typeof parsed?.sig === 'string' ? parsed.sig : null };
+  } catch { return { grants: {}, sig: null }; }
 }
+
+/** The text the signature covers: the granted origins and their times, sorted. */
+export const grantsText = grants => JSON.stringify(Object.keys(grants).sort().map(origin => [origin, grants[origin].grantedAt]));
 
 /**
  * `createConsent({ storage, now })` returns the grant store. `storage` defaults to
  * localStorage; pass an in-memory object in tests.
  */
-export function createConsent({ storage = globalThis.localStorage, now = () => Date.now() } = {}) {
-  let grants = readGrants(storage);
+export function createConsent({ storage = globalThis.localStorage, now = () => Date.now(), vault = null } = {}) {
+  const stored = readRecord(storage);
+  let grants = vault ? {} : stored.grants;
+  let unconfirmed = {};
+  const changed = new Set(); // origins the person changed before the signature was checked
   const listeners = new Set();
+  const notify = () => { for (const fn of listeners) { try { fn(api.list()); } catch { /* a listener's error is its own */ } } };
 
-  const save = () => {
-    try { storage?.setItem(NETWORK_KEY, JSON.stringify({ version: 1, grants })); } catch { /* blocked storage: grants last for this page only */ }
-    for (const fn of listeners) { try { fn(api.list()); } catch { /* a listener's error is its own */ } }
+  const write = record => {
+    try { storage?.setItem(NETWORK_KEY, JSON.stringify(record)); } catch { /* blocked storage: grants last for this page only */ }
   };
+  let saving = Promise.resolve();
+  const save = () => {
+    const snapshot = grants;
+    if (!vault) write({ version: 1, grants: snapshot });
+    else {
+      saving = saving
+        .then(() => Promise.resolve(vault))
+        .then(v => v.sign(grantsText(snapshot)))
+        .then(sig => write({ version: 2, grants: snapshot, sig }), () => { /* no vault: grants last for this page only */ });
+    }
+    notify();
+  };
+
+  const ready = !vault ? Promise.resolve() : Promise.resolve(vault)
+    .then(v => v.verify(grantsText(stored.grants), stored.sig))
+    .catch(() => false)
+    .then(ok => {
+      const fresh = { ...grants };
+      const doubt = {};
+      for (const [origin, value] of Object.entries(stored.grants)) {
+        if (changed.has(origin)) continue;
+        if (ok) fresh[origin] = value;
+        else if (knownByOrigin.has(origin)) doubt[origin] = value;
+      }
+      grants = fresh;
+      unconfirmed = doubt;
+      notify();
+    });
 
   const api = {
     /** Every origin with its grant state, known providers first. */
     list() {
-      const rows = KNOWN_ORIGINS.map(k => ({ ...k, granted: !!grants[k.origin], grantedAt: grants[k.origin]?.grantedAt ?? null }));
+      const rows = KNOWN_ORIGINS.map(k => ({
+        ...k, granted: !!grants[k.origin], grantedAt: grants[k.origin]?.grantedAt ?? null,
+        unconfirmed: !grants[k.origin] && !!unconfirmed[k.origin],
+      }));
       for (const origin of Object.keys(grants)) {
         if (!knownByOrigin.has(origin)) rows.push({ origin, label: origin, row: null, purpose: 'An origin you added.', sends: 'What the feature that uses it sends.', granted: true, grantedAt: grants[origin].grantedAt });
       }
@@ -108,19 +152,28 @@ export function createConsent({ storage = globalThis.localStorage, now = () => D
     },
     grant(urlOrOrigin) {
       const origin = originOf(urlOrOrigin);
+      changed.add(origin);
+      if (unconfirmed[origin]) { const { [origin]: _confirmed, ...rest } = unconfirmed; unconfirmed = rest; }
       if (!grants[origin]) { grants = { ...grants, [origin]: { grantedAt: now() } }; save(); }
       return origin;
     },
     revoke(urlOrOrigin) {
       const origin = originOf(urlOrOrigin);
+      changed.add(origin);
+      if (unconfirmed[origin]) { const { [origin]: _gone, ...rest } = unconfirmed; unconfirmed = rest; save(); }
       if (grants[origin]) { const { [origin]: _gone, ...rest } = grants; grants = rest; save(); }
       return origin;
     },
+    /** Resolves once a vault-signed record has been checked (at once without a vault). */
+    ready,
+    /** Resolves once the last change is written (signed) to storage. */
+    saved: () => saving,
     /** Throws NetworkConsentError('not-granted') unless the person turned this origin on. */
     assertAllowed(urlOrOrigin) {
       const origin = originOf(urlOrOrigin);
       if (!grants[origin]) {
         const label = knownByOrigin.get(origin)?.label ?? origin;
+        if (unconfirmed[origin]) throw new NetworkConsentError('not-granted', `${label} (${origin}) was turned on outside NakliAmp's Network panel, so it stays off. Turn it on there to confirm.`, origin);
         throw new NetworkConsentError('not-granted', `${label} (${origin}) is off. Turn it on in Settings, Network to use it.`, origin);
       }
       return origin;

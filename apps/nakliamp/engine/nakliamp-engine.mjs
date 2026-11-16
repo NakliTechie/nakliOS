@@ -17,6 +17,15 @@ const STREAM_HEAD_BYTES = 64 * 1024; // bytes read to sniff before choosing whol
 const STREAM_AHEAD_S = 3; // seconds of PCM kept scheduled ahead of the clock
 const STREAM_LEAD_S = 0.05; // first chunk starts this far ahead of the context clock
 const STREAM_TICK_MS = 200; // pump interval, beside each chunk's own ended event
+// End of track (review findings N3, N5): a route that has played to its end
+// reports `clock.ended: true`, holds its position at the duration and keeps
+// status 'playing', and the engine emits `ended` once for that track. The
+// event comes from the route's own audio-clock callback where it has one
+// (BufferSource and element `ended`), and from END_WATCH_MS polling otherwise
+// (the R1 rung). Both are timers or audio events, never animation frames, so
+// they keep running in a hidden tab (setInterval is throttled to about 1 s).
+const END_EPSILON_S = 0.05; // within this of the duration counts as the end
+const END_WATCH_MS = 250;
 
 const DEFAULT_CONFIG = Object.freeze({
   version: '0.2.0-m1',
@@ -402,8 +411,13 @@ export function createNakliAmpEngine({
   let laneSkipped = null; // why the last load did not use the lane, for the strip
   let pendingNext = null; // { input, meta, token, item, join, state }
   let preloadToken = 0;
-  let laneVolumeValue = 1;
-  let laneMutedFlag = false;
+  // Volume and mute hold across tracks and routes (review finding N19): every
+  // load applies them to the new route, so a muted player stays muted.
+  let outputVolume = 1;
+  let outputMuted = false;
+  let trackSerial = 0; // bumped on every load and lane advance
+  let endedSerial = -1; // the trackSerial `ended` was last emitted for
+  let endWatch = null;
 
   function preferredMode() {
     if (forcePath === 'r1') return 'r1';
@@ -752,8 +766,8 @@ export function createNakliAmpEngine({
     if (lane) return lane;
     const context = openLaneContext();
     const volume = context.createGain();
-    volume.gain.value = laneMutedFlag ? 0 : laneVolumeValue;
-    const instance = createGaplessLane({ context, destination: volume, onAdvance: laneAdvanced });
+    volume.gain.value = outputMuted ? 0 : outputVolume;
+    const instance = createGaplessLane({ context, destination: volume, onAdvance: laneAdvanced, onEnded: () => noteEnded() });
     instance.setRate?.(speed);
     lane = { context, volume, lane: instance, chained: false };
     lane.chained = connectOutput(context, volume);
@@ -893,6 +907,7 @@ export function createNakliAmpEngine({
   }
 
   function laneAdvanced(item, { mode: join }) {
+    trackSerial += 1;
     previousMeta = currentMeta;
     currentMeta = item.meta ? { ...item.meta } : null;
     trackValues = { replayGain: currentMeta?.replayGain ?? null, loudness: currentMeta?.loudness ?? null, albumContext: null };
@@ -1138,7 +1153,7 @@ export function createNakliAmpEngine({
   /** Set the compensator to 1 / volume, so the analysers read the pre-volume level. */
   function applyTapCompensation() {
     if (!tapCompensator) return;
-    const volume = laneMutedFlag ? 0 : laneVolumeValue;
+    const volume = outputMuted ? 0 : outputVolume;
     // Below -80 dB the picture is noise either way; at 0 nothing is left to undo.
     const value = volumeBeforeTap() && volume > 1e-4 ? 1 / volume : 1;
     const param = tapCompensator.gain;
@@ -1163,6 +1178,8 @@ export function createNakliAmpEngine({
    * build another against the same context, buffer and gain.
    */
   function stopSoftwareSource() {
+    // A stopped source may still fire `ended`; it must not end the track (N18).
+    if (software?.source) software.source.onended = null;
     try { software?.source?.stop(); } catch {}
     try { software?.source?.disconnect(); } catch {}
     if (software) software.source = null;
@@ -1198,9 +1215,17 @@ export function createNakliAmpEngine({
    */
   function softwarePlayback(decoded, name, size, container) {
     const context = audioContextFactory();
-    const buffer = context.createBuffer(decoded.channels.length, decoded.frames, decoded.sampleRate);
-    for (const [index, channel] of decoded.channels.entries()) {
-      buffer.copyToChannel(channel.subarray(0, decoded.frames), index);
+    let buffer = null;
+    try {
+      buffer = context.createBuffer(decoded.channels.length, decoded.frames, decoded.sampleRate);
+      for (const [index, channel] of decoded.channels.entries()) {
+        buffer.copyToChannel(channel.subarray(0, decoded.frames), index);
+      }
+    } catch (error) {
+      // A rate or length the context refuses must not leave its audio thread
+      // open (review finding N40).
+      try { context.close?.()?.catch?.(() => {}); } catch {}
+      throw error;
     }
     const gain = context.createGain();
     const chained = connectOutput(context, gain);
@@ -1213,8 +1238,9 @@ export function createNakliAmpEngine({
       startedAt: 0,
       rate: speed,
       playing: false,
-      volume: 1,
-      muted: false,
+      ended: false,
+      volume: outputVolume,
+      muted: outputMuted,
       durationS: decoded.frames / decoded.sampleRate,
       sampleRate: decoded.sampleRate,
       channels: decoded.channels.length,
@@ -1253,8 +1279,9 @@ export function createNakliAmpEngine({
       startedAt: 0,
       rate: speed,
       playing: false,
-      volume: 1,
-      muted: false,
+      ended: false,
+      volume: outputVolume,
+      muted: outputMuted,
       durationS: stream.durationS,
       sampleRate: stream.sampleRate,
       channels: stream.channelCount,
@@ -1306,9 +1333,7 @@ export function createNakliAmpEngine({
       track.sources.delete(source);
       if (generation !== track.generation) return;
       if (track.streamEnded && !track.sources.size) {
-        track.offsetS = track.durationS;
-        track.playing = false;
-        haltStreamed(track);
+        streamedFinished(track);
         return;
       }
       pumpStreamed(track);
@@ -1317,6 +1342,15 @@ export function createNakliAmpEngine({
     track.sources.add(source);
     track.nextTime += chunk.frames / track.sampleRate / rate;
     track.scheduledEndS = chunk.startS + chunk.frames / track.sampleRate;
+  }
+
+  /** A streamed track played its last chunk: hold at the end and report it. */
+  function streamedFinished(track) {
+    track.offsetS = track.durationS;
+    track.playing = false;
+    track.ended = true;
+    haltStreamed(track);
+    if (software === track) noteEnded();
   }
 
   /** Keep STREAM_AHEAD_S seconds scheduled. One pump at a time per track. */
@@ -1331,7 +1365,7 @@ export function createNakliAmpEngine({
         if (generation !== track.generation) return;
         if (!chunk) {
           track.streamEnded = true;
-          if (!track.sources.size) { track.offsetS = track.durationS; track.playing = false; haltStreamed(track); }
+          if (!track.sources.size) streamedFinished(track);
           return;
         }
         scheduleChunk(track, chunk);
@@ -1356,6 +1390,7 @@ export function createNakliAmpEngine({
     haltStreamed(track);
     const generation = track.generation;
     track.anchor = null;
+    track.ended = false;
     track.streamEnded = false;
     track.scheduledEndS = track.offsetS;
     track.playing = true;
@@ -1542,6 +1577,8 @@ export function createNakliAmpEngine({
     stopLane();
     nativeAudio = candidateAudio;
     nativeUrl = candidateUrl;
+    // The element's own `ended` fires on its media clock, in a hidden tab too.
+    try { candidateAudio.addEventListener?.('ended', () => { if (nativeAudio === candidateAudio) noteEnded(); }); } catch {}
     nativeMetadata = {
       ...metadata,
       videoIgnored,
@@ -1706,6 +1743,14 @@ export function createNakliAmpEngine({
    */
   async function load(input, meta = null) {
     const loadId = ++latestLoadId;
+    // A preload still decoding belongs to the track being replaced: without
+    // this it can schedule itself on the lane while this load decodes, and the
+    // engine starts the same track twice (review finding N17).
+    preloadToken += 1;
+    pendingNext = null;
+    lane?.lane.clearNext();
+    stopEndWatch();
+    trackSerial += 1;
     status = 'loading';
     fellBackFrom = null;
     laneSkipped = null;
@@ -1723,6 +1768,7 @@ export function createNakliAmpEngine({
     pendingNext = null;
     adoptMeta(meta);
     applyTrackGain();
+    applyOutputLevel();
     return loaded;
   }
 
@@ -1846,14 +1892,26 @@ export function createNakliAmpEngine({
       return;
     }
     stopSoftwareSource();
+    if (software.offsetS >= software.durationS) software.offsetS = 0;
     const source = software.context.createBufferSource();
     source.buffer = software.buffer;
     if (source.playbackRate) source.playbackRate.value = software.rate || 1;
     source.connect(software.gain);
-    source.onended = () => { if (software?.playing) software.playing = false; };
+    // Only the source still playing this track may end it (review finding N18);
+    // at the end the position holds at the duration (N5).
+    const track = software;
+    source.onended = () => {
+      if (software !== track || track.source !== source || !track.playing) return;
+      track.offsetS = track.durationS;
+      track.playing = false;
+      track.ended = true;
+      track.source = null;
+      noteEnded();
+    };
     source.start(0, Math.min(software.offsetS, software.durationS));
     software.source = source;
     software.startedAt = software.context.currentTime;
+    software.ended = false;
     software.playing = true;
   }
 
@@ -1871,8 +1929,39 @@ export function createNakliAmpEngine({
       await nativeAudio.play();
     } else throw new NakliAmpError('NoTrackError', 'ERR_NAKLIAMP_NO_TRACK', 'Open an audio file before playing.');
     status = 'playing';
+    startEndWatch();
     events.emit('transport:play', { positionS: state().clock.positionS, path: mode });
   }
+
+  // ---- End of track (N3, N5) ---------------------------------------------
+
+  /** Emit `ended` once for the current track, while the person has it playing. */
+  function noteEnded() {
+    if (status !== 'playing' || endedSerial === trackSerial) return;
+    endedSerial = trackSerial;
+    stopEndWatch();
+    const current = state();
+    events.emit('ended', { name: current.media.name, path: mode, duration: current.media.duration, positionS: current.clock.positionS });
+  }
+
+  /** Poll for the end on routes that have no end callback of their own; a timer, so it runs in a hidden tab. */
+  function startEndWatch() {
+    stopEndWatch();
+    endWatch = setInterval(() => {
+      if (status !== 'playing') { stopEndWatch(); return; }
+      if (state().clock.ended) noteEnded();
+    }, END_WATCH_MS);
+    // In Node (the gates) a forgotten watch must not keep the process alive.
+    endWatch?.unref?.();
+  }
+
+  function stopEndWatch() {
+    if (endWatch !== null) clearInterval(endWatch);
+    endWatch = null;
+  }
+
+  /** True when a position is at the end of a known duration. */
+  const atEnd = (positionS, duration) => Number.isFinite(duration) && duration > 0 && positionS >= duration - END_EPSILON_S;
 
   function pause() {
     if (mode === 'r3' && software?.streamed) {
@@ -1887,6 +1976,7 @@ export function createNakliAmpEngine({
     if (mode === 'lane') lane?.lane.pause();
     if (mode === 'r1') reel.pause();
     if (mode === 'r2') nativeAudio?.pause();
+    stopEndWatch();
     if (mode) status = 'paused';
     events.emit('transport:pause', { positionS: state().clock.positionS, path: mode });
   }
@@ -1898,6 +1988,7 @@ export function createNakliAmpEngine({
     else stopSoftwareSource();
     software.offsetS = next;
     software.playing = false;
+    software.ended = false;
     if (!wasPlaying) return;
     if (software.streamed) await startStreamed(software);
     else await play();
@@ -1913,7 +2004,14 @@ export function createNakliAmpEngine({
       spliceR1();
     } else if (mode === 'r2' && nativeAudio) nativeAudio.currentTime = next;
     else throw new NakliAmpError('NoTrackError', 'ERR_NAKLIAMP_NO_TRACK', 'Open an audio file before seeking.');
+    rearmEnd(next, duration);
     events.emit('transport:seek', { positionS: next, path: mode });
+  }
+
+  /** A seek back from the end makes the track's end reportable again. */
+  function rearmEnd(positionS, duration) {
+    if (!atEnd(positionS, duration)) endedSerial = -1;
+    if (status === 'playing' && endWatch === null) startEndWatch();
   }
 
   function applySoftwareGain() {
@@ -1921,29 +2019,32 @@ export function createNakliAmpEngine({
   }
 
   function setVolume(value) {
-    const next = Math.max(0, Math.min(1, Number(value) || 0));
-    if (mode === 'r1') reel.setVolume(next);
-    if (nativeAudio) nativeAudio.volume = next;
-    if (software) { software.volume = next; applySoftwareGain(); }
-    laneVolumeValue = next;
+    outputVolume = Math.max(0, Math.min(1, Number(value) || 0));
+    applyOutputLevel();
+  }
+
+  /** Apply the held volume and mute to every live route. */
+  function applyOutputLevel() {
+    if (mode === 'r1') {
+      reel.setVolume(outputVolume);
+      // Reel unmutes itself on any volume above 0, so mute is applied after.
+      reel.setMuted(outputMuted);
+    }
+    if (nativeAudio) { nativeAudio.volume = outputVolume; nativeAudio.muted = outputMuted; }
+    if (software) { software.volume = outputVolume; software.muted = outputMuted; applySoftwareGain(); }
     applyLaneVolume();
     applyTapCompensation();
   }
 
   function applyLaneVolume() {
     if (!lane) return;
-    const value = laneMutedFlag ? 0 : laneVolumeValue;
+    const value = outputMuted ? 0 : outputVolume;
     try { lane.volume.gain.setTargetAtTime(value, lane.context.currentTime, 0.01); } catch { lane.volume.gain.value = value; }
   }
 
   function setMuted(value) {
-    const next = !!value;
-    if (mode === 'r1') reel.setMuted(next);
-    if (nativeAudio) nativeAudio.muted = next;
-    if (software) { software.muted = next; applySoftwareGain(); }
-    laneMutedFlag = next;
-    applyLaneVolume();
-    applyTapCompensation();
+    outputMuted = !!value;
+    applyOutputLevel();
   }
 
   function state() {
@@ -1983,9 +2084,10 @@ export function createNakliAmpEngine({
       clock: {
         positionS,
         playing: lane.lane.playing(),
+        ended: lane.lane.ended(),
         rate: speed,
-        volume: laneVolumeValue,
-        muted: laneMutedFlag,
+        volume: outputVolume,
+        muted: outputMuted,
       },
       honesty: {
         container: media.container,
@@ -2014,7 +2116,7 @@ export function createNakliAmpEngine({
       path: mode,
       media: upstream.media,
       track,
-      clock: upstream.clock,
+      clock: { ...upstream.clock, ended: atEnd(upstream.clock.positionS, upstream.media.duration) },
       honesty: {
         container: upstream.media.container,
         codec: track?.codec || null,
@@ -2039,7 +2141,9 @@ export function createNakliAmpEngine({
   function r3State() {
     return structuredClone({
       version,
-      status: software.playing ? 'playing' : status === 'ready' ? 'ready' : 'paused',
+      // A track that played to its end keeps 'playing' until the person or
+      // the queue acts, as the other routes do; `clock.ended` says it ended.
+      status: software.playing || (software.ended && status === 'playing') ? 'playing' : status === 'ready' ? 'ready' : 'paused',
       path: mode,
       media: {
         name: software.name,
@@ -2053,6 +2157,7 @@ export function createNakliAmpEngine({
       clock: {
         positionS: softwarePosition(),
         playing: software.playing,
+        ended: Boolean(software.ended),
         rate: software.rate || 1,
         volume: software.volume,
         muted: software.muted,
@@ -2094,6 +2199,7 @@ export function createNakliAmpEngine({
       clock: {
         positionS: Number(nativeAudio.currentTime) || 0,
         playing: !nativeAudio.paused,
+        ended: Boolean(nativeAudio.ended) || atEnd(Number(nativeAudio.currentTime) || 0, nativeMetadata.duration),
         rate: Number(nativeAudio.playbackRate) || 1,
         volume: Number(nativeAudio.volume) || 0,
         muted: !!nativeAudio.muted,
@@ -2124,7 +2230,7 @@ export function createNakliAmpEngine({
       path: mode,
       media: { name: null, fingerprint: null, duration: null, size: null, container: null, mimeType: null },
       track: null,
-      clock: { positionS: 0, playing: false, rate: 1, volume: 1, muted: false },
+      clock: { positionS: 0, playing: false, ended: false, rate: 1, volume: outputVolume, muted: outputMuted },
       honesty: null,
       diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
       error: lastError,
@@ -2142,6 +2248,7 @@ export function createNakliAmpEngine({
    */
   function destroy() {
     latestLoadId += 1;
+    stopEndWatch();
     reel.pause();
     disposeNative();
     // The R3 graph and the spectrum tap outlive the element otherwise: a

@@ -275,7 +275,9 @@ async function scanPlaylistFile(scan, path, relative, handle) {
   try {
     const file = await handle.getFile();
     // Entries resolve against the folder's own root, then take its prefix.
-    const parsed = parsePlaylist(await file.text(), relative);
+    // Bytes, not text: a legacy .m3u in Windows-1252 decodes exactly and is written back in
+    // its own code page; lastModified and size let a rewrite see an outside change (N10, N11).
+    const parsed = parsePlaylist(new Uint8Array(await file.arrayBuffer()), relative, { lastModified: file.lastModified, size: file.size });
     scan.pendingPlaylists.push(scan.primary ? parsed : {
       ...parsed,
       path,

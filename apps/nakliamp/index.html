@@ -6,6 +6,10 @@
 <meta name="nakliamp-version" content="0.3.0-m2">
 <meta name="description" content="Play music files privately in your browser. Your audio stays on your device.">
 <meta name="theme-color" content="#f6f2ea">
+<!-- connect-src names all six opt-in service hosts at all times, because a page's CSP cannot
+     change while it runs. The browser therefore enforces "no other origin"; "only the services
+     you turned on" is enforced in JavaScript by app/net/consent.mjs (consentedFetch checks the
+     grant before every request) and tested by scripts/verify-boundary.mjs (N36). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self' blob: https://musicbrainz.org https://coverartarchive.org https://archive.org https://*.archive.org https://lrclib.net https://api.listenbrainz.org; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>NakliAmp — local music player</title>
 <script>
@@ -26,7 +30,9 @@
 :root{
   color-scheme:light;
   --bg:#f6f2ea;--panel:#fffdf8;--panel-2:#f1ebe0;--line:#dcd1bf;
-  --text:#2a231b;--ink:var(--text);--muted:#62574a;--faint:#6f6354;--accent:#a35f0f;
+  --text:#2a231b;--ink:var(--text);--muted:#62574a;--faint:#6f6354;--accent:#9a590e;
+  /* N43: accent text 4.65:1 or more on every light surface; field borders 3:1 or more. */
+  --field-line:#8c7e69;
   --accent-ink:#ffffff;--good:#3d7433;--warn:#9c5221;--refuse:#a93c2c;
   --glass:rgba(255,253,248,.9);--glow:rgba(163,95,15,.08);--shadow:rgba(60,40,10,.14);
   --display:"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
@@ -37,7 +43,9 @@
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#161310;--panel:#1f1a15;--panel-2:#26201a;--line:#3a3026;
-  --text:#efe8da;--muted:#9d9180;--faint:#8a8172;--accent:#e0a24a;
+  --text:#efe8da;--muted:#9d9180;--faint:#968c7c;--accent:#e0a24a;
+  /* N43: faint text 4.86:1 or more on every dark surface; field borders 3:1 or more. */
+  --field-line:#7a6d60;
   --accent-ink:#1a1206;--good:#8fbf7f;--warn:#d98c5f;--refuse:#d27464;
   --glass:rgba(26,22,18,.92);--glow:rgba(224,162,74,.11);--shadow:rgba(0,0,0,.4);
 }
@@ -46,6 +54,7 @@ html,body{min-height:100%;margin:0}
 body{background:radial-gradient(circle at 18% -10%,var(--glow),transparent 34rem),var(--bg);
   color:var(--text);font-family:var(--body);font-size:14px;overflow-x:hidden}
 button,input,select{font:inherit}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{border-color:var(--field-line)}
 button{color:inherit}
 button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -179,6 +188,9 @@ main:has(> .library.on),main:has(> .queue-view.on),main:has(> .now.on){place-ite
 .lib-row .who span{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lib-row .dur{font:11px var(--mono);color:var(--faint);flex:none}
 .row-tools{display:flex;gap:4px;flex:none}
+.lib-list>li.has-tools{display:flex;align-items:center;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.lib-list>li.has-tools>.lib-row{border-top:0;min-width:0;flex:1}
+.lib-list>li.has-tools>.row-tools{padding:0 12px 0 4px}
 .row-tools button{width:28px;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);cursor:pointer;font:11px var(--mono);line-height:1;padding:0}
 .row-tools button:hover{border-color:var(--accent);color:var(--accent)}
 .lib-empty{padding:28px 16px;text-align:center;color:var(--muted)}
@@ -342,7 +354,9 @@ html.pip-out .pip-note{display:flex;align-items:center;justify-content:center;ga
           <button type="button" role="menuitem" data-view="similar">More like this</button>
           <button type="button" role="menuitem" data-view="genre-fill">Fill missing genres</button>
           <button type="button" role="menuitem" data-view="network">Network (off by default)</button>
-          <button type="button" role="menuitem" data-view="skins">Classic skin (.wsz)</button>
+          <button type="button" role="menuitem" data-view="skins" id="skins-item">Classic skin (.wsz)</button>
+          <button type="button" role="menuitem" data-view="agent-channel" id="agent-channel-item">Agent channel (off)</button>
+          <button type="button" role="menuitem" data-view="licences">Licences</button>
           <hr class="narrow-only">
           <button type="button" role="menuitem" class="narrow-only" data-act="theme" id="theme-item">Theme: light</button>
           <button type="button" role="menuitem" class="narrow-only" data-act="mini">Mini player</button>
@@ -361,7 +375,7 @@ html.pip-out .pip-note{display:flex;align-items:center;justify-content:center;ga
       <div class="record-mark" aria-hidden="true"></div>
       <h1 id="empty-title" data-t="empty.title">Your music. Still yours.</h1>
       <p class="lede" data-t="empty.body">Open one track, or point NakliAmp at your music folder. It plays here without an upload, account, or analytics.</p>
-      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Open a single file" aria-describedby="drop-detail">
+      <div class="drop" id="drop" role="group" aria-labelledby="drop-detail">
         <p id="drop-detail" data-t="empty.drop">Drop a folder or a file here, choose a folder from your device, or open a single track.</p>
         <div class="actions">
           <button class="btn primary" id="open-folder" type="button" data-t="action.folder">Open a music folder</button>
@@ -516,6 +530,8 @@ html.pip-out .pip-note{display:flex;align-items:center;justify-content:center;ga
 
 <input id="file-input" type="file" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg,.opus,.wav,.mka,.aiff,.aif,.caf,.au,.wma,.ape" hidden aria-label="Choose an audio file">
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<!-- Says the new track's name to a screen reader when one starts (N44). -->
+<p class="sr-only" id="now-announce" role="status" aria-live="polite" aria-atomic="true"></p>
 
 <script>
 /* oxlint-disable -- the NakliOS SDK below is a canonical copy kept byte-identical by scripts/vendor-naklios-sdk.mjs; its findings belong upstream in NakliTechie/nakliOS sdk/naklios.js */
@@ -1792,7 +1808,7 @@ html.pip-out .pip-note{display:flex;align-items:center;justify-content:center;ga
 </script>
 <script type="module">
 import { createNakliAmpEngine } from './engine/nakliamp-engine.mjs';
-import { decodePcm, sniffPcm } from './app/decode/pcm.mjs';
+import { pcmDecoder } from './app/decode/pcm.mjs';
 import { createVisualiser, createPreviewGrid } from './app/visualiser/driver.mjs';
 import { MILKDROP_STILL_URL } from './app/visualiser/milkdrop-still.mjs';
 import {
@@ -1800,7 +1816,10 @@ import {
   setRating, setFavourite, getLoudness, putLoudness, loudnessKey, setMeta,
 } from './app/library/store.mjs';
 import { searchTracks } from './app/library/search.mjs';
-import { toM3u8, safePlaylistFileName, appendToPlaylist, mergeEntry, PlaylistFormatError } from './app/library/playlist.mjs';
+import {
+  toM3u8, safePlaylistFileName, appendToPlaylist, mergeEntry, PlaylistFormatError, pickEntryPath,
+  decodePlaylistBytes, encodePlaylistText, assertPlaylistUnchanged,
+} from './app/library/playlist.mjs';
 import { browse, folderOf, GROUP_VIEWS } from './app/library/views.mjs';
 import { evaluateSmart, serialiseSmart, smartFileName } from './app/library/smart.mjs';
 import { createWatcher } from './app/library/watch.mjs';
@@ -1810,27 +1829,30 @@ import {
 import { createFolderLibrary, splitLibraryPath } from './app/library/folders.mjs';
 import { playbackSpan, reachedSpanEnd, continuesInFile, isVirtual } from './app/library/cue.mjs';
 import { findDuplicates } from './app/library/duplicates.mjs';
-import { planRename, planFindReplace, canRenameOnDisk, renameOnDisk } from './app/library/rename.mjs';
+import { planRename, planFindReplace, canRenameOnDisk, renameOnDisk, planPlaylistRenames, sidecarRenames } from './app/library/rename.mjs';
 import { saveTagsToHandle } from './app/tags/save.mjs';
 import { createPlaybackTimers, clampSpeed, stepSpeed, formatSpeed, formatRemaining, SPEED_STEPS } from './app/player/timers.mjs';
 import { createTransientStore, receiveFiles, isTransientId } from './app/player/transient.mjs';
 import { positionToDb, dbToPosition, positionToGain, stepDb, formatDb, clampFloor } from './app/audio/volume.mjs';
 import { parseEqf, eqfToSettings, exportCurrentEq } from './app/audio/eqf.mjs';
-import { createConsent } from './app/net/consent.mjs';
+import { createConsent, KNOWN_ORIGINS } from './app/net/consent.mjs';
+import { openVault, sealedToken } from './app/net/vault.mjs';
 import { createMusicBrainz, isMbid } from './app/net/musicbrainz.mjs';
 import { createLrclib, sidecarPlan } from './app/net/lrclib.mjs';
 import { createListenBrainz, createPlayTracker, LB_ORIGIN } from './app/net/listenbrainz.mjs';
 import { moreLikeThis } from './app/ai/similar.mjs';
 import { suggestGenres } from './app/ai/genres.mjs';
 import { registerWebMcpTools } from './app/agent/webmcp.mjs';
-import { CHANNEL_NAME, buildSnapshot, createEventPublisher, createChannelBridge, instanceId } from './app/agent/events.mjs';
+import { CHANNEL_NAME, buildSnapshot, createEventPublisher, createChannelBridge, instanceId, newPairingCode } from './app/agent/events.mjs';
 import { readSpectrum, DEFAULT_BANDS } from './app/agent/spectrum.mjs';
-import { mountNetworkPanel } from './app/ui/v1x-network.mjs';
+import { mountNetworkPanel, lyricsSidecar } from './app/ui/v1x-network.mjs';
 import { mountDuplicates, mountRename, mountFolders } from './app/ui/v1x-library-tools.mjs';
 import { mountSleepTimer } from './app/ui/v1x-timers.mjs';
 import { mountCommandBar } from './app/ui/v1x-command-bar.mjs';
 import { mountSimilar, mountGenreFill } from './app/ui/v1x-ai-tools.mjs';
 import { mountWebampFace } from './app/ui/webamp-face.mjs';
+import { mountAgentChannel } from './app/ui/agent-channel.mjs';
+import { mountLicences } from './app/ui/licences.mjs';
 import { createLoudnessScanner } from './app/audio/loudness.mjs';
 import { createQueue } from './app/player/queue.mjs';
 import { loadSettings, saveSettings, onSettings } from './app/settings.mjs';
@@ -1850,7 +1872,7 @@ import { mountAiDialog } from './app/ui/ai-dialog.mjs';
 import { mountKeymap } from './app/ui/keymap.mjs';
 import {
   formatTime, formatBytes, stem, seekTarget, scaledSeek, steppedVolume, cycle, dspSummary,
-  trackSummary, page, engineMeta,
+  trackSummary, page, engineMeta, seekValueText, trackAnnouncement,
 } from './app/ui/shell/format.mjs';
 import { applyTheme } from './app/ui/shell/theme.mjs';
 import { createMediaSession } from './app/ui/shell/media-session.mjs';
@@ -1929,14 +1951,18 @@ function paintPopOut() {
 // below runs after an await, by which time the block has run.
 let HARNESS = false;
 const VIEWS = ['empty', 'library', 'queue', 'now'];
+// The single-file builds define the module loader before this script runs.
+const SINGLE_FILE = typeof window.__nakliampModule === 'function';
+// Webamp is not inlined into the single-file builds, so their menu does not offer skins (N28).
+if (SINGLE_FILE) document.getElementById('skins-item')?.remove();
 // R3 decoders. The lean build ships the in-house PCM tier, which closes the
 // AIFF, AIFC, CAF and AU gap at no download cost. The full build appends the
 // wasm tier for the compressed long tail.
 const SOFTWARE_DECODERS = [
-  { name: 'in-house PCM', sniff: sniffPcm, decode: decodePcm },
+  pcmDecoder,
 ];
 const engine = createNakliAmpEngine({ version: VERSION, softwareDecoders: SOFTWARE_DECODERS });
-// Stop after this track and the sleep timer (P10). Pure state; renderClock drives it.
+// Stop after this track and the sleep timer (P10). Pure state; tickPlayback drives it.
 const timers = createPlaybackTimers();
 let uiLoadId = 0;
 let toastTimer = 0;
@@ -2178,6 +2204,7 @@ function renderTrack(state) {
   const name = state.media.name || 'Untitled track';
   const title = playingTrack?.title || stem(name);
   $('#track-name').textContent = title;
+  announceTrack(title, playingTrack?.artist ?? state.media.tags?.artist);
   $('#art-letter').textContent = initialFor(name);
   $('#track-meta').textContent = trackMetaText(state);
   const length = trackDuration(state);
@@ -2230,6 +2257,22 @@ function trackDuration(state) { return playingTrack ? spanLength(playingTrack, s
 function seekTrack(seconds) { return engine.seek(spanStart(playingTrack) + Math.max(0, Number(seconds) || 0)); }
 
 let lastPlaying = null;
+let lastAnnounced = '';
+/** Tell a screen reader once per new track (N44); a repaint of the same track says nothing. */
+function announceTrack(title, artist) {
+  const text = trackAnnouncement({ title, artist });
+  if (text === lastAnnounced) return;
+  lastAnnounced = text;
+  $('#now-announce').textContent = text;
+}
+let lastSeekText = '';
+/** The seek slider speaks minutes and seconds (N42); written only when it changes. */
+function paintSeekText(position, duration) {
+  const text = seekValueText(position, duration);
+  if (text === lastSeekText) return;
+  lastSeekText = text;
+  $('#seek').setAttribute('aria-valuetext', text);
+}
 /** The transport row: clock, seek position, play/pause glyph, prev/next availability. */
 function paintTransport(state) {
   const ended = hasEnded(state);
@@ -2237,6 +2280,7 @@ function paintTransport(state) {
   const position = trackPosition(state);
   $('#elapsed').textContent = formatTime(position);
   if (!seeking) $('#seek').value = String(position || 0);
+  paintSeekText(position, trackDuration(state));
   $('#play').textContent = playing ? 'Ⅱ' : '▶';
   $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   const snap = queue.snapshot();
@@ -2254,8 +2298,10 @@ function paintTransport(state) {
  * its buffer ends. When the engine has the next track scheduled (gapless or crossfade)
  * it advances by itself and says so with `track-advanced`, so nothing is loaded here.
  */
+// The engine's own end flag counts too, so the check does not hang on the 50 ms window (N5).
+const trackFinished = state => hasEnded(state) || state.clock?.ended === true;
 function maybeAdvance(state) {
-  if (!state.path || !hasEnded(state) || state.status !== 'playing') return;
+  if (!state.path || !trackFinished(state) || state.status !== 'playing') return;
   if (!isVirtual(playingTrack) && (state.dsp?.next === 'gapless' || state.dsp?.next === 'crossfade')) return;
   if (advancing || endedTrackKey === currentTrackKey()) return;
   endedTrackKey = currentTrackKey();
@@ -2263,17 +2309,31 @@ function maybeAdvance(state) {
   advanceAfterEnd().finally(() => { advancing = false; });
 }
 
+// Painting only. Chrome stops animation frames in a hidden tab, so the end of a track and
+// the timers run from the engine's `ended` event and a 250 ms interval instead (N3).
 function renderClock() {
   const state = engine.state();
-  if (state.path) { paintTransport(state); paintHonesty(); tickTimers(state); }
+  if (state.path) { paintTransport(state); paintHonesty(); }
   const idle = !state.path || !state.clock.playing || hasEnded(state);
   if (!idle && !visualiser.running) visualiser.start();
   // Nothing is moving, so nothing needs repainting.
   if (idle && visualiser.running) visualiser.stop();
   paintStageIdle();
-  maybeAdvance(state);
   requestAnimationFrame(renderClock);
 }
+
+// The queue and the timers. A hidden tab throttles this interval to about once a second,
+// which still advances the queue and still pauses at the sleep timer. The interval covers
+// cue-sheet tracks, which end inside the parent file while the engine keeps playing.
+function tickPlayback() {
+  const state = engine.state();
+  if (state.path) tickTimers(state);
+  maybeAdvance(state);
+}
+setInterval(tickPlayback, 250);
+// The engine reports a track's end from the audio clock or its own timer, so the queue
+// advances in a hidden tab too; the latch in maybeAdvance stops a double advance.
+engine.on('ended', () => maybeAdvance(engine.state()));
 let advancing = false;
 let endedTrackKey = null;
 
@@ -2557,7 +2617,10 @@ function libraryRow(track, index, playingId, playlist) {
       button.textContent = label;
       tools.append(button);
     }
-    row.append(tools);
+    // The tools sit beside the row button, not inside it: a button's children are
+    // presentational to a screen reader, so nested buttons would not be exposed (N30).
+    item.classList.add('has-tools');
+    item.append(tools);
   }
   return item;
 }
@@ -3162,7 +3225,7 @@ async function undoLast() {
   }
   if (entry.kind === 'queue') { queue.undo(); toast('Undid the last queue edit.'); return 'queue'; }
   if (entry.before === null) await removeLibraryFile(entry.path);
-  else await writeLibraryText(entry.path, entry.before);
+  else await writeLibraryText(entry.path, encodePlaylistText(entry.before, entry.encoding ?? 'utf-8'));
   toast(`Undid the last change to ${entry.path.split('/').pop()}.`);
   await rescanPath(entry.path);
   return 'file';
@@ -3349,13 +3412,21 @@ navigator.mediaDevices?.addEventListener?.('devicechange', () => { paintOutputDe
 
 // Nothing here sends anything until the person turns an origin on: every module
 // checks consent before each request, and the default profile has no grants.
-const consent = createConsent();
+// The ListenBrainz token is sealed and the grant record signed with keys no page can
+// export (N15), so another app on a shared origin cannot change either by writing a
+// storage key. A vault that cannot open (no IndexedDB) leaves every service off.
+const vault = openVault();
+vault.catch(error => console.warn('[nakliamp] the vault did not open, so network services stay off', error));
+const consent = createConsent({ vault });
 // The only fetch the page hands out, and only to app/net modules (each checks consent first).
 // It looks window.fetch up on each call, so a test that stubs window.fetch sees every request.
 const netFetch = (url, init) => window.fetch.call(window, url, init);
 const musicbrainz = createMusicBrainz({ fetch: netFetch, consent });
 const lrclib = createLrclib({ fetch: netFetch, consent });
-const listenbrainz = createListenBrainz({ fetch: netFetch, consent, clientVersion: VERSION });
+const lbToken = sealedToken(vault);
+const listenbrainz = createListenBrainz({ fetch: netFetch, consent, tokenStore: lbToken, clientVersion: VERSION });
+// Queued listens wait for the checked grants and the sealed token.
+Promise.all([consent.ready, lbToken.ready]).then(() => flushScrobbles());
 const scrobbleOn = () => consent.isAllowed(LB_ORIGIN) && Boolean(listenbrainz.token());
 const playTracker = createPlayTracker({
   onScrobble: listen => { if (scrobbleOn()) listenbrainz.scrobble(listen).catch(() => {}); },
@@ -3631,7 +3702,9 @@ function tracksForPlaylist(playlist) {
   const found = [];
   let missing = 0;
   for (const [entryIndex, entry] of playlist.entries.entries()) {
-    const track = entry.path ? byPath.get(entry.path) : null;
+    // The raw text first, then the percent-decoded reading (N33).
+    const path = pickEntryPath(entry, candidate => byPath.has(candidate));
+    const track = path ? byPath.get(path) : null;
     if (track) found.push({ ...track, entryIndex });
     else missing += 1;
   }
@@ -3641,7 +3714,10 @@ function tracksForPlaylist(playlist) {
 /** The lines to write: an entry keeps its own EXTINF and borrows the index's where it has none. */
 function playlistLines(entries) {
   const byPath = new Map(libraryTracks.map(track => [track.path, track]));
-  return entries.map(entry => mergeEntry(entry, entry.path ? byPath.get(entry.path) : null));
+  return entries.map(entry => {
+    const path = pickEntryPath(entry, candidate => byPath.has(candidate));
+    return mergeEntry(entry, path ? byPath.get(path) ?? null : null);
+  });
 }
 
 /** Only M3U and M3U8 are rewritten; M3U8 text over PLS, XSPF or JSPF would change the format. */
@@ -3653,8 +3729,13 @@ function assertWritable(playlist) {
 }
 
 // Every helper below takes a library path; the folder that owns it does the I/O.
+/**
+ * A library file's text and its code page, `{ text, encoding }`, or null when it is not
+ * there. Strict UTF-8, else Windows-1252, so a legacy .m3u is never read with U+FFFD in
+ * place of its accented names and its undo copy is exact (N10).
+ */
 async function readLibraryText(path) {
-  try { return await (await (await libraryFileHandle(path)).getFile()).text(); } catch { return null; }
+  try { return decodePlaylistBytes(new Uint8Array(await (await (await libraryFileHandle(path)).getFile()).arrayBuffer())); } catch { return null; }
 }
 
 async function writeLibraryText(path, data) {
@@ -3675,12 +3756,82 @@ async function removeLibraryFile(path) {
   await (await directoryFor(handle, segments)).removeEntry(fileName);
 }
 
-/** Write a file in a folder and log its previous text for undo. */
-async function writeLogged(path, text) {
+/**
+ * Write a file in a folder and log its previous text for undo. `encoding` is the code page
+ * to write in: a legacy Windows-1252 playlist stays in Windows-1252 (N10).
+ */
+async function writeLogged(path, text, encoding = 'utf-8') {
   const before = await readLibraryText(path);
-  await writeLibraryText(path, text);
-  editLog.push({ kind: 'file', path, before });
+  await writeLibraryText(path, encodePlaylistText(text, encoding));
+  pushFileEdit(path, before);
+}
+/**
+ * The folder handle of a rename row's file, its file name, and the sidecar files that
+ * follow it (`sidecarRenames` from the names beside it).
+ */
+async function parentDirOf(path) {
+  const { handle, relativePath } = await locate(path, { write: true });
+  const segments = relativePath.split('/');
+  const name = segments.pop();
+  return { parent: await directoryFor(handle, segments), name };
+}
+async function renameSidecars(row) {
+  const { parent, name } = await parentDirOf(row.path);
+  const siblings = [];
+  for await (const sibling of parent.keys()) siblings.push(sibling);
+  return { parent, name, plan: sidecarRenames(row, siblings) };
+}
+
+/** Rename one file and the same-named .lrc beside it (N23). True when the audio file renamed. */
+async function renameWithSidecars(row, out) {
+  const failed = (from, error) => out.failed.push({ id: row.id, from, error: String(error?.message ?? error) });
+  let found;
+  try {
+    found = await renameSidecars(row);
+    await renameOnDisk(await found.parent.getFileHandle(found.name), row.to, { parent: found.parent });
+  } catch (error) { failed(row.from, error); return false; }
+  out.renamed += 1;
+  // A failure here leaves the audio renamed and names the lyrics file that stayed.
+  for (const { from, to } of found.plan.renames) {
+    try { await renameOnDisk(await found.parent.getFileHandle(from), to, { parent: found.parent }); out.sidecars += 1; } catch (error) { failed(from, error); }
+  }
+  return true;
+}
+
+/** Rewrite the M3U/M3U8 playlists that name renamed files; returns the paths written. */
+async function rewriteRenamedPlaylists(renamed, out) {
+  const written = [];
+  for (const update of planPlaylistRenames(renamed, playlistRows).updates) {
+    try {
+      await assertPlaylistFresh(update.playlist);
+      await writeLogged(update.playlist.path, update.text, update.playlist.encoding);
+      out.playlists += 1;
+      written.push(update.playlist.path);
+    } catch (error) {
+      out.failed.push({ id: null, from: update.playlist.path, error: String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '') });
+    }
+  }
+  return written;
+}
+
+/** Log a file's earlier text (or null: the file did not exist) for undo. */
+function pushFileEdit(path, before) {
+  editLog.push({ kind: 'file', path, before: before?.text ?? null, encoding: before?.encoding ?? 'utf-8' });
   if (editLog.length > 200) editLog.shift();
+}
+
+/**
+ * Refuse to rewrite a playlist that changed on disk since the last scan, so entries another
+ * player or tab added are not lost (N11). On a change it rescans and asks for the edit again.
+ */
+async function assertPlaylistFresh(playlist) {
+  try {
+    await assertPlaylistUnchanged(playlist, await (await libraryFileHandle(playlist.path)).getFile());
+  } catch (error) {
+    if (error?.code !== 'ERR_NAKLIAMP_PLAYLIST_CHANGED') throw error;
+    await rescanPath(playlist.path);
+    throw new CommandError('refused', error.message);
+  }
 }
 
 async function playlistFileExists(path) {
@@ -3725,7 +3876,8 @@ function playlistEntriesFor(name) {
   if (!playlist) throw new CommandError('not-found', `No playlist named ${name}.`);
   const byPath = new Map(libraryTracks.map(track => [track.path, track]));
   const entries = playlist.entries.map((entry, position) => {
-    const track = entry.path ? byPath.get(entry.path) : null;
+    const path = pickEntryPath(entry, candidate => byPath.has(candidate));
+    const track = path ? byPath.get(path) : null;
     return { position, id: track?.id ?? null, title: entry.title ?? track?.title ?? null, artist: entry.artist ?? track?.artist ?? null };
   });
   return { name: playlist.name, kind: String(playlist.format ?? 'm3u').toLowerCase(), entries };
@@ -3791,11 +3943,12 @@ async function persistPlaylist(playlist, entries, message) {
   try {
     assertWritable(playlist);
     const base = playlist.path.split('/').slice(0, -1).join('/');
-    await writeLogged(playlist.path, toM3u8(playlistLines(entries), { name: playlist.name, base }));
+    await assertPlaylistFresh(playlist);
+    await writeLogged(playlist.path, toM3u8(playlistLines(entries), { name: playlist.name, base, header: playlist.header, trailer: playlist.trailer }), playlist.encoding);
     if (message) reportScan(message);
     await rescanPath(playlist.path);
   } catch (error) {
-    reportScan(`Could not update ${playlist.name}: ${error.message}`);
+    reportScan(`Could not update ${playlist.name}: ${String(error.message).replace(/^\[[a-z-]+\] /, '')}`);
   }
 }
 
@@ -3815,11 +3968,13 @@ async function renamePlaylistFile(playlist, name) {
   assertWritable(playlist);
   const { directory, file, path: nextPath } = renamedPlaylistPath(playlist, name);
   const renamingFile = nextPath !== playlist.path;
+  await assertPlaylistFresh(playlist);
   const oldText = renamingFile ? await readLibraryText(playlist.path) : null;
-  await writeLogged(nextPath, toM3u8(playlistLines(playlist.entries), { name, base: directory }));
+  // A rename writes a new .m3u8 file, which is UTF-8 by definition; in place it keeps the code page.
+  await writeLogged(nextPath, toM3u8(playlistLines(playlist.entries), { name, base: directory, header: playlist.header, trailer: playlist.trailer }), renamingFile ? 'utf-8' : playlist.encoding);
   if (renamingFile) {
     await removeLibraryFile(playlist.path);
-    editLog.push({ kind: 'file', path: playlist.path, before: oldText });
+    pushFileEdit(playlist.path, oldText);
   }
   if (activePlaylist === playlist.path) activePlaylist = nextPath;
   if (queuePlaylist === playlist.name) { queuePlaylist = name; agentEvents.poke(); }
@@ -3840,7 +3995,7 @@ async function renamePlaylist() {
     const { file } = await renamePlaylistFile(playlist, name);
     reportScan(`Renamed to ${file}.`);
   } catch (error) {
-    reportScan(`Could not rename: ${error.message}`);
+    reportScan(`Could not rename: ${String(error.message).replace(/^\[[a-z-]+\] /, '')}`);
   }
 }
 
@@ -3977,6 +4132,9 @@ const DIALOGS = {
   // V5: a classic skin (.wsz) the person picks; Webamp loads lazily, only then.
   skins: { title: 'Classic skin (.wsz)', mount: mountWebampFace, state: () => ({}) },
   visualisers: { title: 'Visualisers', mount: root => mountVisualiserPicker(root), state: () => undefined },
+  // N9: the person's switch and pairing code for the BroadcastChannel; N27: every licence.
+  'agent-channel': { title: 'Agent channel', mount: mountAgentChannel, state: () => undefined },
+  licences: { title: 'Licences', mount: root => mountLicences(root), state: () => undefined },
 };
 const V1X_DIALOGS = ['network', 'music-folders', 'duplicates', 'rename', 'sleep', 'commands', 'similar', 'genre-fill', 'skins'];
 
@@ -4043,6 +4201,9 @@ function viewOpeners() {
     ['ai', dialogView('ai')],
     ['keymap', dialogView('keymap')],
     ['smart', arg => openDialogView('smart', arg ?? null)],
+    // Menu-only views: no command opens them, so no caller can reach the channel switch.
+    ['agent-channel', dialogView('agent-channel')],
+    ['licences', dialogView('licences')],
     ...V1X_DIALOGS.map(name => [name, dialogView(name)]),
   ]);
 }
@@ -4073,6 +4234,12 @@ const ctx = {
   queue,
   settings: { get: () => loadSettings(), set: patch => saveSettings(patch), on: fn => onSettings(fn) },
   run: (name, input, options) => run(name, input, options).catch(error => { throw plainError(error); }),
+  agentChannel: {
+    state: () => agentChannelState(),
+    set: on => setAgentChannel(on),
+    pair: fresh => setPairing(fresh),
+    onChange: fn => { agentChannelListeners.add(fn); return () => agentChannelListeners.delete(fn); },
+  },
   library: {
     // Listed tracks only: no cue-sheet parents, no tracks the person hid (L14).
     tracks: () => libraryVisible(),
@@ -4084,6 +4251,14 @@ const ctx = {
     folderHandle: () => folderHandleCache,
     fileFor,
     handleFor,
+    // The tag editor's backup list restores into a file by its library path (N14).
+    handleForPath: async path => { try { return await libraryFileHandle(path, { write: true }); } catch { return null; } },
+    findByPath: path => libraryTracks.find(track => track.path === path) ?? null,
+    // The rename panel's fallback needs the folder handle for its collision check (N37).
+    parentFor: async track => {
+      if (!track || track.transient || isVirtual(track)) return null;
+      try { return (await parentDirOf(track.path)).parent; } catch { return null; }
+    },
     updateTrack,
     // An existing name for the same thing, kept for panels written against the batch-2 ctx line.
     updateTrackState: updateTrack,
@@ -4216,7 +4391,7 @@ function trackOrPlaying(id) {
 async function pickEqfFile() {
   if ('showOpenFilePicker' in window) {
     try {
-      const [handle] = await showOpenFilePicker({ multiple: false, types: [{ description: 'Winamp EQ', accept: { 'application/octet-stream': ['.eqf', '.q1'] } }] });
+      const [handle] = await showOpenFilePicker({ multiple: false, types: [{ description: 'EQF preset', accept: { 'application/octet-stream': ['.eqf', '.q1'] } }] });
       return handle ? handle.getFile() : null;
     } catch (error) {
       if (error?.name === 'AbortError') return null;
@@ -4485,7 +4660,8 @@ const handlers = {
     } catch (error) {
       throw new CommandError('refused', error.message);
     }
-    await writeLogged(playlist.path, text);
+    await assertPlaylistFresh(playlist);
+    await writeLogged(playlist.path, text, playlist.encoding);
     toast(`Added ${tracks.length} track${tracks.length === 1 ? '' : 's'} to ${playlist.name}.`);
     await rescanPath(playlist.path);
     return { name: playlist.name, added: tracks.length };
@@ -4506,7 +4682,7 @@ const handlers = {
       if (!playlist) throw new CommandError('not-found', `No playlist named ${input.name}.`);
       const before = await readLibraryText(playlist.path);
       await removeLibraryFile(playlist.path);
-      editLog.push({ kind: 'file', path: playlist.path, before });
+      pushFileEdit(playlist.path, before);
       if (activePlaylist === playlist.path) activePlaylist = null;
       if (queuePlaylist === playlist.name) queuePlaylist = null;
       reportScan(`Deleted ${playlist.name}.`);
@@ -4547,7 +4723,8 @@ const handlers = {
       try { assertWritable(playlist); } catch (error) { throw new CommandError('refused', error.message); }
       const base = playlist.path.split('/').slice(0, -1).join('/');
       const next = playlist.entries.filter((_, position) => position !== input.index);
-      await writeLogged(playlist.path, toM3u8(playlistLines(next), { name: playlist.name, base }));
+      await assertPlaylistFresh(playlist);
+      await writeLogged(playlist.path, toM3u8(playlistLines(next), { name: playlist.name, base, header: playlist.header, trailer: playlist.trailer }), playlist.encoding);
       await rescanPath(playlist.path);
       return { name: playlist.name, removed: entryLabel(entry), entries: next.length };
     },
@@ -4759,31 +4936,36 @@ const handlers = {
       if (renames.length && first && !canRenameOnDisk(first)) {
         return { lines: ['This browser cannot rename files. Renaming needs a Chromium browser, such as Chrome or Edge.'], unchanged: true };
       }
+      // Playlists that name a renamed file, and same-named .lrc and .cue files (N23).
+      const sidecars = [];
+      for (const row of renames) {
+        const found = await renameSidecars(row).catch(() => null);
+        if (!found) continue;
+        for (const { from, to } of found.plan.renames) sidecars.push(`${from} → ${to} (lyrics follow the track)`);
+        for (const name of found.plan.cueSheets) sidecars.push(`${name} names ${row.from} inside it; NakliAmp does not edit cue sheets, so fix it by hand.`);
+      }
       return {
         title: `Rename ${renames.length} file${renames.length === 1 ? '' : 's'}?`,
         summary: 'The audio files are renamed in their folders, then the folder is rescanned.',
-        lines: rows.map(row => (row.status === 'rename' ? `${row.from} → ${row.to}` : `${row.from}: ${RENAME_NOTES[row.status] ?? row.status}`)),
+        lines: [
+          ...rows.map(row => (row.status === 'rename' ? `${row.from} → ${row.to}` : `${row.from}: ${RENAME_NOTES[row.status] ?? row.status}`)),
+          ...sidecars,
+          ...planPlaylistRenames(renames, playlistRows).lines,
+        ],
         approveLabel: 'Rename files',
         unchanged: renames.length === 0,
       };
     },
     run: async input => {
       const rows = renamePlan(input).filter(row => row.status === 'rename');
-      const out = { renamed: 0, failed: [] };
+      const out = { renamed: 0, failed: [], sidecars: 0, playlists: 0 };
       const touched = new Set();
+      const renamed = [];
       for (const row of rows) {
-        try {
-          const { handle, relativePath } = await locate(row.path, { write: true });
-          const segments = relativePath.split('/');
-          const name = segments.pop();
-          const parent = await directoryFor(handle, segments);
-          await renameOnDisk(await parent.getFileHandle(name), row.to, { parent });
-          out.renamed += 1;
-          touched.add(rowForPath(row.path));
-        } catch (error) {
-          out.failed.push({ id: row.id, from: row.from, error: String(error?.message ?? error) });
-        }
+        if (await renameWithSidecars(row, out)) { renamed.push(row); touched.add(rowForPath(row.path)); }
       }
+      // Playlists follow the files that did rename, never one that failed (N23).
+      for (const path of await rewriteRenamedPlaylists(renamed, out)) touched.add(rowForPath(path));
       for (const folder of touched) await runScan(folder);
       if (out.failed.length) toast(`${out.failed.length} file${out.failed.length === 1 ? '' : 's'} not renamed: ${out.failed[0].error}`, 6000);
       return out;
@@ -4834,10 +5016,10 @@ const handlers = {
     const track = trackOrPlaying(input.id);
     if (track.transient || isVirtual(track)) throw new CommandError('refused', 'Lyrics are saved beside a file in your library; this track is not one.');
     const result = await lrclib.getLyrics({ title: track.title, artist: track.artist, album: track.album, durationS: track.durationS });
-    if (!result) throw new CommandError('not-found', 'LRCLIB has no lyrics for this track.');
-    const plan = sidecarPlan(track.path.split('/').pop(), result);
-    const directory = track.path.split('/').slice(0, -1).join('/');
-    const path = directory ? `${directory}/${plan.name}` : plan.name;
+    // An instrumental track or empty lyrics has nothing to save: not-found, not a TypeError (N34).
+    const plan = lyricsSidecar(track.path, result, sidecarPlan);
+    if (plan.refusal) throw new CommandError(plan.refusal.code, plan.refusal.message);
+    const { path } = plan;
     if (await playlistFileExists(path)) throw new CommandError('refused', `${plan.name} already exists beside the track.`);
     await writeLogged(path, plan.text);
     toast(`Saved ${plan.name}. Ctrl+Z removes it.`);
@@ -4875,13 +5057,33 @@ const handlers = {
   },
   'ai.suggest_genres': async input => suggestGenres({ tracks: libraryVisible(), chat: hostChat(), maxAlbums: input.maxAlbums ?? 200 }),
   'ui.command_bar': input => { open('commands', input.text); return { view: 'commands' }; },
-  'view.skins': () => { open('skins'); return { view: 'skins' }; },
+  'view.skins': () => {
+    // The single-file builds do not carry the Webamp bundle (N28).
+    if (SINGLE_FILE) throw new CommandError('unavailable', 'Classic skins need the hosted NakliAmp page; this single-file build does not carry Webamp.');
+    open('skins');
+    return { view: 'skins' };
+  },
 
   'network.list': () => ({ origins: consent.list().map(({ origin, label, purpose, sends, granted, alsoContacts }) => ({ origin, label, purpose, sends, granted, alsoContacts: alsoContacts ?? [] })) }),
-  'network.grant': input => {
-    consent.grant(input.origin);
-    if (input.origin === LB_ORIGIN) flushScrobbles();
-    return { origin: input.origin, granted: true };
+  // Asks the person every time, whoever calls (askEveryTime, N16); the Network panel's
+  // switch is the person's own click and skips the dialog.
+  'network.grant': {
+    diff: (input, context) => {
+      const service = KNOWN_ORIGINS.find(row => row.origin === input.origin);
+      const from = { webmcp: 'an in-browser agent (WebMCP)', host: 'NakliOS, for another app', channel: 'another tab', key: 'a keyboard shortcut' }[context?.from] ?? 'a command';
+      return {
+        title: `Turn on ${service?.label ?? input.origin}?`,
+        summary: `${from[0].toUpperCase()}${from.slice(1)} asked to turn on ${service?.label ?? input.origin} (${input.origin}). Nothing goes to it until you approve.`,
+        lines: [service?.purpose, `Sends: ${service?.sends}`].filter(Boolean),
+        notes: ['You can turn it off again in Network services.'],
+        approveLabel: 'Turn on',
+      };
+    },
+    run: input => {
+      consent.grant(input.origin);
+      if (input.origin === LB_ORIGIN) flushScrobbles();
+      return { origin: input.origin, granted: true };
+    },
   },
   'network.revoke': input => {
     consent.revoke(input.origin);
@@ -4894,6 +5096,8 @@ const handlers = {
     queued: listenbrainz.queued().length,
     rejected: listenbrainz.rejected().length,
     nextAttemptAt: listenbrainz.nextAttemptAt() || null,
+    // A failed save means the waiting listens last only until this page reloads.
+    saveError: listenbrainz.saveError(),
   }),
   'scrobble.flush': () => netCall(() => listenbrainz.flush({ force: true })),
 };
@@ -4976,6 +5180,9 @@ function reportCommandError(error) {
 // The pop-out mini player's window sends its keys here too.
 function onShortcutKey(event) {
   if (event.defaultPrevented) return;
+  // A modal open in this page owns the keyboard, even for keys sent from the pop-out
+  // window (N8); matchShortcut checks the key's own document.
+  if (document.querySelector('[aria-modal="true"]')) return;
   const hit = matchShortcut(event);
   if (!hit) return;
   event.preventDefault();
@@ -5016,14 +5223,53 @@ function snapshotParts() {
     error: lastPlayerError,
   };
 }
+// The channel is off until the person turns it on for this tab in Tools, Agent channel
+// (N9): other apps on a shared origin (naklios.dev) could otherwise drive the player. On,
+// it answers read commands; reversible ones need this tab's pairing code, which lives in
+// memory only and which the person copies into the other tab. The switch is per tab and
+// not stored, so no app can turn it on by writing a setting, and no command turns it on.
 let agentChannel = null;
-try { agentChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(CHANNEL_NAME) : null; } catch { agentChannel = null; }
+let agentBridge = null;
+let pairingCode = null;
+const agentSinks = [];
 const agentEvents = createEventPublisher({
   getSnapshot: () => buildSnapshot(snapshotParts()),
-  sinks: agentChannel ? [message => agentChannel.postMessage(message)] : [],
+  sinks: agentSinks,
   instance: agentInstance,
 });
-const agentBridge = agentChannel ? createChannelBridge({ channel: agentChannel, run, publisher: agentEvents, instance: agentInstance }) : null;
+const agentChannelListeners = new Set();
+function agentChannelState() {
+  return { on: Boolean(agentChannel), available: typeof BroadcastChannel === 'function', code: pairingCode, instance: agentInstance };
+}
+function announceAgentChannel() {
+  const state = agentChannelState();
+  const item = document.getElementById('agent-channel-item');
+  if (item) item.textContent = `Agent channel (${!state.on ? 'off' : state.code ? 'paired' : 'read only'})`;
+  for (const fn of agentChannelListeners) { try { fn(state); } catch { /* listener's own */ } }
+  return state;
+}
+function setAgentChannel(on) {
+  if (on && !agentChannel && typeof BroadcastChannel === 'function') {
+    try { agentChannel = new BroadcastChannel(CHANNEL_NAME); } catch { agentChannel = null; }
+    if (agentChannel) {
+      const channel = agentChannel;
+      agentSinks.push(message => channel.postMessage(message));
+      agentBridge = createChannelBridge({ channel, run, publisher: agentEvents, instance: agentInstance, pairingCode: () => pairingCode });
+    }
+  } else if (!on && agentChannel) {
+    agentSinks.length = 0;
+    agentBridge?.close();
+    agentBridge = null;
+    agentChannel = null;
+    pairingCode = null;
+  }
+  return announceAgentChannel();
+}
+/** A new pairing code; the old one stops working at once. Null clears it (read-only). */
+function setPairing(fresh) {
+  pairingCode = fresh && agentChannel ? newPairingCode() : null;
+  return announceAgentChannel();
+}
 engine.on('*', entry => {
   if (entry?.type === 'playback:refused') {
     lastPlayerError = { code: entry.detail?.code ?? 'refused', message: entry.detail?.message ?? 'Playback refused.' };
@@ -5061,7 +5307,10 @@ $('#forward').addEventListener('click', () => run('player.seek_relative', { seco
 $('#shuffle').addEventListener('click', () => run('queue.shuffle').catch(reportCommandError));
 $('#repeat').addEventListener('click', () => run('queue.repeat').catch(reportCommandError));
 $('#seek').addEventListener('pointerdown', () => { seeking = true; });
-$('#seek').addEventListener('input', () => { $('#elapsed').textContent = formatTime(Number($('#seek').value)); });
+$('#seek').addEventListener('input', () => {
+  $('#elapsed').textContent = formatTime(Number($('#seek').value));
+  paintSeekText(Number($('#seek').value), Number($('#seek').max));
+});
 $('#seek').addEventListener('change', async () => {
   await seekTrack(Number($('#seek').value));
   seeking = false;
@@ -5172,13 +5421,9 @@ addEventListener('drop', event => {
   acceptDrop(event.dataTransfer).catch(error => toast(error.message, 5000));
 });
 
-drop.addEventListener('keydown', event => {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault();
-    event.stopPropagation();
-    chooseFile();
-  }
-});
+// The drop area is a group, not a button: its two buttons are the keyboard path, and
+// a keydown handler here used to catch Enter on "Open a music folder" and open the
+// single-file picker instead (N6, N30).
 
 addEventListener('pagehide', () => { rememberPosition(); releaseArt(); cancelScan(); });
 // `pagehide` does not fire when a tab is merely switched away from or the phone is locked.

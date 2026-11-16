@@ -8,12 +8,14 @@
 // createEditTagsHandler(ctx) under 'track.edit_tags'.
 //
 // Writing: saveTagsToHandle per file when the folder gives a writable handle
-// (Chromium), then ctx.library.updateTrack. Elsewhere the result offers "Download
+// (Chromium), then ctx.library.updateTrack. Each write keeps the original in the
+// backup folder, so a written row offers Undo and the "Tag backups" list restores
+// any kept original by its track path. Elsewhere the result offers "Download
 // edited copy" (writeTags on the File). Cover art is not in the command's JSON input
 // (agents send no image bytes), so it travels in the run context.
 
 import { planTagWrite, inspectTagFormat, writeTags } from '../tags/write.mjs';
-import { saveTagsToHandle, restoreTagBackup } from '../tags/save.mjs';
+import { saveTagsToHandle, restoreTagBackup, listTagBackups, deleteTagBackup } from '../tags/save.mjs';
 import { describeTagChange, summariseTagChanges } from '../tags/diff.mjs';
 import { h, injectCss, nextId } from './dialog.mjs';
 
@@ -156,6 +158,46 @@ export function resultSummary(results) {
 
 const canWrite = handle => Boolean(handle && typeof handle.createWritable === 'function');
 
+function writtenMessage(saved) {
+  return saved.skipped?.length ? `Written; not stored in this format: ${saved.skipped.join(', ')}.` : 'Written and read back.';
+}
+
+/** One line per kept tag backup, for the "Restore tag backups" list. */
+export function backupLine(item) {
+  const when = Number.isFinite(item.savedAt) ? new Date(item.savedAt).toLocaleString() : 'an earlier session';
+  const what = item.status === 'failed'
+    ? 'the write did not read back; this is the only good copy'
+    : item.status === 'written' ? 'original before a tag edit' : 'backup with no record';
+  const size = Number.isFinite(item.size) ? `, ${Math.max(1, Math.round(item.size / 1024))} KB` : '';
+  return `${item.path ?? item.name}: ${what}, saved ${when}${size}`;
+}
+
+/**
+ * The kept tag backups with what restoring each needs. `ctx.library.handleForPath(path)`
+ * (or getTrack by path) gives the file to restore into. Returns
+ * `[{ ...backup, line, restore?, remove }]`, newest first.
+ */
+export async function tagBackupRows(ctx, saveOptions = {}) {
+  const backups = await listTagBackups(saveOptions);
+  return backups.map(item => {
+    const row = { ...item, line: backupLine(item) };
+    const handleFor = async () => {
+      if (typeof ctx.library?.handleForPath === 'function') return ctx.library.handleForPath(item.path);
+      const track = ctx.library?.findByPath?.(item.path);
+      return track ? ctx.library.handleFor?.(track) : null;
+    };
+    if (item.path) {
+      row.restore = async () => {
+        const handle = await handleFor();
+        if (!canWrite(handle)) throw new Error(`NakliAmp cannot open ${item.path} to restore it. Open its music folder, then try again.`);
+        return restoreTagBackup(handle, item.backup, saveOptions);
+      };
+    }
+    row.remove = () => deleteTagBackup(item.backup, saveOptions);
+    return row;
+  });
+}
+
 // ---------------------------------------------------------- the command ----
 
 /**
@@ -230,14 +272,22 @@ export function createEditTagsHandler(ctx, { saveOptions = {} } = {}) {
 
   async function writeItem(item, handle, patch) {
     try {
-      const saved = await saveTagsToHandle(handle, patch, { ...saveOptions, expectedLastModified: item.track.lastModified || undefined });
+      const saved = await saveTagsToHandle(handle, patch, saveOptionsFor(item));
       await updateIndex(item, patch, saved);
-      return { id: item.id, name: item.name, status: 'written', message: saved.skipped?.length ? `Written; not stored in this format: ${saved.skipped.join(', ')}.` : 'Written and read back.' };
+      // The original stays in the backup folder, so a good write can be undone.
+      return withRestore({ id: item.id, name: item.name, status: 'written', backup: saved.backup ?? null, message: writtenMessage(saved) }, handle);
     } catch (error) {
-      const result = { id: item.id, name: item.name, status: 'failed', code: error?.code ?? null, message: String(error?.message ?? error), backup: error?.backup ?? null };
-      if (result.backup) Object.defineProperty(result, 'restore', { enumerable: false, value: () => restoreTagBackup(handle, result.backup, saveOptions) });
-      return result;
+      return withRestore({ id: item.id, name: item.name, status: 'failed', code: error?.code ?? null, message: String(error?.message ?? error), backup: error?.backup ?? null }, handle);
     }
+  }
+
+  function saveOptionsFor(item) {
+    return { ...saveOptions, path: item.track.path ?? null, expectedLastModified: item.track.lastModified || undefined };
+  }
+
+  function withRestore(result, handle) {
+    if (result.backup) Object.defineProperty(result, 'restore', { enumerable: false, value: () => restoreTagBackup(handle, result.backup, saveOptions) });
+    return result;
   }
 
   function downloadResult(item, patch) {
@@ -425,7 +475,7 @@ export function mountTagEditor(root, ctx) {
     const cancel = h('button', { type: 'button', className: 'nk-btn', textContent: 'Close', onclick: () => (ctx.close ?? (() => {}))() });
     save.addEventListener('click', () => submit({ save, errors, progress, results }));
 
-    container.replaceChildren(lead, grid, art, formatNote, errors, progress, results, h('div', { className: 'actions' }, cancel, save));
+    container.replaceChildren(lead, grid, art, formatNote, errors, progress, results, h('div', { className: 'actions' }, cancel, save), backupsSection());
     checkFormats(tracks, formatNote, mine);
   }
 
@@ -486,6 +536,43 @@ export function mountTagEditor(root, ctx) {
     }
   }
 
+  /** "Restore tag backups": every original kept in private storage, with Restore and Delete. */
+  function backupsSection() {
+    const list = h('ul', { className: 'res', 'aria-label': 'Tag backups' });
+    const status = h('p', { className: 'lead', role: 'status' });
+    const show = h('button', { type: 'button', className: 'nk-btn', textContent: 'Restore tag backups...' });
+    const section = h('details', { className: 'f span4' }, h('summary', { textContent: 'Tag backups' }), status, show, list);
+    async function refresh() {
+      status.textContent = 'Reading backups...';
+      let rows;
+      try { rows = await tagBackupRows(ctx, ctx.tagSaveOptions ?? {}); } catch (error) { status.textContent = String(error?.message ?? error); return; }
+      status.textContent = rows.length ? `${rows.length} backup${rows.length === 1 ? '' : 's'}. Restoring puts that file back as it was before the edit.` : 'No tag backups are kept.';
+      list.replaceChildren(...rows.map(row => {
+        const li = h('li', {}, h('span', { className: `st ${row.status === 'failed' ? 'failed' : 'written'}`, textContent: row.status }), h('span', { textContent: row.line }));
+        if (row.restore) {
+          li.append(h('button', { type: 'button', className: 'nk-btn danger', textContent: 'Restore', 'aria-label': `Restore ${row.path} from its backup`, onclick: async () => {
+            try {
+              const restored = await row.restore();
+              const track = ctx.library?.findByPath?.(row.path);
+              if (track) await ctx.library.updateTrack?.(track.id, { lastModified: restored.lastModified, size: restored.size });
+              ctx.toast?.(`Restored ${row.path}.`);
+              await refresh();
+            } catch (error) { ctx.toast?.(String(error?.message ?? error)); }
+          } }));
+        }
+        // A failed write's backup may be the only good copy, so only a good write's backup offers Delete.
+        if (row.status === 'written') {
+          li.append(h('button', { type: 'button', className: 'nk-btn', textContent: 'Delete', 'aria-label': `Delete the backup of ${row.path ?? row.name}`, onclick: async () => {
+            try { await row.remove(); await refresh(); } catch (error) { ctx.toast?.(String(error?.message ?? error)); }
+          } }));
+        }
+        return li;
+      }));
+    }
+    show.addEventListener('click', refresh);
+    return section;
+  }
+
   function renderResults(list, target) {
     target.replaceChildren(...list.map(result => {
       const li = h('li', {}, h('span', { className: `st ${result.status}`, textContent: result.status === 'download' ? 'copy' : result.status }),
@@ -499,7 +586,8 @@ export function mountTagEditor(root, ctx) {
         }));
       }
       if (typeof result.restore === 'function') {
-        const restore = h('button', { type: 'button', className: 'nk-btn danger', textContent: 'Restore original', 'aria-label': `Restore the original ${result.name}` });
+        const undo = result.status === 'written';
+        const restore = h('button', { type: 'button', className: `nk-btn${undo ? '' : ' danger'}`, textContent: undo ? 'Undo' : 'Restore original', 'aria-label': undo ? `Undo the tag edit of ${result.name}` : `Restore the original ${result.name}` });
         restore.addEventListener('click', async () => {
           restore.disabled = true;
           try {

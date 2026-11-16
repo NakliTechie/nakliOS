@@ -9,8 +9,11 @@
 // `coverFrom`. Saving lyrics goes through `lyrics.save_sidecar`, which writes a new
 // `.lrc` file beside the track.
 //
-// The ListenBrainz token is stored only in this browser (localStorage, by
-// listenbrainz.mjs) and goes only to api.listenbrainz.org. The panel never shows it.
+// The ListenBrainz token is stored only in this browser, sealed in the vault
+// (app/net/vault.mjs), and goes only to api.listenbrainz.org. The panel never shows it,
+// and no command reads or sets it. A switch here is the person's own consent, so it runs
+// `network.grant` with `byPerson`; every other caller of that command gets a confirm
+// dialog (N16). A grant written outside this panel shows as unconfirmed and stays off.
 
 import { formatRemaining } from '../player/timers.mjs';
 import { parseLrc } from '../library/lyrics.mjs';
@@ -25,6 +28,7 @@ export function networkRows(list) {
   return rows.map(r => ({
     origin: r.origin, label: r.label || r.origin, purpose: r.purpose || '', sends: r.sends || '',
     also: Array.isArray(r.alsoContacts) ? r.alsoContacts : [], granted: Boolean(r.granted),
+    unconfirmed: Boolean(r.unconfirmed),
   }));
 }
 
@@ -45,6 +49,7 @@ export function scrobbleStatusText(s, now = Date.now()) {
   if (s.rejected) parts.push(`${s.rejected} refused by ListenBrainz and set aside.`);
   if (s.nextAttemptAt && s.nextAttemptAt > now) parts.push(`Next try in ${formatRemaining((s.nextAttemptAt - now) / 1000)}.`);
   if (s.lastError) parts.push(`Last error: ${s.lastError}`);
+  if (s.saveError) parts.push(`This browser refused to store the waiting listens (${s.saveError.message || s.saveError.name || 'storage error'}), so they last only until this page reloads.`);
   return parts.join(' ');
 }
 
@@ -118,6 +123,22 @@ export function lyricsOf(result) {
   return null;
 }
 
+/**
+ * Where `lyrics.save_sidecar` writes: `{ path, name, text }` for a library track path and an
+ * LRCLIB result, or a `{ code: 'not-found', message }` refusal when there is nothing to save
+ * (an instrumental track, empty lyrics) (N34). `plan` is lrclib.mjs's sidecarPlan.
+ */
+export function lyricsSidecar(trackPath, result, plan) {
+  const parts = String(trackPath ?? '').split('/');
+  const made = result ? plan(parts.at(-1), result) : null;
+  if (!made) {
+    const message = result?.instrumental ? 'LRCLIB lists this track as instrumental, so there are no lyrics to save.' : 'LRCLIB has no lyrics for this track.';
+    return { refusal: { code: 'not-found', message } };
+  }
+  const directory = parts.slice(0, -1).join('/');
+  return { path: directory ? `${directory}/${made.name}` : made.name, name: made.name, text: made.text };
+}
+
 /** "Song.lrc" for a track path. */
 export function sidecarName(path) {
   const base = String(path ?? '').split('/').pop() || 'track';
@@ -148,8 +169,11 @@ function originsSection(ctx, id) {
 
   async function toggle(row, on) {
     const name = on ? 'network.grant' : 'network.revoke';
+    const direct = () => (on ? consent.grant(row.origin) : consent.revoke(row.origin));
     try {
-      await runOr(ctx, name, { origin: row.origin }, () => (on ? consent.grant(row.origin) : consent.revoke(row.origin)));
+      // The switch is the person's click, so the grant needs no second confirm (byPerson).
+      if (typeof ctx.run === 'function') await ctx.run(name, { origin: row.origin }, { byPerson: true, context: { from: 'panel' } });
+      else await runOr(ctx, name, { origin: row.origin }, direct);
       status.textContent = on ? `${row.label} is on.` : `${row.label} is off. Nothing more goes to ${row.origin}.`;
     } catch (error) { status.textContent = plainError(error); }
     render();
@@ -158,9 +182,10 @@ function originsSection(ctx, id) {
   function renderRow(row) {
     const box = h('input', { type: 'checkbox', role: 'switch', checked: row.granted, id: `${id}-o-${row.label.replace(/\W+/g, '')}`, 'aria-describedby': `${id}-o-${row.label.replace(/\W+/g, '')}-d` });
     box.addEventListener('change', () => toggle(row, box.checked));
+    const doubt = row.unconfirmed ? ' This switch was turned on outside this panel, so it stays off until you turn it on here.' : '';
     return h('li', { className: 'item origin' }, box,
       h('label', { htmlFor: box.id, style: 'color:inherit;font-size:inherit' }, h('strong', { textContent: row.label }), h('small', { className: 'mono', textContent: row.origin })),
-      h('p', { id: `${box.id}-d`, className: 'hint' }, row.purpose, ' ', sendsText(row)));
+      h('p', { id: `${box.id}-d`, className: 'hint' }, row.purpose, ' ', sendsText(row), doubt));
   }
 
   let rendered = false;
@@ -205,7 +230,7 @@ function listenBrainzSection(ctx, id) {
     validate.disabled = !tokenSet && !token.value.trim();
     forget.disabled = !tokenSet;
     flush.disabled = !tokenSet || !lb.queued().length;
-    status.textContent = scrobbleStatusText({ tokenSet, queued: lb.queued().length, rejected: lb.rejected().length, nextAttemptAt: lb.nextAttemptAt(), lastError, userName });
+    status.textContent = scrobbleStatusText({ tokenSet, queued: lb.queued().length, rejected: lb.rejected().length, nextAttemptAt: lb.nextAttemptAt(), lastError, userName, saveError: lb.saveError?.() ?? null });
   }
 
   async function guard(fn) {

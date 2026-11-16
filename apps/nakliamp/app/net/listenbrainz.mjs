@@ -9,12 +9,21 @@
 // its length or 4 minutes, whichever comes first. Seeking does not count as playing.
 //
 // Listens wait in a queue in localStorage (`nakliamp:listenbrainz`) that survives
-// restarts. `flush()` sends them oldest first: one listen as `single`, more as `import`
+// restarts. The queue keeps at most `QUEUE_MAX` listens (about 400 bytes each), so it
+// stays well inside the browser's per-origin storage, which other apps on the origin
+// share. A save that fails (storage full or blocked) is reported by `saveError()` and by
+// `saved: false` on every result, so the page can tell the person that queued listens
+// last only until reload. `flush()` sends them oldest first: one listen as `single`, more as `import`
 // in batches of up to 50. A network failure, a 429 or a 5xx stops the flush and sets a
 // backoff (30 s doubling to 1 hour, or the server's Retry-After when longer). A 401
 // keeps the queue and reports the token as rejected. A 400 on a batch resends that
 // batch one listen at a time, and a single listen the server still refuses is set aside
 // in `rejected`, so one bad listen never blocks the rest. Headless: no DOM.
+//
+// The token is not part of the stored queue (N15): other apps on a shared origin can read
+// localStorage. It lives in `tokenStore` (`get()`, `set(token)`), which the page backs with
+// the sealed vault (app/net/vault.mjs); by default it lasts for this page only. A token an
+// older version left in the queue record moves into the token store and out of storage.
 
 import { consentedFetch } from './consent.mjs';
 
@@ -25,7 +34,7 @@ export const MIN_TRACK_S = 30;
 export const MAX_THRESHOLD_S = 240;
 export const BACKOFF_BASE_MS = 30_000;
 export const BACKOFF_MAX_MS = 60 * 60 * 1000;
-export const QUEUE_MAX = 10_000;
+export const QUEUE_MAX = 2_000;
 export const REJECTED_MAX = 50;
 export const CLIENT_NAME = 'NakliAmp';
 
@@ -89,7 +98,7 @@ const isListen = l => l && typeof l === 'object' && Number.isInteger(l.listened_
   && typeof l.track_metadata.artist_name === 'string' && typeof l.track_metadata.track_name === 'string';
 
 function readState(storage) {
-  const empty = { token: '', queue: [], rejected: [], nextAttemptAt: 0, failures: 0 };
+  const empty = { queue: [], rejected: [], nextAttemptAt: 0, failures: 0, legacyToken: '' };
   try {
     const raw = storage?.getItem(LB_KEY);
     if (!raw) return empty;
@@ -99,7 +108,7 @@ function readState(storage) {
 
 // Stored state with every field checked; a wrong-typed field falls back to empty.
 const stateFrom = s => ({
-  token: typeof s?.token === 'string' ? s.token : '',
+  legacyToken: typeof s?.token === 'string' ? s.token : '',
   queue: Array.isArray(s?.queue) ? s.queue.filter(isListen) : [],
   rejected: Array.isArray(s?.rejected) ? s.rejected.slice(-REJECTED_MAX) : [],
   nextAttemptAt: Number(s?.nextAttemptAt) || 0,
@@ -119,23 +128,48 @@ function retryAfterOf(res) {
   return Number.isFinite(s) && s > 0 ? s : 0;
 }
 
+/** A token holder that lasts for this page only. */
+export function memoryTokenStore() {
+  let token = '';
+  return { get: () => token, set(value) { token = String(value ?? ''); } };
+}
+
 /**
- * `createListenBrainz({ fetch, consent, storage, now, clientVersion })`.
+ * `createListenBrainz({ fetch, consent, storage, tokenStore, now, clientVersion })`.
  * `now()` is milliseconds.
  */
-export function createListenBrainz({ fetch: fetchFn, consent, storage = globalThis.localStorage, now = () => Date.now(), clientVersion = '' } = {}) {
+export function createListenBrainz({ fetch: fetchFn, consent, storage = globalThis.localStorage, tokenStore = memoryTokenStore(), now = () => Date.now(), clientVersion = '' } = {}) {
   const get = consentedFetch(fetchFn, consent);
-  let state = readState(storage);
+  const { legacyToken, ...stored } = readState(storage);
+  let state = stored;
+  const token = () => tokenStore.get() || '';
   let running = null;
   let singles = 0; // listens still to send one at a time after a 400 on a batch
+  let saveError = null; // why the last save failed, or null when the stored copy is current
 
-  const save = () => { try { storage?.setItem(LB_KEY, JSON.stringify(state)); } catch { /* blocked storage: the queue lasts for this page */ } };
-  const auth = token => ({ Authorization: `Token ${token}` });
+  // Store the state. On failure the queue lasts for this page only, and saveError says so.
+  const save = () => {
+    try {
+      if (!storage) throw new Error('No storage is available.');
+      storage.setItem(LB_KEY, JSON.stringify(state));
+      saveError = null;
+      return true;
+    } catch (error) {
+      saveError = { name: String(error?.name || 'Error'), message: String(error?.message || error), at: now(), queued: state.queue.length };
+      return false;
+    }
+  };
+  // A token stored by an older version moves to the token store and leaves localStorage.
+  if (legacyToken) {
+    if (!tokenStore.get()) tokenStore.set(legacyToken);
+    save();
+  }
+  const auth = value => ({ Authorization: `Token ${value}` });
 
   async function post(listenType, payload) {
     return get(`${LB_ORIGIN}/1/submit-listens`, {
       method: 'POST',
-      headers: { ...auth(state.token), 'Content-Type': 'application/json' },
+      headers: { ...auth(token()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ listen_type: listenType, payload }),
     });
   }
@@ -143,7 +177,7 @@ export function createListenBrainz({ fetch: fetchFn, consent, storage = globalTh
   // A result to return before sending anything (empty queue, no token, backing off), or null.
   function flushBlocked(force, result) {
     if (!state.queue.length) return result;
-    if (!state.token) return { ...result, status: 'no-token' };
+    if (!token()) return { ...result, status: 'no-token' };
     consent.assertAllowed(LB_ORIGIN);
     if (!force && now() < state.nextAttemptAt) return { ...result, status: 'waiting', retryAt: state.nextAttemptAt };
     return null;
@@ -184,6 +218,10 @@ export function createListenBrainz({ fetch: fetchFn, consent, storage = globalTh
   }
 
   async function flushOnce({ force }) {
+    return { ...(await sendQueue({ force })), saved: saveError === null };
+  }
+
+  async function sendQueue({ force }) {
     const result = { sent: 0, rejected: 0, remaining: state.queue.length, status: 'idle', retryAt: null };
     const blocked = flushBlocked(force, result);
     if (blocked) return blocked;
@@ -205,23 +243,26 @@ export function createListenBrainz({ fetch: fetchFn, consent, storage = globalTh
   }
 
   const api = {
-    token: () => state.token,
+    token: () => token(),
     /** Store the token the person pasted. LB tokens are UUIDs; anything else is refused. */
     setToken(token) {
       const t = String(token ?? '').trim();
       if (!/^[A-Za-z0-9-]{8,128}$/.test(t)) throw new ListenBrainzError('bad-input', 'That does not look like a ListenBrainz user token. Copy it from listenbrainz.org, Settings.');
-      state = { ...state, token: t, failures: 0, nextAttemptAt: 0 };
+      tokenStore.set(t);
+      state = { ...state, failures: 0, nextAttemptAt: 0 };
       save();
     },
-    clearToken() { state = { ...state, token: '' }; save(); },
+    clearToken() { tokenStore.set(''); },
     queued: () => state.queue.slice(),
+    /** `{ name, message, at, queued }` when the last save failed, else null. */
+    saveError: () => (saveError ? { ...saveError } : null),
     rejected: () => state.rejected.slice(),
     nextAttemptAt: () => state.nextAttemptAt,
 
     /** `{ valid, userName }` for a token (the stored one by default). */
-    async validateToken(token = state.token) {
-      if (!token) throw new ListenBrainzError('no-token', 'Paste your ListenBrainz user token first.');
-      const res = await get(`${LB_ORIGIN}/1/validate-token`, { headers: auth(token) });
+    async validateToken(candidate = token()) {
+      if (!candidate) throw new ListenBrainzError('no-token', 'Paste your ListenBrainz user token first.');
+      const res = await get(`${LB_ORIGIN}/1/validate-token`, { headers: auth(candidate) });
       if (res.status === 401) return { valid: false, userName: null };
       if (!res.ok) throw new ListenBrainzError('http', `ListenBrainz answered ${res.status}.`, res.status);
       let json;
@@ -229,19 +270,22 @@ export function createListenBrainz({ fetch: fetchFn, consent, storage = globalTh
       return { valid: json?.valid === true, userName: typeof json?.user_name === 'string' ? json.user_name : null };
     },
 
-    /** Add a listen to the end of the persistent queue. The oldest are dropped past 10,000. */
+    /**
+     * Add a listen to the end of the persistent queue; the oldest are dropped past
+     * `QUEUE_MAX`. Returns `{ queued, saved }`; `saved` is false when storage refused it.
+     */
     enqueue(listen) {
       if (!isListen(listen)) throw new ListenBrainzError('bad-input', 'Not a listen: it needs listened_at, artist_name and track_name.');
       const queue = [...state.queue, listen];
       state = { ...state, queue: queue.length > QUEUE_MAX ? queue.slice(queue.length - QUEUE_MAX) : queue };
-      save();
+      return { queued: state.queue.length, saved: save() };
     },
 
     /** Add listens from an import (for example an older play history), oldest first. */
     enqueueAll(listens) { for (const l of listens) api.enqueue(l); },
 
     /**
-     * Send the queue in order. Returns `{ sent, rejected, remaining, status, retryAt }`;
+     * Send the queue in order. Returns `{ sent, rejected, remaining, status, retryAt, saved }`;
      * `status` is idle, sent, waiting, no-token, bad-token, offline or http-<code>.
      * Concurrent calls share one run.
      */
@@ -255,7 +299,7 @@ export function createListenBrainz({ fetch: fetchFn, consent, storage = globalTh
 
     /** Tell ListenBrainz what is playing now. Not queued: a failure is returned, not retried. */
     async nowPlaying(track) {
-      if (!state.token) return { ok: false, status: 'no-token' };
+      if (!token()) return { ok: false, status: 'no-token' };
       const listen = makeListen(track, null, { clientVersion });
       try {
         const res = await post('playing_now', [listen]);

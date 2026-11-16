@@ -9,6 +9,19 @@ export function formatTime(seconds) {
   return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${secs}` : `${minutes}:${secs}`;
 }
 
+/** The seek slider's spoken value (N42): "2:17 of 4:05", not the raw seconds "137.42". */
+export function seekValueText(positionS, durationS) {
+  const at = formatTime(positionS);
+  return Number.isFinite(durationS) && durationS > 0 ? `${at} of ${formatTime(durationS)}` : at;
+}
+
+/** What the polite live region says when a new track starts (N44). */
+export function trackAnnouncement({ title, artist } = {}) {
+  const name = String(title ?? '').trim() || 'Untitled track';
+  const by = String(artist ?? '').trim();
+  return `Now playing: ${name}${by ? ` by ${by}` : ''}`;
+}
+
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes)) return '';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;

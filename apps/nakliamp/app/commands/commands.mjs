@@ -8,6 +8,10 @@
 //   scope  'read'        runs without asking; changes nothing the person keeps
 //          'reversible'  runs without asking; queue undo, a toggle or a new file undoes it
 //          'destructive' stages a diff and runs only after the person approves
+//   askEveryTime  true for a command that is the person's own consent (turning a network
+//          service on, N16): every door shows NakliAmp's confirm dialog, even a host call
+//          that arrives approved. Only the Network panel's own switch, a click by the person,
+//          skips the dialog. Its manifest `approval` is 'consent'.
 //   keys   [{ key, input?, label? }]: keyboard bindings. `key` is a canonical shortcut
 //          ('Space', 'Shift+ArrowLeft', 'Alt+3', 'Mod+Z', '?'), `input` the command
 //          input that key sends, `label` how the keymap overlay names it.
@@ -282,11 +286,11 @@ const RAW = [
   { name: 'sound.output', group: 'sound', scope: 'reversible', label: 'Output device',
     description: 'Play through another audio output by its id from sound.devices; an empty id is the system default.',
     input: obj({ deviceId: str('Device id', { maxLength: 256 }) }, ['deviceId']) },
-  { name: 'eq.import_eqf', group: 'sound', scope: 'reversible', label: 'Import Winamp EQ',
-    description: 'Load a Winamp .eqf preset file chosen by the person into the custom equaliser curve. `presetIndex` picks one preset from a library file (default 0).',
+  { name: 'eq.import_eqf', group: 'sound', scope: 'reversible', label: 'Import EQF preset',
+    description: 'Load an .eqf equaliser preset file chosen by the person into the custom equaliser curve. `presetIndex` picks one preset from a library file (default 0).',
     input: obj({ presetIndex: int('Preset in the file', { minimum: 0, maximum: 1000 }) }) },
-  { name: 'eq.export_eqf', group: 'sound', scope: 'read', label: 'Export Winamp EQ',
-    description: 'Save the current equaliser curve as a Winamp .eqf file.', input: obj({ name: str('Preset name', { minLength: 1, maxLength: 200 }) }) },
+  { name: 'eq.export_eqf', group: 'sound', scope: 'read', label: 'Export EQF preset',
+    description: 'Save the current equaliser curve as an .eqf preset file.', input: obj({ name: str('Preset name', { minLength: 1, maxLength: 200 }) }) },
 
   { name: 'history.clear', group: 'library', scope: 'destructive', label: 'Clear listening history',
     description: 'Reset every track\'s play count and last-played time, which empties the recently played and most played lists. Ratings and favourites stay. Shows how many tracks change and waits for approval; it cannot be undone.',
@@ -343,8 +347,8 @@ const RAW = [
 
   { name: 'network.list', group: 'network', scope: 'read', label: 'Network services',
     description: 'The online services NakliAmp can use, what each one receives, and whether the person turned it on. All are off by default.', input: obj() },
-  { name: 'network.grant', group: 'network', scope: 'reversible', label: 'Turn a service on',
-    description: 'Allow NakliAmp to contact one service. Nothing is sent to it until this is on.',
+  { name: 'network.grant', group: 'network', scope: 'reversible', askEveryTime: true, label: 'Turn a service on',
+    description: 'Allow NakliAmp to contact one service. Nothing is sent to it until this is on. NakliAmp shows what the service receives and asks the person every time, whoever calls.',
     input: obj({ origin: oneOf(NETWORK_ORIGINS, 'Service origin') }, ['origin']) },
   { name: 'network.revoke', group: 'network', scope: 'reversible', label: 'Turn a service off',
     description: 'Stop NakliAmp contacting one service.', input: obj({ origin: oneOf(NETWORK_ORIGINS, 'Service origin') }, ['origin']) },
@@ -397,7 +401,7 @@ export function manifest() {
       label: c.label,
       description: c.description,
       scope: railScope(c),
-      approval: c.scope,
+      approval: c.askEveryTime ? 'consent' : c.scope,
       group: c.group,
       input: c.input,
       ...(c.shortcut ? { shortcut: c.shortcut.slice() } : {}),

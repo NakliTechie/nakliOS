@@ -7,6 +7,9 @@
 // Shuffle reorders the entries and keeps the unshuffled order beside them, so turning
 // shuffle off puts the queue back the way the person built it. Album shuffle keeps the
 // track order inside each album and shuffles the albums (it needs `albumOf(id)`).
+// With repeat all, moving past the last entry reshuffles the whole queue for the next
+// pass, entries added during the pass included, and never starts the pass on the entry
+// that just played. `peekNext` names the same entry `next` then moves to.
 //
 // Transient entries (a file NakliOS hands over, which is not in the library) queue and
 // play like any other entry, but `isTransient(id)` keeps them out of the stored copy:
@@ -60,10 +63,21 @@ function validEntries(stored) {
   return list;
 }
 
+/**
+ * The stored person's order, as a permutation of the restored entries: each known key
+ * once, in stored order, then any entry the stored order left out, in play order.
+ */
 function restoredUnshuffled(stored, list) {
-  if (!Array.isArray(stored)) return [];
   const keys = new Set(list.map(e => e.key));
-  return stored.filter(k => keys.has(k));
+  const seen = new Set();
+  const order = [];
+  for (const k of Array.isArray(stored) ? stored : []) {
+    if (!keys.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    order.push(k);
+  }
+  for (const e of list) if (!seen.has(e.key)) order.push(e.key);
+  return order;
 }
 
 function restoredIndex(stored, length) {
@@ -102,6 +116,7 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
   let revision = 0;          // moves on every change a listener hears about; not persisted
   const undoStack = [];
   const listeners = new Set();
+  let wrapOrder = null;      // the reshuffled next pass, fixed once peekNext or next asks for it
 
   const make = id => ({ key: nextKey++, id });
   const currentKey = () => (index >= 0 && index < entries.length ? entries[index].key : null);
@@ -129,12 +144,11 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
       if (!s || !Array.isArray(s.entries)) return;
       const list = validEntries(s.entries);
       entries = list;
-      unshuffled = restoredUnshuffled(s.unshuffled, list);
       index = restoredIndex(s.index, list.length);
       shuffle = SHUFFLE_MODES.includes(s.shuffle) ? s.shuffle : 'off';
       repeat = REPEAT_MODES.includes(s.repeat) ? s.repeat : 'off';
+      unshuffled = shuffle === 'off' ? [] : restoredUnshuffled(s.unshuffled, list);
       nextKey = Math.max(1, ...list.map(e => e.key + 1), Number.isInteger(s.nextKey) ? s.nextKey : 1);
-      if (shuffle !== 'off' && unshuffled.length !== list.length) unshuffled = list.map(e => e.key);
     } catch { /* a damaged record starts an empty queue */ }
   }
 
@@ -145,6 +159,7 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
 
   function emit(reason, before) {
     revision += 1;
+    if (reason !== 'repeat') wrapOrder = null;
     persist();
     const snap = snapshot();
     const info = { reason, currentChanged: before !== currentKey() };
@@ -214,6 +229,34 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
     };
   }
 
+  // The order of the next pass under repeat all with shuffle on: every entry reshuffled,
+  // and the entry that just played moved off the front when the queue has another.
+  function shuffledPass() {
+    const curKey = currentKey();
+    if (shuffle === 'tracks') {
+      const list = shuffleInPlace(entries.slice(), random);
+      if (list.length > 1 && list[0].key === curKey) list.push(list.shift());
+      return list;
+    }
+    const groups = new Map();
+    for (const e of entries) {
+      let album = '';
+      try { album = String(albumOf(e.id) ?? ''); } catch { album = ''; }
+      if (!groups.has(album)) groups.set(album, []);
+      groups.get(album).push(e);
+    }
+    const list = shuffleInPlace([...groups.values()], random);
+    if (list.length > 1 && list[0].some(e => e.key === curKey)) list.push(list.shift());
+    return list.flat();
+  }
+
+  // True when the next move goes past the last entry into a reshuffled pass.
+  function wrapsIntoNewPass(auto) {
+    if (repeat !== 'all' || shuffle === 'off' || entries.length < 2) return false;
+    if (index < 0 || index + 1 < entries.length) return false;
+    return !(auto && repeat === 'one');
+  }
+
   // The position `next` would move to, or -1. `auto` means the track ended by itself:
   // repeat-one then plays the same entry again; a person pressing Next still moves on.
   function nextIndex({ auto = false } = {}) {
@@ -222,6 +265,16 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
     if (auto && repeat === 'one') return index;
     if (index + 1 < entries.length) return index + 1;
     return repeat === 'all' || repeat === 'one' ? 0 : -1;
+  }
+
+  // The entry `next` would make current, without moving: from the reshuffled pass at a wrap.
+  function nextEntry(options = {}) {
+    if (wrapsIntoNewPass(options.auto)) {
+      wrapOrder ??= shuffledPass();
+      return wrapOrder[0];
+    }
+    const i = nextIndex(options);
+    return i < 0 ? null : entries[i];
   }
 
   load();
@@ -290,15 +343,16 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
     },
 
     current() { return index >= 0 && index < entries.length ? entries[index].id : null; },
-    peekNext(options) { const i = nextIndex(options); return i < 0 ? null : entries[i].id; },
+    peekNext(options) { return nextEntry(options)?.id ?? null; },
 
     next(options) {
-      const i = nextIndex(options);
-      if (i < 0) return null;
+      const target = nextEntry(options);
+      if (!target) return null;
       const before = currentKey();
-      index = i;
+      if (wrapsIntoNewPass(options?.auto)) { entries = wrapOrder; index = 0; }
+      else index = nextIndex(options);
       emit('next', before);
-      return entries[i].id;
+      return target.id;
     },
 
     prev() {

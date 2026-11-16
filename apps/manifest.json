@@ -289,14 +289,6 @@
           "destination": "app/commands/run.mjs"
         },
         {
-          "source": "app/decode/libav-stream.mjs",
-          "destination": "app/decode/libav-stream.mjs"
-        },
-        {
-          "source": "app/decode/libav.mjs",
-          "destination": "app/decode/libav.mjs"
-        },
-        {
           "source": "app/decode/pcm.mjs",
           "destination": "app/decode/pcm.mjs"
         },
@@ -381,6 +373,10 @@
           "destination": "app/net/musicbrainz.mjs"
         },
         {
+          "source": "app/net/vault.mjs",
+          "destination": "app/net/vault.mjs"
+        },
+        {
           "source": "app/player/queue.mjs",
           "destination": "app/player/queue.mjs"
         },
@@ -405,12 +401,24 @@
           "destination": "app/tags/id3.mjs"
         },
         {
+          "source": "app/tags/id3v1.mjs",
+          "destination": "app/tags/id3v1.mjs"
+        },
+        {
+          "source": "app/tags/pictures.mjs",
+          "destination": "app/tags/pictures.mjs"
+        },
+        {
           "source": "app/tags/save.mjs",
           "destination": "app/tags/save.mjs"
         },
         {
           "source": "app/tags/write.mjs",
           "destination": "app/tags/write.mjs"
+        },
+        {
+          "source": "app/ui/agent-channel.mjs",
+          "destination": "app/ui/agent-channel.mjs"
         },
         {
           "source": "app/ui/ai-dialog.mjs",
@@ -431,6 +439,10 @@
         {
           "source": "app/ui/keymap.mjs",
           "destination": "app/ui/keymap.mjs"
+        },
+        {
+          "source": "app/ui/licences.mjs",
+          "destination": "app/ui/licences.mjs"
         },
         {
           "source": "app/ui/lyrics.mjs",
@@ -513,6 +525,10 @@
           "destination": "app/visualiser/modes.mjs"
         },
         {
+          "source": "engine/LICENSE-reel.txt",
+          "destination": "engine/LICENSE-reel.txt"
+        },
+        {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs"
         },
@@ -545,18 +561,6 @@
           "destination": "vendor/libav/LICENSE-LGPL-NOTICE.md"
         },
         {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs"
-        },
-        {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs"
-        },
-        {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm"
-        },
-        {
           "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
           "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
         },
@@ -575,6 +579,10 @@
         {
           "source": "vendor/webamp/LICENSE-MIT.txt",
           "destination": "vendor/webamp/LICENSE-MIT.txt"
+        },
+        {
+          "source": "vendor/webamp/LICENSES-bundled.txt",
+          "destination": "vendor/webamp/LICENSES-bundled.txt"
         },
         {
           "source": "vendor/webamp/webamp-2.3.1.bundle.min.mjs",

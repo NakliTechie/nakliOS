@@ -12,6 +12,12 @@
 // current ends, with equal-power gain curves (cos/sin) so the summed power
 // stays level through the overlap.
 //
+// Each voice has two gain stages: `fade` carries only the crossfade curves
+// (0 to 1) and `gain` carries only the track's ReplayGain level. A curve and a
+// level change then never share an AudioParam, so scheduling the fade-out of a
+// track still fading in, or changing its ReplayGain mid-fade, cannot cancel
+// the other's automation (review findings N4 and N41).
+//
 // Memory: a decoded track is Float32 per channel, about 10 MB per stereo
 // minute at 44.1 kHz. The lane is capped at tracks under 20 minutes
 // (LANE_MAX_S); longer files take the normal route.
@@ -142,13 +148,17 @@ export function laneItem(buffer, trim = {}, extra = {}) {
  *   context      the lane's AudioContext (one for the life of the lane)
  *   destination  node the lane feeds (the chain input, or a volume stage)
  *   onAdvance    called with the new current item when the lane moves on
+ *   onEnded      called with the current item when it plays to its end and no
+ *                next track is scheduled; fired from the source's own `ended`
+ *                event, so it runs on the audio clock, not on animation frames
  *   setTimer / clearTimer  injected for tests
  */
 export function createGaplessLane({
-  context, destination, onAdvance = () => {}, setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = id => clearTimeout(id),
+  context, destination, onAdvance = () => {}, onEnded = () => {},
+  setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = id => clearTimeout(id),
 }) {
-  let current = null; // { item, source, gain }
-  let next = null; // { item, mode, fadeS, source, gain, plan }
+  let current = null; // { item, source, fade, gain, fadeInEnd }
+  let next = null; // { item, mode, fadeS, source, fade, gain, plan }
   let tail = null; // the outgoing track during a crossfade
   let tailFadeEnd = 0;
   let playing = false;
@@ -160,25 +170,37 @@ export function createGaplessLane({
   const now = () => context.currentTime;
   const rate = () => context.sampleRate || 48000;
 
+  /** A voice's two stages: source -> fade (crossfade curves) -> gain (ReplayGain) -> destination. */
   function makeVoice(item) {
     const gain = context.createGain();
     gain.gain.value = dbToGain(item.gainDb);
     gain.connect(destination);
-    return gain;
+    const fade = context.createGain();
+    fade.gain.value = 1;
+    fade.connect(gain);
+    return { fade, gain };
   }
-  function startSource(item, gain, when, offsetS) {
+  function startSource(item, fade, when, offsetS) {
     const source = context.createBufferSource();
     source.buffer = item.buffer;
     if (source.playbackRate) source.playbackRate.value = speed;
-    source.connect(gain);
+    source.connect(fade);
+    // Only a source that is still the current one when it ends reports the
+    // end; silence() clears the handler first, so stop() never reports one.
+    source.onended = () => {
+      if (!playing || current?.source !== source || next?.plan) return;
+      try { onEnded(current.item); } catch {}
+    };
     const remaining = Math.max(0, item.lengthS - offsetS);
     source.start(when, item.startS + offsetS, remaining);
     return source;
   }
   function silence(voice) {
     if (!voice) return;
+    if (voice.source) voice.source.onended = null;
     try { voice.source?.stop(); } catch {}
     try { voice.source?.disconnect(); } catch {}
+    try { voice.fade?.disconnect(); } catch {}
     try { voice.gain?.disconnect(); } catch {}
     voice.source = null;
   }
@@ -186,20 +208,30 @@ export function createGaplessLane({
     if (timer !== null) clearTimer(timer);
     timer = null;
   }
-  function resetCurrentGain() {
-    if (!current?.gain) return;
-    const param = current.gain.gain;
-    try { param.cancelScheduledValues(0); } catch {}
-    try { param.setValueAtTime(dbToGain(current.item.gainDb), now()); } catch { param.value = dbToGain(current.item.gainDb); }
+  /**
+   * Remove the fade-out scheduled for an unscheduled next track. Only events
+   * from the fade-out's start are cancelled, so a fade-in still running on the
+   * current track keeps its curve.
+   */
+  function cancelFadeOut(plan) {
+    if (!current?.fade || !(plan?.fadeS > 0)) return;
+    const param = current.fade.gain;
+    const from = plan.fadeOutAt ?? plan.nextStartAt;
+    try { param.cancelScheduledValues(from); } catch {}
+    if (now() >= from) {
+      try { param.setValueAtTime(1, now()); } catch { param.value = 1; }
+    }
   }
 
   function unscheduleNext() {
     cancelTimer();
     if (next?.source) {
+      const plan = next.plan;
       silence(next);
+      next.fade = null;
       next.gain = null;
       next.plan = null;
-      resetCurrentGain();
+      cancelFadeOut(plan);
     }
   }
 
@@ -216,15 +248,22 @@ export function createGaplessLane({
       now: now(),
       sampleRate: rate(),
     });
-    next.gain = makeVoice(next.item);
+    Object.assign(next, makeVoice(next.item));
     if (plan.fadeS > 0) {
-      const curves = equalPowerCurves(128, dbToGain(current.item.gainDb), dbToGain(next.item.gainDb));
-      next.gain.gain.value = 0;
-      next.gain.gain.setValueCurveAtTime(curves.fadeIn, plan.nextStartAt, plan.fadeS);
-      try { current.gain.gain.cancelScheduledValues(0); } catch {}
-      current.gain.gain.setValueCurveAtTime(curves.fadeOut, plan.nextStartAt, plan.fadeS);
+      const curves = equalPowerCurves(128);
+      next.fade.gain.value = 0;
+      next.fade.gain.setValueCurveAtTime(curves.fadeIn, plan.nextStartAt, plan.fadeS);
+      // The current track's fade-in (if it is still running) is left alone:
+      // the fade-out starts no earlier than the fade-in ends, and ends with
+      // the track. Nothing on the current track's curve is cancelled.
+      const fadeOutAt = Math.max(plan.nextStartAt, current.fadeInEnd ?? 0);
+      const fadeOutS = fadeOutAt === plan.nextStartAt ? plan.fadeS : plan.nextStartAt + plan.fadeS - fadeOutAt;
+      plan.fadeOutAt = fadeOutAt;
+      if (fadeOutS > 0) {
+        try { current.fade.gain.setValueCurveAtTime(curves.fadeOut, fadeOutAt, fadeOutS); } catch {}
+      }
     }
-    next.source = startSource(next.item, next.gain, plan.nextStartAt, 0);
+    next.source = startSource(next.item, next.fade, plan.nextStartAt, 0);
     next.plan = plan;
     const delayMs = Math.max(0, (plan.nextStartAt - now()) * 1000);
     cancelTimer();
@@ -249,7 +288,10 @@ export function createGaplessLane({
     } else {
       silence(current);
     }
-    current = { item: incoming.item, source: incoming.source, gain: incoming.gain };
+    current = {
+      item: incoming.item, source: incoming.source, fade: incoming.fade, gain: incoming.gain,
+      fadeInEnd: incoming.plan.fadeS > 0 ? incoming.plan.nextStartAt + incoming.plan.fadeS : null,
+    };
     startAt = incoming.plan.nextStartAt;
     offsetAtStart = 0;
     next = null;
@@ -268,14 +310,14 @@ export function createGaplessLane({
     cancelTimer();
     if (tail) { silence(tail); tail = null; }
     if (current) silence(current);
-    if (next?.source) { silence(next); next.gain = null; next.plan = null; }
+    if (next?.source) { silence(next); next.fade = null; next.gain = null; next.plan = null; }
   }
 
   return {
     /** Replace everything with one item, paused at its start. */
     load(item) {
       stopAll();
-      current = { item, source: null, gain: null };
+      current = { item, source: null, fade: null, gain: null, fadeInEnd: null };
       next = null;
       playing = false;
       pausedOffset = 0;
@@ -286,8 +328,8 @@ export function createGaplessLane({
       const offset = Math.min(pausedOffset, current.item.lengthS);
       startAt = alignToFrame(now() + LANE_LEAD_S, rate());
       offsetAtStart = offset;
-      current.gain = makeVoice(current.item);
-      current.source = startSource(current.item, current.gain, startAt, offset);
+      Object.assign(current, makeVoice(current.item), { fadeInEnd: null });
+      current.source = startSource(current.item, current.fade, startAt, offset);
       playing = true;
       scheduleNext();
     },
@@ -296,7 +338,7 @@ export function createGaplessLane({
       pausedOffset = position();
       playing = false;
       stopAll();
-      if (current) current.gain = null;
+      if (current) { current.fade = null; current.gain = null; }
     },
     seek(positionS) {
       if (!current) return;
@@ -323,19 +365,24 @@ export function createGaplessLane({
     /** Queue the item that follows, joined by 'gapless' or 'crossfade'. */
     queue(item, { mode = 'gapless', fadeS = 0 } = {}) {
       unscheduleNext();
-      next = item ? { item, mode, fadeS, source: null, gain: null, plan: null } : null;
+      next = item ? { item, mode, fadeS, source: null, fade: null, gain: null, plan: null } : null;
       scheduleNext();
     },
     clearNext() {
       unscheduleNext();
       next = null;
     },
-    /** Change the current item's gain (ReplayGain) smoothly; ignored mid-fade. */
+    /**
+     * Change the current item's gain (ReplayGain) smoothly. It applies at once,
+     * mid-fade included: the level stage carries no fade curve to collide with.
+     */
     setCurrentGainDb(db) {
       if (!current) return;
       current.item.gainDb = Number(db) || 0;
-      if (current.gain && !(next?.plan?.fadeS > 0)) {
-        try { current.gain.gain.setTargetAtTime(dbToGain(current.item.gainDb), now(), 0.02); } catch {}
+      if (current.gain) {
+        const param = current.gain.gain;
+        try { param.cancelScheduledValues(now()); } catch {}
+        try { param.setTargetAtTime(dbToGain(current.item.gainDb), now(), 0.02); } catch { param.value = dbToGain(current.item.gainDb); }
       }
     },
     position,

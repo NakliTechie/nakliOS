@@ -7,6 +7,10 @@
 //      refuses with `[declined]` unless it resolves true. `options.approved` skips the
 //      prompt when someone else already asked the person (the NakliOS host stages
 //      destructive commands itself before it calls the handler).
+//   4. a command marked `askEveryTime` (network.grant, N16) asks through `confirm` on every
+//      call, `approved` or not, because turning a service on is the person's consent and
+//      no caller may give it for them. `options.byPerson` skips the prompt; only the
+//      Network panel's switch passes it, because that click is the person's answer.
 // A handler is a function `(input, context) => result`, or `{ run, diff? }`.
 // A queue-editing command (`ifRevision: true` in COMMANDS) may carry `if_revision`; when
 // `revision()` has moved past it the command refuses with `[conflict]` before it runs,
@@ -103,13 +107,14 @@ function propertyCountErrors(schema, count, names, path) {
  *           revision?: () => number }} [options]
  */
 export function bindCommands(handlers = {}, { confirm = null, revision = null } = {}) {
-  return async function run(name, input = {}, { approved = false, context = {} } = {}) {
+  return async function run(name, input = {}, { approved = false, byPerson = false, context = {} } = {}) {
     const { command, handler, runFn } = resolveHandler(handlers, name);
     const given = input ?? {};
     const errors = validate(command.input, given);
     if (errors.length) throw new CommandError('invalid-input', `${name}: ${errors.join('; ')}.`);
     const args = command.ifRevision ? withoutRevision(given, revision) : given;
-    if (command.scope === 'destructive' && !approved) await askApproval({ name, command, handler, args, context, confirm });
+    const ask = command.askEveryTime ? !byPerson : command.scope === 'destructive' && !approved;
+    if (ask) await askApproval({ name, command, handler, args, context, confirm });
     return runFn(args, context);
   };
 }
@@ -209,11 +214,42 @@ function inEditable(target) {
   return /^(INPUT|TEXTAREA|SELECT)$/.test(String(target.tagName || '').toUpperCase());
 }
 
-/** `{ name, input }` for a key press, or null when no command owns it or focus is in a text field. */
+// Roles whose element presses, opens or picks on Enter or Space itself (N7).
+const ACTIVATING_ROLES = new Set(['button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'checkbox',
+  'radio', 'switch', 'option', 'treeitem', 'gridcell', 'combobox', 'slider', 'spinbutton']);
+
+/** True when Enter and Space belong to the focused element: a button, link, summary or an interactive role. */
+export function ownsActivationKeys(target) {
+  if (!target || typeof target !== 'object') return false;
+  if (/^(BUTTON|A|SUMMARY)$/.test(String(target.tagName || '').toUpperCase())) return true;
+  const role = typeof target.getAttribute === 'function' ? String(target.getAttribute('role') ?? '').trim().toLowerCase() : '';
+  return ACTIVATING_ROLES.has(role);
+}
+
+const MODAL = '[aria-modal="true"],[role="menu"]';
+
+/**
+ * True when a modal dialog or an open menu owns the keyboard (N8): the target sits
+ * inside one, or the target's document holds an open modal (focus fell to the body).
+ */
+export function behindModal(target) {
+  if (!target || typeof target !== 'object') return false;
+  if (typeof target.closest === 'function' && target.closest(MODAL)) return true;
+  const doc = target.nodeType === 9 ? target : target.ownerDocument;
+  return Boolean(doc && typeof doc.querySelector === 'function' && doc.querySelector('[aria-modal="true"]'));
+}
+
+/**
+ * `{ name, input }` for a key press, or null when no command owns it, focus is in a
+ * text field, a modal dialog or menu is open, or the key is Enter or Space on an
+ * element that activates on it.
+ */
 export function matchShortcut(event) {
-  if (inEditable(event?.target)) return null;
+  const target = event?.target;
+  if (inEditable(target) || behindModal(target)) return null;
   const key = shortcutOf(event);
   if (!key) return null;
+  if ((key === 'Space' || key === 'Enter') && ownsActivationKeys(target)) return null;
   const hit = KEY_INDEX.get(key);
   return hit ? { name: hit.name, input: { ...hit.input } } : null;
 }

@@ -289,21 +289,21 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "777e21a574520a07bc3fd6a70db30895efc47a26",
+      "resolvedCommit": "dfa373c7eca10075c5f6bf99b78e64d5795589fb",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "63cf7e37a148c36ef6ae81ed7549f5eef671f1500589847f50e42f2f0d0b6259",
-          "bytes": 260674,
-          "originalSourceSha256": "5cdf0f7387c9fe5008ea6eba3dfc4741071f9e7c0fa23a3068a0c68e1d69c8ea",
+          "sha256": "68ea418be6231de3b08daa3cc51765ed6df2f61b2525974213fdbf3547c01e98",
+          "bytes": 274247,
+          "originalSourceSha256": "8c8d030dd8f567f4f452b0df8d72abf26e1e51520e0dfaddf4eb687898f02380",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "32367863b1100f5d9a87be891a43b4cbf8c924c7e385425a9e3f758c05c7755c",
-          "bytes": 67246
+          "sha256": "b5b652eafc445a779f9f7808d6c55854b851c493d6f2d1dfc84b496980d30779",
+          "bytes": 67338
         },
         {
           "source": "sw.js",
@@ -314,8 +314,8 @@
         {
           "source": "VENDOR.md",
           "destination": "VENDOR.md",
-          "sha256": "de0bcff59a5054cf9a49d1d9b9a7b0985f9b67f5c10834bd28737a957d6d01b4",
-          "bytes": 10500
+          "sha256": "0bd80b5b4a2e8cba01a852e44854ca1261bd5040cfc51c79508b9e83a6cbe9bb",
+          "bytes": 13572
         },
         {
           "source": "LICENSE",
@@ -326,8 +326,8 @@
         {
           "source": "app/agent/events.mjs",
           "destination": "app/agent/events.mjs",
-          "sha256": "e86af2b21885263e23a84ac3214002673e6763d7c72723d730430f63265b2cda",
-          "bytes": 12083
+          "sha256": "20815e86e1ac5edd893937a72b8960d9631712e37dd0e3a29bbe10fd6c75059d",
+          "bytes": 16224
         },
         {
           "source": "app/agent/spectrum.mjs",
@@ -368,8 +368,8 @@
         {
           "source": "app/audio/chain.mjs",
           "destination": "app/audio/chain.mjs",
-          "sha256": "854967b8a22bc2c981387395ab8f96d4d7987bf844a6a040ffaada214bd500f8",
-          "bytes": 5708
+          "sha256": "cf3e6a8835ef390355c457a04a16595803bf21a7b0a6556105efc5ef40fe9189",
+          "bytes": 6584
         },
         {
           "source": "app/audio/eq-presets.mjs",
@@ -386,8 +386,8 @@
         {
           "source": "app/audio/gapless.mjs",
           "destination": "app/audio/gapless.mjs",
-          "sha256": "4e6be5cc36b7c4e10bd6e43fa5e3f327646d4921cd1dfce66b57e6cdc9f5f801",
-          "bytes": 13800
+          "sha256": "b9a00768220a0bcb40addd50e41c69953867641fb184b4ebe6c97b6ec733c5b9",
+          "bytes": 16199
         },
         {
           "source": "app/audio/loudness.mjs",
@@ -410,32 +410,20 @@
         {
           "source": "app/commands/commands.mjs",
           "destination": "app/commands/commands.mjs",
-          "sha256": "f500ca90d6bd60f329a563c9b78b5f6c774aa6d8930a173272ce1dd77b155131",
-          "bytes": 36454
+          "sha256": "2a8665b514b943627a3ee98649a3a37f57aacb17699148cc0fc3e5cb7a6422c0",
+          "bytes": 36942
         },
         {
           "source": "app/commands/run.mjs",
           "destination": "app/commands/run.mjs",
-          "sha256": "ae331daf6dff9eb59ac7f66cd23f59cd5af533fd4997b9b669148e24e1ced1dc",
-          "bytes": 11993
-        },
-        {
-          "source": "app/decode/libav-stream.mjs",
-          "destination": "app/decode/libav-stream.mjs",
-          "sha256": "c0ef1b6fb7c7181fe3acbb1d5263a0cf4fcda77636e06df5186f83b75b90167b",
-          "bytes": 15756
-        },
-        {
-          "source": "app/decode/libav.mjs",
-          "destination": "app/decode/libav.mjs",
-          "sha256": "e8d6c35e908ed7ac0e2edf385c73386ce8191bd7c7c03aa34af1d8b8bafc02bc",
-          "bytes": 17515
+          "sha256": "78535fd5315a5bac6d52f5bf93f87c9ed3b8e0032d48c8662edff459a7f8c3af",
+          "bytes": 14020
         },
         {
           "source": "app/decode/pcm.mjs",
           "destination": "app/decode/pcm.mjs",
-          "sha256": "9ba378347e322b0cead5d7515aeb6d7b4695fd073267a9b07a2cba9218369603",
-          "bytes": 15656
+          "sha256": "ad192973dbe998c41699281a36961b18e21a1fa5d7e6561490474f2e26be7665",
+          "bytes": 21460
         },
         {
           "source": "app/host.mjs",
@@ -476,20 +464,20 @@
         {
           "source": "app/library/playlist.mjs",
           "destination": "app/library/playlist.mjs",
-          "sha256": "6f710782fed7cfdcf2409853b064418f8d9533a818f52ea92d9c0d6b5b4784ec",
-          "bytes": 15919
+          "sha256": "4175ef9aa1f9ae82acfd78d7aaecdae623b8471f853a12c7fecc52f88e8ac562",
+          "bytes": 26168
         },
         {
           "source": "app/library/rename.mjs",
           "destination": "app/library/rename.mjs",
-          "sha256": "0aaf957f7d7f1ccd2b5db76bfa5891f59b7bedf019bd9c1ca06ae3282d8378e3",
-          "bytes": 10079
+          "sha256": "7f792d24427d808f9e8b1f7a4526669afe063d5f886720b5dc0899ba7a7e3e77",
+          "bytes": 14752
         },
         {
           "source": "app/library/scan-core.mjs",
           "destination": "app/library/scan-core.mjs",
-          "sha256": "80702fbfdd62144ab2f12f77cfb6824429d02db4690eeaf1f5e3c0355694acd8",
-          "bytes": 17613
+          "sha256": "031c7d386d93c855c6e706bee15645eccca321ba3371fcc09225b54b4f82ea15",
+          "bytes": 17879
         },
         {
           "source": "app/library/scan-worker.mjs",
@@ -536,14 +524,14 @@
         {
           "source": "app/net/consent.mjs",
           "destination": "app/net/consent.mjs",
-          "sha256": "e43e75646c531132c4b64ebd7f7e2ef9aaba8bc306f41cee740dbc12c3c0eaf3",
-          "bytes": 6536
+          "sha256": "2ef37a6e191570a312394da32b4729c3f5a00814a1e8ab1ee45f3bdde2ca8863",
+          "bytes": 9263
         },
         {
           "source": "app/net/listenbrainz.mjs",
           "destination": "app/net/listenbrainz.mjs",
-          "sha256": "93ffd2455b726c8ec529c1c919435d11b315e4d455394a47a805dd95254d21f3",
-          "bytes": 13840
+          "sha256": "d46fffb6d2505e67ccee39bdc13c59236fbcd7f4f61151db2272dc5f89417354",
+          "bytes": 15912
         },
         {
           "source": "app/net/lrclib.mjs",
@@ -554,14 +542,20 @@
         {
           "source": "app/net/musicbrainz.mjs",
           "destination": "app/net/musicbrainz.mjs",
-          "sha256": "da29ca50f323ea88bf04468c474cee6d32e5913b0c0802763c099e068b89cb27",
-          "bytes": 10728
+          "sha256": "55d34232289d8e78aa9d161b29a1265462c819540a89b7a5da8f9889e7032c05",
+          "bytes": 14177
+        },
+        {
+          "source": "app/net/vault.mjs",
+          "destination": "app/net/vault.mjs",
+          "sha256": "581201a5fd07d021bf73c3aeac27a8ef624b997119fead5878d5986d4721fe6c",
+          "bytes": 6884
         },
         {
           "source": "app/player/queue.mjs",
           "destination": "app/player/queue.mjs",
-          "sha256": "f7cc9a772975a7b9d6cab0009dec96d400344aa6c01fac5c8fdf0b74d7fc0554",
-          "bytes": 13818
+          "sha256": "9f358adba418682c532ca91b737c7af71bfe58691f8a04d978a1e1a28dc5fa03",
+          "bytes": 16062
         },
         {
           "source": "app/player/timers.mjs",
@@ -590,20 +584,38 @@
         {
           "source": "app/tags/id3.mjs",
           "destination": "app/tags/id3.mjs",
-          "sha256": "9908edce3b98f34619c2b4b15c688c36630dac8b5c330128a19a3b546f9a5ae7",
-          "bytes": 10563
+          "sha256": "2b35b6f37deea21bf17d987abd6fea66fe1269441ce2e5b0158547700519584a",
+          "bytes": 18833
+        },
+        {
+          "source": "app/tags/id3v1.mjs",
+          "destination": "app/tags/id3v1.mjs",
+          "sha256": "9e5bf8b37008300d4df8dcb3f81cdf623bc83ae8eba9b94a5d314440370d798e",
+          "bytes": 3329
+        },
+        {
+          "source": "app/tags/pictures.mjs",
+          "destination": "app/tags/pictures.mjs",
+          "sha256": "203cf5521ed2664b9e79e16ca7b083a810c2f2dc4a318815ec49a73710562455",
+          "bytes": 10963
         },
         {
           "source": "app/tags/save.mjs",
           "destination": "app/tags/save.mjs",
-          "sha256": "1ee3488532af1b2b2cb1895aaa3b7a612f43985dbe1051c7e4d31863f9dec61e",
-          "bytes": 9194
+          "sha256": "da792278aa54933cd6ca404f2f83870931e7184d3502ca56b4369a7f65ef17ce",
+          "bytes": 15891
         },
         {
           "source": "app/tags/write.mjs",
           "destination": "app/tags/write.mjs",
-          "sha256": "dde9ac2aaec442a4f0f2c842e722c338936209306f4f5897f9ea155cb03eedc3",
-          "bytes": 12493
+          "sha256": "c87eff3f600463fcd0ded4442864147d7a3b180aea4019aad77cf95dca94e175",
+          "bytes": 19951
+        },
+        {
+          "source": "app/ui/agent-channel.mjs",
+          "destination": "app/ui/agent-channel.mjs",
+          "sha256": "2cbbe822b1c7cd53a87e986ae34642bd950a2dfd14d1b5c7ad2c60d53c9ecff8",
+          "bytes": 4423
         },
         {
           "source": "app/ui/ai-dialog.mjs",
@@ -636,6 +648,12 @@
           "bytes": 4257
         },
         {
+          "source": "app/ui/licences.mjs",
+          "destination": "app/ui/licences.mjs",
+          "sha256": "6a8d109b19824efb5c95cfa43cf8c939e77bbcc42592dae99cae2922d480175f",
+          "bytes": 3895
+        },
+        {
           "source": "app/ui/lyrics.mjs",
           "destination": "app/ui/lyrics.mjs",
           "sha256": "ba9a1db7a6d5a57d4cf563fad6afaf34a9b7de511544e0806e13da6a251cfbe0",
@@ -656,8 +674,8 @@
         {
           "source": "app/ui/shell/format.mjs",
           "destination": "app/ui/shell/format.mjs",
-          "sha256": "325b796963bc39ebefabe70d07f76126878462043a58913e45b006ef7e81fcca",
-          "bytes": 5308
+          "sha256": "de932c224329d80a334ebb3d67afef2e9a95e33ab973e3a8b99ec928218b6fa7",
+          "bytes": 5885
         },
         {
           "source": "app/ui/shell/media-session.mjs",
@@ -686,14 +704,14 @@
         {
           "source": "app/ui/sound-panel.mjs",
           "destination": "app/ui/sound-panel.mjs",
-          "sha256": "d86059512cc6726aa02177f99cddd5d8c3b9b82cf58a4d09abfee6729e88d35c",
-          "bytes": 18137
+          "sha256": "424305cec0db93c2a60c62dd46d3a762eb9a46a0d4a0cbc566aa900aabfba30c",
+          "bytes": 18152
         },
         {
           "source": "app/ui/tag-editor.mjs",
           "destination": "app/ui/tag-editor.mjs",
-          "sha256": "dfab08c90161731ffe664504e2f6ee8847d36b4c168dd382401969874a60c1aa",
-          "bytes": 25425
+          "sha256": "91a218ee8f67e70e120fb5dbacde9c20358aadb2aac307cb04920283303e13d0",
+          "bytes": 30209
         },
         {
           "source": "app/ui/v1x-ai-tools.mjs",
@@ -710,14 +728,14 @@
         {
           "source": "app/ui/v1x-library-tools.mjs",
           "destination": "app/ui/v1x-library-tools.mjs",
-          "sha256": "85d52bce4274a0e4f1b5f818d61758a93f6e1dd8571857b399bc8b8bd3a90a6d",
-          "bytes": 32952
+          "sha256": "6bc23a6afc92a3964732aeb861f041523a8fa491023376bc0554326a7f3033a9",
+          "bytes": 33184
         },
         {
           "source": "app/ui/v1x-network.mjs",
           "destination": "app/ui/v1x-network.mjs",
-          "sha256": "9d792b35ea13fa056113973f7524fbba44924ed734487a6a86a8ac60783650f9",
-          "bytes": 23005
+          "sha256": "c582fefd33f39756b808100e8b114c65e57ae9e4deb9388aff9dd912560d51ee",
+          "bytes": 24786
         },
         {
           "source": "app/ui/v1x-timers.mjs",
@@ -756,10 +774,16 @@
           "bytes": 48298
         },
         {
+          "source": "engine/LICENSE-reel.txt",
+          "destination": "engine/LICENSE-reel.txt",
+          "sha256": "e0450e0052c411fb725bcdb18ffbd71423279eca716938d74817061e19368d31",
+          "bytes": 930
+        },
+        {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs",
-          "sha256": "f1742523e0ef51669fbd47871ac82a212e24d0e97b99cebf394808f715b7ef54",
-          "bytes": 81086
+          "sha256": "835200ed87552e16aaafb15ea2ab921b19285cefb018896523f4b4996afa93d9",
+          "bytes": 85885
         },
         {
           "source": "engine/reel-engine.mjs",
@@ -800,26 +824,8 @@
         {
           "source": "vendor/libav/LICENSE-LGPL-NOTICE.md",
           "destination": "vendor/libav/LICENSE-LGPL-NOTICE.md",
-          "sha256": "afb8d248e345d343a45f74a5666f850d1920fb5a0006621a5a45e570687933bf",
-          "bytes": 644
-        },
-        {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
-          "sha256": "272cef7c32705b2e70290cf4698350e2c888b00b789f11a97386195aa5d0b691",
-          "bytes": 28363
-        },
-        {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
-          "sha256": "6248df5db8d7d91f30ce4b678c851fe6030747496407a2e6deabb16ad0cf6b1a",
-          "bytes": 248832
-        },
-        {
-          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
-          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
-          "sha256": "cdc5ce039f8e584f01a22d94e5026a17caa61d870978920a29c898ac39b46cd3",
-          "bytes": 1537400
+          "sha256": "a433962c03da35a986364c456529354d682b9bd596f0a0396174526b1376f463",
+          "bytes": 2775
         },
         {
           "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
@@ -850,6 +856,12 @@
           "destination": "vendor/webamp/LICENSE-MIT.txt",
           "sha256": "fc7f2696d3e70b5c04659de0a843c1d7defebbb14eb2a07a38808fead88d9279",
           "bytes": 1086
+        },
+        {
+          "source": "vendor/webamp/LICENSES-bundled.txt",
+          "destination": "vendor/webamp/LICENSES-bundled.txt",
+          "sha256": "e129f54a59cc33a73737886ec2e2f40e6401bca7757976f82cdc844d85061365",
+          "bytes": 82496
         },
         {
           "source": "vendor/webamp/webamp-2.3.1.bundle.min.mjs",

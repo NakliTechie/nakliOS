@@ -1,7 +1,12 @@
 // The DSP chain every playback route feeds: ReplayGain gain, ten peaking EQ
 // filters, a master stage, then the destination.
 //
-//   route output -> input (track gain) -> eq[0..9] -> output -> destination
+//   route output -> input (track gain) -> eq[0..9] -> output (EQ preamp) -> destination
+//
+// Headroom (review finding N21): the output stage lowers the level by the
+// largest EQ band boost, so a boosted band does not push the signal past full
+// scale, and clipping prevention treats a gain with no known peak as if the
+// peak were full scale, so it never raises such a track above unity.
 //
 // One chain per AudioContext. Each route that owns a context (Reel's engine,
 // the native element graph, the software rung, the gapless lane) gets its own
@@ -50,9 +55,15 @@ function pickGain(mode, values, albumContext) {
   return (wantAlbum ? (album ?? track) : (track ?? album)) ?? computed;
 }
 
+/** EQ preamp in dB: minus the largest band boost, or 0 when no band boosts. */
+export function eqPreampDb(bandGains = []) {
+  const boost = Math.max(0, ...bandGains.map(value => Number(value) || 0));
+  return boost > 0 ? -boost : 0;
+}
+
 /** Lower the gain so the peak times the gain stays at or under full scale. */
 function limitToPeak(gainDb, peak) {
-  const ceilingDb = -20 * Math.log10(peak);
+  const ceilingDb = -20 * Math.log10(peak) || 0; // `|| 0`: a full-scale peak gives 0, not -0
   return gainDb > ceilingDb ? { gainDb: ceilingDb, clipLimited: true } : { gainDb, clipLimited: false };
 }
 
@@ -81,8 +92,10 @@ export function resolveTrackGain(settings = {}, values = {}, { albumContext = fa
   const pick = pickGain(mode, values, albumContext);
   if (!pick) return { gainDb: 0, source: 'none', peak: null, clipLimited: false };
   const preamped = pick.gainDb + (finite(settings.preampDb) ?? 0);
-  const { gainDb, clipLimited } = settings.preventClipping !== false && pick.peak > 0
-    ? limitToPeak(preamped, pick.peak)
+  // An unknown peak is taken as full scale: without it, a positive gain could
+  // push any sample past full scale and nothing later in the chain limits it.
+  const { gainDb, clipLimited } = settings.preventClipping !== false
+    ? limitToPeak(preamped, pick.peak > 0 ? pick.peak : 1)
     : { gainDb: preamped, clipLimited: false };
   return { gainDb, source: pick.source, peak: pick.peak, clipLimited };
 }
@@ -132,6 +145,7 @@ export function createChain(context) {
     setEq(setting) {
       bandGains = eqGains(setting);
       eq.forEach((filter, index) => smooth(context, filter.gain, bandGains[index]));
+      smooth(context, output.gain, dbToGain(eqPreampDb(bandGains)));
       return [...bandGains];
     },
     /** Set the per-track gain in dB on the input stage. */
@@ -141,6 +155,7 @@ export function createChain(context) {
     },
     gainDb: () => gainDb,
     bandGains: () => [...bandGains],
+    preampDb: () => eqPreampDb(bandGains),
     dispose() {
       for (const item of [input, ...eq, output]) {
         try { item.disconnect(); } catch {}

@@ -421,12 +421,18 @@ function renameSection(ctx, id, getRecords) {
     render();
   }
 
+  // The folder handle lets renameOnDisk check the new name is free; without it, it refuses (N37).
+  async function renameOne(row) {
+    const track = ctx.library?.getTrack?.(row.id);
+    const parent = await ctx.library?.parentFor?.(track);
+    await renameOnDisk(await ctx.library.handleFor(track), row.to, { parent });
+  }
+
   async function renameDirect(rows) {
     if (!(await confirmCommand({ label: 'Rename files', diff: renameDiff(rows) }))) return;
     let done = 0;
     for (const row of rows.filter(r => r.status === 'rename')) {
-      const track = ctx.library?.getTrack?.(row.id);
-      try { await renameOnDisk(await ctx.library.handleFor(track), row.to); done += 1; } catch (error) { ctx.toast?.(plainError(error)); break; }
+      try { await renameOne(row); done += 1; } catch (error) { ctx.toast?.(plainError(error)); break; }
     }
     if (done) await ctx.library?.rescan?.();
     ctx.toast?.(`${done} file${done === 1 ? '' : 's'} renamed.`);
