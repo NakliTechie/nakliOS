@@ -16,7 +16,17 @@ import {
 import { SPEECH, speechStatus, downloadSpeech, transcribeLocal, stopSpeech, speechMB } from './speech.mjs';
 
 const TRANSLATE_BATCH = 30;
-const panelFlag = { type: 'boolean', description: 'true opens the AI panel, false closes it' };
+const exportFlag = { type: 'boolean', description: 'true also returns the SRT text; by default only counts and ids come back' };
+
+/* Where translation runs, from the host's capabilities (NakliOS app contract: aiLocal,
+ * aiModelLabel, aiProvider). Exported for tests. Returns { where: 'device' | 'remote' | 'unknown', model, provider }. */
+export function translateBoundary(capabilities) {
+  const caps = capabilities || {};
+  const model = caps.aiModelLabel || caps.aiModel || null;
+  const provider = caps.aiProvider || null;
+  const where = caps.aiLocal === true ? 'device' : caps.aiLocal === false ? 'remote' : 'unknown';
+  return { where, model, provider };
+}
 
 export const COMMANDS = [
   { name: 'ai.transcribe', label: 'Generate subtitles', scope: 'write', readTwin: 'ai.read',
@@ -26,16 +36,20 @@ export const COMMANDS = [
       language: { type: 'string', description: 'Spoken language code such as "en" or "hi"; omitted lets Whisper detect it' },
       fromS: { type: 'number', minimum: 0, description: 'Start of the range to transcribe; defaults to 0' },
       toS: { type: 'number', minimum: 0, description: 'End of the range; defaults to the end of the video' },
+      export: exportFlag,
       cancel: { type: 'boolean', description: 'Cancel the running job' } }, required: [] } },
   { name: 'ai.translate', label: 'Translate subtitles', scope: 'write', readTwin: 'ai.read',
-    description: 'Translate the selected subtitle track into a language with the NakliOS host model, keeping cue times, and load it as a new track named "(translated)". Outside NakliOS there is no translation model and it refuses. cancel stops a running job.',
+    description: 'Translate the selected subtitle track into a language with the NakliOS host chat model, keeping cue times, and load it as a new track named "(translated)". The subtitle text goes to that model, which may be an outside service (ai.read reports where it runs). Outside NakliOS there is no translation model and it refuses. cancel stops a running job.',
     input: { type: 'object', properties: {
       language: { type: 'string', description: 'Target language code or name, such as "fr" or "French"' },
       trackIndex: { type: 'integer', minimum: 0, description: 'Subtitle track position from subtitle.read; defaults to the selected track' },
+      export: exportFlag,
       cancel: { type: 'boolean', description: 'Cancel the running job' } }, required: [] } },
-  { name: 'ai.read', label: 'AI state', scope: 'read',
-    description: 'Read the local speech model state (absent, cached, loading, loaded), the route for transcription and translation (host, local or none), the running job and its progress, and the last generated track. panel opens or closes the AI panel.',
-    input: { type: 'object', properties: { panel: panelFlag }, required: [] } },
+  { name: 'ai.read', label: 'AI state', scope: 'read', input: { type: 'object', properties: {}, required: [] },
+    description: 'Read the local speech model state (absent, cached, loading, loaded), the route for transcription and translation (host, local or none), where translation runs (device, remote or unknown, with the model and provider), the running job and its progress, the last generated track and whether the AI panel is open.' },
+  { name: 'ai.panel', label: 'AI panel', scope: 'write', readTwin: 'ai.read',
+    description: 'Open or close the AI panel (subtitles from speech and translation); with no input it toggles.',
+    input: { type: 'object', properties: { open: { type: 'boolean', description: 'true opens the AI panel, false closes it' } }, required: [] } },
 ];
 
 export const STRINGS = {
@@ -72,6 +86,11 @@ export const STRINGS = {
   'ai.translate.target': 'Translate the selected track into',
   'ai.translate.run': 'Translate',
   'ai.translate.noLocal': 'Translation needs the NakliOS host model. Outside NakliOS this browser has no translation model, so Reel offers none.',
+  'ai.translate.device': 'Runs on this device ({model}).',
+  'ai.translate.remote': 'The subtitle text is sent to {provider} ({model}), the chat model chosen in NakliOS.',
+  'ai.translate.unknownModel': 'model not named',
+  'ai.translate.unknownProvider': 'an outside service',
+  'ai.translate.unknownBoundary': 'The subtitle text goes to the chat model chosen in NakliOS ({model}); NakliOS does not say whether it runs on this device.',
   'ai.translate.noAccess': 'NakliOS has not given Reel access to its AI model. Allow it in NakliOS, then try again.',
   'ai.toast.generated': 'Generated {count} subtitle cues',
   'ai.toast.translated': 'Translated {count} cues into {language}',
@@ -125,6 +144,7 @@ export function install(ctx) {
     return {
       model: { name: SPEECH.name, state: model.state, bytes: model.bytes, cache: SPEECH.cache, refusedRequests: model.refusedRequests ?? 0 },
       route: { transcribe: transcribeRoute, translate: hostCanChat(host) ? 'host' : 'none' },
+      translateBoundary: hostCanChat(host) ? translateBoundary(host.capabilities) : null,
       pcm: typeof ctx.Engine?.audioPcm === 'function' || Boolean(devHooks.pcm),
       job: job ? { kind: job.kind, phase: job.phase, done: job.done, total: job.total, fraction: job.total ? job.done / job.total : 0, route: job.route, error: job.error || null } : null,
       generated: generated ? { name: generated.name, trackId: generated.trackId, cueCount: generated.cueCount, saved: generated.saved } : null,
@@ -210,7 +230,7 @@ export function install(ctx) {
       editorBox.hidden = false;
       setJob({ phase: 'done', count: cues.length });
       ctx.toast(t('ai.toast.generated', { count: cues.length }));
-      return { route, windows: windows.length, cueCount: cues.length, trackName: name, trackId: generated.trackId, text };
+      return { route, windows: windows.length, cueCount: cues.length, trackName: name, trackId: generated.trackId, ...(input.export === true ? { text } : {}) };
     } catch (error) {
       if (job.phase !== 'cancelled') setJob({ phase: error.code === 'CANCELLED' ? 'cancelled' : 'error', error: error.message });
       throw error;
@@ -270,7 +290,7 @@ export function install(ctx) {
       const loaded = await r.run('subtitle.load-file', { name, text });
       setJob({ phase: 'done', count: out.length });
       ctx.toast(t('ai.toast.translated', { count: out.length, language }));
-      return { route: 'host', language, sourceTrack: source?.label || source?.fileName || null, sentences: groups.length, batches: parts.length, cueCount: out.length, trackName: name, trackId: loaded?.selectedId ?? null, text };
+      return { route: 'host', language, sourceTrack: source?.label || source?.fileName || null, sentences: groups.length, batches: parts.length, cueCount: out.length, trackName: name, trackId: loaded?.selectedId ?? null, ...(input.export === true ? { text } : {}) };
     } catch (error) {
       if (job.phase !== 'cancelled') setJob({ phase: error.code === 'CANCELLED' ? 'cancelled' : 'error', error: error.message });
       throw error;
@@ -279,9 +299,11 @@ export function install(ctx) {
 
   r.handle('ai.transcribe', (input = {}) => transcribe(input, takePersonAct()));
   r.handle('ai.translate', (input = {}) => translate(input));
-  r.handle('ai.read', async ({ panel } = {}) => {
-    if (panel === true) { ctx.panels.open('ai'); await renderStatus(); }
-    if (panel === false && ctx.panels.current() === 'ai') ctx.panels.close();
+  r.handle('ai.read', () => read());
+  r.handle('ai.panel', async ({ open } = {}) => {
+    const show = typeof open === 'boolean' ? open : ctx.panels.current() !== 'ai';
+    if (show) { ctx.panels.open('ai'); await renderStatus(); }
+    else if (ctx.panels.current() === 'ai') ctx.panels.close();
     return read();
   });
 
@@ -345,7 +367,13 @@ export function install(ctx) {
     noChat = state.route.translate === 'none';
     translateButton.disabled = noChat;
     targetSelect.disabled = noChat;
-    translateNote.textContent = noChat ? t('ai.translate.noLocal') : '';
+    const boundary = state.translateBoundary;
+    const model = boundary?.model || t('ai.translate.unknownModel');
+    translateNote.textContent = noChat ? t('ai.translate.noLocal')
+      : boundary?.where === 'device' ? t('ai.translate.device', { model })
+        : boundary?.where === 'remote' ? t('ai.translate.remote', { provider: boundary.provider || t('ai.translate.unknownProvider'), model })
+          : t('ai.translate.unknownBoundary', { model });
+    translateNote.dataset.boundary = noChat ? 'none' : boundary?.where || 'unknown';
     renderProgress();
     return state;
   }
@@ -413,10 +441,10 @@ export function install(ctx) {
 
   const button = el('button', {
     type: 'button', className: 'reel-ai-button', textContent: t('ai.button.text'), title: t('ai.button'),
-    'aria-label': t('ai.button'), 'aria-expanded': 'false', 'aria-controls': 'mount-panels', dataset: { command: 'ai.read' },
+    'aria-label': t('ai.button'), 'aria-expanded': 'false', 'aria-controls': 'mount-panels', dataset: { command: 'ai.panel' },
   });
   button.addEventListener('click', () => {
-    Promise.resolve(r.run('ai.read', { panel: ctx.panels.current() !== 'ai' })).catch(report);
+    Promise.resolve(r.run('ai.panel', {})).catch(report);
   });
   ctx.mounts.controlsRight.append(button);
   ctx.on('ui:panel', ({ id } = {}) => button.setAttribute('aria-expanded', String(id === 'ai')));

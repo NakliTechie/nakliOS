@@ -42,3 +42,28 @@ export function gridMove(index, key, count, columns) {
     default: return null;
   }
 }
+
+/* A file name Reel writes in reel-posters/ (posterName output). */
+export function isPosterName(name) {
+  return /^[a-zA-Z0-9_-]+\.webp$/.test(String(name));
+}
+
+/* The resume index keeps the newest RESUME_LIMIT entries (index.html Storage.upsertResume). */
+export const RESUME_LIMIT = 100;
+export const BOOKMARK_PREFIX = 'bookmarks:';
+
+/* Which stored posters and bookmark records to prune. Pruning runs only once the resume index
+ * is full, because only then has it dropped entries; a record is kept when its fingerprint is in
+ * the index or in `keep` (the file open now and the library's cards). `entries` is the resume
+ * index, `bookmarkKeys` the "bookmarks:<fingerprint>" keys, `posters` the poster file names.
+ * Returns { bookmarkKeys, posters } to delete. */
+export function pruneTargets({ entries, bookmarkKeys, posters, keep = [] }) {
+  if (!Array.isArray(entries) || entries.length < RESUME_LIMIT) return { bookmarkKeys: [], posters: [] };
+  const fingerprints = [...entries.map(entry => entry?.fingerprint), ...keep].filter(Boolean);
+  const keptKeys = new Set(fingerprints.map(fp => `${BOOKMARK_PREFIX}${fp}`));
+  const keptPosters = new Set(fingerprints.map(posterName));
+  return {
+    bookmarkKeys: bookmarkKeys.filter(key => key.startsWith(BOOKMARK_PREFIX) && !keptKeys.has(key)),
+    posters: posters.filter(name => isPosterName(name) && !keptPosters.has(name)),
+  };
+}

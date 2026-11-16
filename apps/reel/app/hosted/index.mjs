@@ -86,6 +86,8 @@ function createStore(ctx, bridge) {
   }
 
   return {
+    /* Drops cached chunks and the one-piece buffer (V58): called when the video closes. */
+    release() { cache.clear(); whole = null; },
     get label() { return backendLabel(); },
     get rangeReads() { return caps().fsRangeReads === true; },
     walk(prefix = '') { return walkListing(dir => fs.list(dir), keep, { prefix }); },
@@ -99,6 +101,9 @@ function createStore(ctx, bridge) {
       const backend = backendLabel();
       if (caps().fsRangeReads === true) {
         if (!Number.isSafeInteger(size)) throw coded(t('hosted.sizeUnknown', { backend, name }), 'ERR_HOSTED_SIZE');
+        // Without a modification time the cache key cannot tell a rewritten file of the same size
+        // from the old one, so a new reader drops that path's cached chunks (V59).
+        if (!stamp) cache.dropPath(path);
         return createChunkReader({
           path, name, size, type, stamp, cache,
           readChunk: (offset, maxBytes) => fs.readBinary(path, { offset, maxBytes }),
@@ -110,7 +115,7 @@ function createStore(ctx, bridge) {
       const bounded = fs.supportsBoundedReads === true;
       if (!Number.isSafeInteger(size) && !bounded) throw coded(t('hosted.sizeUnknown', { backend, name }), 'ERR_HOSTED_SIZE');
       const key = `${path}\0${size}\0${stamp}`;
-      if (whole?.key === key) return whole.reader;
+      if (stamp && whole?.key === key) return whole.reader;
       whole = null;
       const bytes = bytesOf(await fs.readBinary(path, bounded ? { maxBytes: WHOLE_READ_LIMIT + 1 } : undefined));
       if (bytes.byteLength > WHOLE_READ_LIMIT) throw tooLarge(bytes.byteLength);
@@ -327,20 +332,20 @@ export function install(ctx) {
     return item?.hosted && item.name === name ? item.path : null;
   }
 
-  function snapshot() {
+  function snapshot(view = listing) {
     const host = hostStore();
-    const { videos, subtitles } = classify(listing?.records || [], record => ctx.supportsPlayback({ name: record.name, type: '' }));
+    const { videos, subtitles } = classify(view?.records || [], record => ctx.supportsPlayback({ name: record.name, type: '' }));
     return {
       available: available(),
       location: host?.label ?? null,
       rangeReads: host?.rangeReads ?? false,
-      path: listing?.path ?? null,
+      path: view?.path ?? null,
       entries: [
         ...videos.map(record => ({ path: record.path, name: record.name, kind: 'video' })),
         ...subtitles.map(record => ({ path: record.path, name: record.name, kind: 'subtitle' })),
       ],
       folders: [...new Set(videos.map(video => dirOf(video.path)))].sort(comparePaths),
-      truncated: listing?.truncated ?? false,
+      truncated: view?.truncated ?? false,
       panelOpen: dialog.open,
       current: currentPath(),
     };
@@ -399,14 +404,17 @@ export function install(ctx) {
   }
 
   activeSetup = refreshBridge;
+  ctx.on('ui:media-cleared', () => hostStore()?.release?.());
 
   /* ---------- commands ---------- */
 
+  // A read: it walks storage into its own result and leaves the open list as it is (V23).
   registry.handle('hosted.list', async ({ path } = {}) => {
     if (!available()) return snapshot();
     if (path !== undefined && typeof path !== 'string') throw coded('hosted.list path must be a string.', 'ERR_COMMAND_INPUT');
-    await refreshListing(path || '');
-    return snapshot();
+    const prefix = path || '';
+    const { records, truncated } = await requireStore().walk(prefix);
+    return snapshot({ path: prefix, records, truncated });
   });
   registry.handle('hosted.open', ({ path }) => {
     if (typeof path !== 'string' || !path.replace(/\//g, '')) throw coded('hosted.open needs a file path from hosted.list.', 'ERR_COMMAND_INPUT');

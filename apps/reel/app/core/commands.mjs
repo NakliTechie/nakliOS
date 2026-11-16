@@ -1,5 +1,6 @@
 /* Core commands: the transport, volume and view controls that existed before the parity build.
- * Handlers are bound in index.html, because they use its local UI functions. */
+ * Handlers are bound in index.html, because they use its local UI functions. `repeat: true` lets a
+ * held key run the command again (review V34). */
 
 const none = { type: 'object', properties: {}, required: [] };
 
@@ -13,7 +14,7 @@ export const COMMANDS = [
   { name: 'playback.seek', label: 'Seek', scope: 'write', readTwin: 'state.read',
     description: 'Seek to a position in seconds from the start.',
     input: { type: 'object', properties: { positionS: { type: 'number', minimum: 0, description: 'Seconds' } }, required: ['positionS'] } },
-  { name: 'playback.skip', label: 'Skip', scope: 'write', readTwin: 'state.read',
+  { name: 'playback.skip', label: 'Skip', scope: 'write', readTwin: 'state.read', repeat: true,
     description: 'Move the position forward or back by a number of seconds.',
     input: { type: 'object', properties: { seconds: { type: 'number', description: 'Negative goes back' } }, required: ['seconds'] },
     shortcuts: [
@@ -26,7 +27,7 @@ export const COMMANDS = [
       rate: { type: 'number', minimum: 0.25, maximum: 4 },
       delta: { type: 'number', description: 'Change from the current speed' } }, required: [] },
     shortcuts: [{ key: '[', input: { delta: -0.25 } }, { key: ']', input: { delta: 0.25 } }, { key: 'z', input: { rate: 1 } }] },
-  { name: 'audio.volume', label: 'Volume', scope: 'write', readTwin: 'state.read',
+  { name: 'audio.volume', label: 'Volume', scope: 'write', readTwin: 'state.read', repeat: true,
     description: 'Set the volume from 0 to 2 (above 1 boosts up to 200%), or step it by a delta.',
     input: { type: 'object', properties: {
       volume: { type: 'number', minimum: 0, maximum: 2 },

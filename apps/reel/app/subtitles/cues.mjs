@@ -2,6 +2,8 @@
  * cues 0..i, so a backward walk from the last started cue stops as soon as nothing earlier can
  * still be showing. Finding the start point is a binary search. */
 
+export const MAX_ACTIVE_CUES = 8;
+
 export class CueIndex {
   constructor(cues) {
     this.cues = [...cues].sort((a, b) => a.startS - b.startS);
@@ -24,10 +26,12 @@ export class CueIndex {
     return found;
   }
 
-  /* Indices of the cues showing at time t (start inclusive, end exclusive), in start order. */
-  activeAt(t) {
+  /* Indices of the cues showing at time t (start inclusive, end exclusive), in start order.
+   * At most `limit` cues, the latest-starting ones (review finding V13): a file of overlapping
+   * cues cannot fill the screen or the live region. */
+  activeAt(t, limit = MAX_ACTIVE_CUES) {
     const out = [];
-    for (let i = this.lastStartedAt(t); i >= 0 && this.maxEnd[i] > t; i -= 1) {
+    for (let i = this.lastStartedAt(t); i >= 0 && this.maxEnd[i] > t && out.length < limit; i -= 1) {
       if (this.cues[i].endS > t) out.push(i);
     }
     return out.reverse();

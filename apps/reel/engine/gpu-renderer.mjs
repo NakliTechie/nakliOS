@@ -3,7 +3,10 @@
  * Part of the vendorable engine: no imports, no DOM beyond the canvas it is given.
  *
  *   const renderer = await createGpuRenderer(canvas)  // null when WebGPU is missing or fails
- *   renderer.draw(videoFrame, view)                     // true when drawn, false when the device is lost
+ *   renderer.draw(videoFrame, view)                     // true when drawn, false when the device is lost (never throws)
+ *   renderer.onLost(fn)                                 // fn({ reason, message }) once when the GPU device is lost;
+ *                                                       // returns an unsubscribe function. The host then replaces the
+ *                                                       // canvas (a canvas keeps one context kind) and attaches again.
  *   renderer.size(width, height)                        // backing size chosen by the engine
  *   await renderer.snapshot()                           // PNG Blob of the last drawn frame (SDR)
  *   renderer.state()                                    // what the renderer is doing, for state().view
@@ -13,6 +16,7 @@
  * view: { rotation, crop, aspect, zoom: { scale, x, y }, adjust: { brightness, contrast, saturation,
  * gamma }, deinterlace: 'off' | 'blend' | 'bob', tonemap: 'auto' | 'off' }.
  *   rotation     clockwise degrees (0, 90, 180, 270), applied to the frame
+ *   flip         true: mirror left to right after the rotation (MP4 matrix with a negative determinant)
  *   crop         'none' or { top, right, bottom, left } fractions of the displayed (rotated) picture
  *   aspect       not used here: the engine picks the backing size from it and calls size()
  *   zoom         scale >= 1; x, y = the centre of the view in the cropped picture, 0 to 1
@@ -27,6 +31,9 @@
  *             plane textures, because Chrome's external texture conversion hard-clips PQ highlights
  *             (observed 2026-11-16: a PQ ramp clips at 0.786 with no tone curve). The shader then does
  *             YUV to RGB, the PQ or HLG EOTF, BT.2020 to BT.709 and the tone map itself.
+ * state().tonemap tells the host which path mapped HDR: 'shader' (planar path, this file's curve),
+ * 'browser' (external path: the browser converted the frame to SDR itself, with no tone curve here),
+ * 'extended' (HDR passed through to an HDR canvas), 'off' (clipped on request) or 'none' (SDR input).
  * The renderer never closes the engine's VideoFrame. It keeps its own clone of the last frame for
  * snapshot(), and closes that clone on the next draw, clear() or destroy().
  */
@@ -54,7 +61,7 @@ struct Uniforms {
   src: vec4f,     // source width, source height, deinterlace (0 off, 1 blend, 2 bob), bob field (0 top, 1 bottom)
   color: vec4f,   // transfer (0 SDR, 1 PQ, 2 HLG), output (0 SDR tone map, 1 clip, 2 extended), Kr, Kb
   range: vec4f,   // luma offset, luma scale, chroma offset, chroma scale (in 0..1 code units)
-  misc: vec4f,    // max code value, BT.2020 primaries (1 or 0), tone-map peak (1.0 = SDR white), unused
+  misc: vec4f,    // max code value, BT.2020 primaries (1 or 0), tone-map peak (1.0 = SDR white), mirror (1 or 0)
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -69,13 +76,15 @@ struct VsOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
   return out;
 }
 
-// Output position (0..1) to frame position (0..1): zoom, then crop, then undo the rotation.
+// Output position (0..1) to frame position (0..1): zoom, then crop, then undo the mirror (a mirrored
+// track is rotated, then flipped left to right), then undo the rotation.
 fn frameUv(uv: vec2f) -> vec2f {
   let scale = max(u.zoom.x, 1.0);
   let span = 0.5 / scale;
   let centre = clamp(u.zoom.yz, vec2f(span), vec2f(1.0 - span));
   let picture = centre + (uv - vec2f(0.5)) / scale;
-  let d = u.crop.xy + picture * u.crop.zw;
+  var d = u.crop.xy + picture * u.crop.zw;
+  if (u.misc.w > 0.5) { d.x = 1.0 - d.x; }
   let turns = i32(u.zoom.w + 0.5);
   if (turns == 1) { return vec2f(d.y, 1.0 - d.x); }
   if (turns == 2) { return vec2f(1.0 - d.x, 1.0 - d.y); }
@@ -215,6 +224,7 @@ export function normalizeView(view = {}) {
   const num = (value, fallback, min, max) => (Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback);
   return {
     rotation,
+    flip: view.flip === true,
     crop: {
       top: num(crop.top, 0, 0, 0.45), right: num(crop.right, 0, 0, 0.45),
       bottom: num(crop.bottom, 0, 0, 0.45), left: num(crop.left, 0, 0, 0.45),
@@ -237,7 +247,9 @@ export function hdrTransfer(frame) {
   return null;
 }
 
-export async function createGpuRenderer(canvas, { hdrDisplay } = {}) {
+/* Options: hdrDisplay (boolean) overrides the (dynamic-range: high) query; exposeDevice (boolean, for
+ * tests only) adds the GPUDevice to state() as `device`, so a check can destroy it. */
+export async function createGpuRenderer(canvas, { hdrDisplay, exposeDevice = false } = {}) {
   try {
     const gpu = globalThis.navigator?.gpu;
     if (!gpu || !canvas || typeof canvas.getContext !== 'function') return null;
@@ -246,15 +258,35 @@ export async function createGpuRenderer(canvas, { hdrDisplay } = {}) {
     const device = await adapter.requestDevice();
     const context = canvas.getContext('webgpu');
     if (!context) { device.destroy(); return null; }
-    return buildRenderer(canvas, device, context, gpu.getPreferredCanvasFormat(), hdrDisplay);
+    return buildRenderer(canvas, device, context, gpu.getPreferredCanvasFormat(), hdrDisplay, exposeDevice);
   } catch {
     return null;
   }
 }
 
-function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
+function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride, exposeDevice) {
   let lost = false;
-  device.lost.then(() => { lost = true; });
+  let lostInfo = null; // { reason, message }
+  let destroyed = false; // destroy() was called: the device's own 'destroyed' loss is not news
+  const lostListeners = new Set();
+  function markLost(reason, message) {
+    if (lost) return;
+    lost = true;
+    lostInfo = { reason: String(reason || 'unknown'), message: String(message || '') };
+    lastFrame?.close();
+    lastFrame = null;
+    if (destroyed) return;
+    for (const fn of [...lostListeners]) {
+      try { fn({ ...lostInfo }); } catch { /* a host listener failed; the others still run */ }
+    }
+  }
+  device.lost.then(info => markLost(info?.reason, info?.message), () => markLost('unknown', 'device.lost rejected'));
+  /* A thrown WebGPU call means the device or canvas is gone only when the device says so, or the error
+   * names it; any other throw drops this one frame. */
+  function failed(error) {
+    const text = `${error?.name || ''} ${error?.message || error || ''}`;
+    if (/\blost\b|destroyed|OperationError/i.test(text)) markLost('draw-failed', text.trim());
+  }
 
   const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
   const uniformBuffer = device.createBuffer({ size: 7 * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -299,6 +331,7 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
   }
 
   let planes = null; // { key, y, u, v }
+  let copyBuffer = null; // HDR copyTo target, reused while the frame size holds (review V45)
   let lastFrame = null;
   let lastView = normalizeView();
   let info = { input: null, hdr: null, output: 'sdr', tonemap: 'none', format: null };
@@ -328,7 +361,9 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
     const hdr = hdrTransfer(frame);
     const spec = hdr ? HDR_FORMATS[frame.format] : null;
     if (hdr && spec) {
-      const data = new Uint8Array(frame.allocationSize());
+      const bytes = frame.allocationSize();
+      if (!copyBuffer || copyBuffer.byteLength !== bytes) copyBuffer = new Uint8Array(bytes);
+      const data = copyBuffer;
       const layout = await frame.copyTo(data);
       uploadPlanes(frame, layout, spec, data);
       return { path: 'planar', hdr, spec };
@@ -362,7 +397,7 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
       srcW, srcH, deinterlace, v.field === 'bottom' ? 1 : 0,
       transfer, outputMode, kr, kb,
       ...range,
-      maxCode, bt2020, (input.hdr === 'hlg' ? HLG_PEAK_NITS : PQ_PEAK_NITS) / SDR_WHITE_NITS, 0,
+      maxCode, bt2020, (input.hdr === 'hlg' ? HLG_PEAK_NITS : PQ_PEAK_NITS) / SDR_WHITE_NITS, v.flip ? 1 : 0,
     ]);
     device.queue.writeBuffer(uniformBuffer, 0, data);
     return v;
@@ -404,20 +439,25 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
   /* draw() is synchronous for SDR frames. HDR frames need an asynchronous copyTo; the draw finishes
    * on a later microtask with a clone, so the engine may close its frame as soon as draw() returns. */
   function draw(frame, view) {
-    if (lost || !frame) return false;
-    const hdr = hdrTransfer(frame);
-    const mine = frame.clone();
-    lastFrame?.close();
-    lastFrame = mine;
-    lastView = normalizeView(view);
-    generation += 1;
-    const ticket = generation;
-    if (hdr && HDR_FORMATS[frame.format]) {
-      drawing = drawing.then(() => (ticket === generation ? drawNow(mine, lastView) : null)).catch(() => {});
-      return true;
+    if (lost || destroyed || !frame) return false;
+    try {
+      const hdr = hdrTransfer(frame);
+      const mine = frame.clone();
+      lastFrame?.close();
+      lastFrame = mine;
+      lastView = normalizeView(view);
+      generation += 1;
+      const ticket = generation;
+      if (hdr && HDR_FORMATS[frame.format]) {
+        drawing = drawing.then(() => (ticket === generation ? drawNow(mine, lastView) : null)).catch(failed);
+        return true;
+      }
+      drawNowSync(mine, lastView, { path: 'external', hdr, spec: null });
+      return !lost;
+    } catch (error) {
+      failed(error);
+      return false;
     }
-    drawNowSync(mine, lastView, { path: 'external', hdr, spec: null });
-    return true;
   }
 
   function drawNowSync(frame, view, input) {
@@ -441,7 +481,7 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
   async function drawNow(frame, view) {
     if (lost || frame !== lastFrame) return;
     const input = await prepareInput(frame);
-    if (frame !== lastFrame) return;
+    if (lost || frame !== lastFrame) return;
     drawNowSync(frame, view, input);
   }
 
@@ -453,8 +493,15 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
   }
 
   /* PNG of the last frame, drawn again off screen in SDR (tone-mapped when HDR). */
-  async function snapshot() {
-    await drawing;
+  /* Chained after any HDR draw in flight, so the two never share the copy buffer and plane textures. */
+  function snapshot() {
+    const result = drawing.then(snapshotNow);
+    drawing = result.catch(() => {});
+    return result;
+  }
+
+  async function snapshotNow() {
+    if (lost) throw new Error(`The GPU device was lost (${lostInfo?.reason}).`);
     if (!lastFrame) throw new Error('No frame has been drawn yet.');
     const frame = lastFrame;
     const width = canvas.width;
@@ -489,21 +536,36 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
     generation += 1;
     lastFrame?.close();
     lastFrame = null;
-    if (lost) return;
-    configure('sdr');
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
-    });
-    pass.end();
-    device.queue.submit([encoder.finish()]);
+    if (lost || destroyed) return;
+    try {
+      configure('sdr');
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
+      });
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  function onLost(fn) {
+    if (typeof fn !== 'function') return () => {};
+    lostListeners.add(fn);
+    return () => lostListeners.delete(fn);
   }
 
   function state() {
-    return { backend: 'webgpu', lost, extendedSupported, hdrDisplay: hdrDisplay(), ...info };
+    const out = { backend: 'webgpu', lost, lostReason: lostInfo?.reason ?? null, extendedSupported, hdrDisplay: hdrDisplay(), ...info };
+    if (exposeDevice) out.device = device;
+    return out;
   }
 
   function destroy() {
+    destroyed = true;
+    lostListeners.clear();
+    copyBuffer = null;
     generation += 1;
     lastFrame?.close();
     lastFrame = null;
@@ -514,5 +576,5 @@ function buildRenderer(canvas, device, context, sdrFormat, hdrDisplayOverride) {
     device.destroy();
   }
 
-  return Object.freeze({ draw, size, snapshot, state, clear, destroy });
+  return Object.freeze({ draw, size, snapshot, state, clear, destroy, onLost });
 }

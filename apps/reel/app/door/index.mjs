@@ -8,7 +8,9 @@
  * NakliOS rail: when hosted, every registry command is registered with
  * `naklios.experimental_commands.register` (the host lists them as `reel.<name>`). Standalone,
  * nothing is called.
- * `door.read` reports all three. */
+ * `door.read` reports all three, and changes nothing (V23): host registration runs once after install.
+ * Scopes map to WebMCP annotations: read is readOnlyHint, destructive is destructiveHint (V22); the
+ * NakliOS rail gets the scope as is, and the host stages destructive commands through review. */
 
 export const COMMANDS = [
   { name: 'door.read', label: 'Agent and offline status', scope: 'read',
@@ -24,6 +26,11 @@ export function findModelContext(doc = globalThis.document, nav = globalThis.nav
   if (typeof doc?.modelContext?.registerTool === 'function') return { api: doc.modelContext, name: 'document.modelContext' };
   if (typeof nav?.modelContext?.registerTool === 'function') return { api: nav.modelContext, name: 'navigator.modelContext' };
   return null;
+}
+
+/* WebMCP tool annotations for a command scope. */
+export function toolAnnotations(scope) {
+  return { readOnlyHint: scope === 'read', destructiveHint: scope === 'destructive' };
 }
 
 function toText(value) {
@@ -42,7 +49,7 @@ export async function registerTools(api, definitions, run) {
       title: def.label,
       description: def.description,
       inputSchema: def.input,
-      annotations: { readOnlyHint: def.scope === 'read' },
+      annotations: toolAnnotations(def.scope),
       async execute(input) {
         try {
           const result = await run(def.name, input ?? {});
@@ -133,7 +140,6 @@ export function install(ctx) {
   }
 
   ctx.registry.handle('door.read', async () => {
-    await syncHost().catch(() => {});
     let worker = null;
     let cache = null;
     if (offline.supported) {

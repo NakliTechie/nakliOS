@@ -90,6 +90,9 @@ function createConsentDialog(ctx) {
         finish(false);
       });
       dialog.addEventListener('close', () => finish(false));
+      // Keys stay inside the dialog, so the player's shortcuts do not fire behind it (V66). Escape
+      // still cancels: the browser fires `cancel` from the default action, not from bubbling.
+      dialog.addEventListener('keydown', event => event.stopPropagation());
 
       (ctx.mounts.dialogs || document.body).append(dialog);
       try {
@@ -112,6 +115,10 @@ function createConsentDialog(ctx) {
 export function install(ctx) {
   ctx.addStyle(STYLE);
   const ask = createConsentDialog(ctx);
+  // Development hook (?dev=1 only): checks open the consent dialog without a decoder download.
+  try {
+    if (new URLSearchParams(location.search).get('dev') === '1') globalThis.__reelRung = Object.freeze({ ask });
+  } catch { /* no location */ }
   // CONFIG is the object the engine received; the engine reads this hook at call time.
   ctx.CONFIG.requestDownload = async info => (await ask(info)) === true;
 

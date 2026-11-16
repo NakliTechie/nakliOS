@@ -2047,6 +2047,10 @@
           "destination": "app/hosted/logic.mjs"
         },
         {
+          "source": "app/library/forget.mjs",
+          "destination": "app/library/forget.mjs"
+        },
+        {
           "source": "app/library/index.mjs",
           "destination": "app/library/index.mjs"
         },
@@ -2111,6 +2115,14 @@
           "destination": "app/subtitles/parse.mjs"
         },
         {
+          "source": "app/subtitles/pgs-decode.mjs",
+          "destination": "app/subtitles/pgs-decode.mjs"
+        },
+        {
+          "source": "app/subtitles/pgs-worker.mjs",
+          "destination": "app/subtitles/pgs-worker.mjs"
+        },
+        {
           "source": "app/subtitles/pgs.mjs",
           "destination": "app/subtitles/pgs.mjs"
         },
@@ -2154,6 +2166,10 @@
           "source": "index.html",
           "destination": "index.html",
           "managedSdk": "inline"
+        },
+        {
+          "source": "licences.html",
+          "destination": "licences.html"
         },
         {
           "source": "sw.js",
@@ -2212,12 +2228,12 @@
           "destination": "vendor/libav/mkconfig-reel.json"
         },
         {
-          "source": "vendor/libpgs/LICENSE",
-          "destination": "vendor/libpgs/LICENSE"
+          "source": "vendor/libav/pins.json",
+          "destination": "vendor/libav/pins.json"
         },
         {
-          "source": "vendor/libpgs/libpgs.js",
-          "destination": "vendor/libpgs/libpgs.js"
+          "source": "vendor/libpgs/LICENSE",
+          "destination": "vendor/libpgs/LICENSE"
         },
         {
           "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",

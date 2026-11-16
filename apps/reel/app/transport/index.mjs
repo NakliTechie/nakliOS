@@ -14,10 +14,10 @@ import { SEEKBAR_STRINGS, SEEKBAR_CSS, installSeekbar } from './seekbar.mjs';
 import { BOOKMARK_COMMANDS, BOOKMARK_STRINGS, BOOKMARK_CSS, installBookmarks } from './bookmarks.mjs';
 
 const none = { type: 'object', properties: {}, required: [] };
-const panelFlag = { type: 'boolean', description: 'true opens the panel, false closes it' };
+const panelInput = { type: 'object', properties: { open: { type: 'boolean', description: 'true opens the panel, false closes it' } }, required: [] };
 
 export const COMMANDS = [
-  { name: 'frame.step', label: 'Step one frame', scope: 'write', readTwin: 'state.read',
+  { name: 'frame.step', label: 'Step one frame', scope: 'write', readTwin: 'state.read', repeat: true,
     description: 'Show the next (direction 1) or previous (direction -1) frame while paused; if playing, the first step pauses.',
     input: { type: 'object', properties: { direction: { type: 'integer', enum: [-1, 1] } }, required: ['direction'] },
     shortcuts: [{ key: '.', input: { direction: 1 } }, { key: ',', input: { direction: -1 } }] },
@@ -38,9 +38,10 @@ export const COMMANDS = [
   { name: 'chapter.go', label: 'Go to chapter', scope: 'write', readTwin: 'chapter.list',
     description: 'Seek to the start of the chapter at a zero-based index.',
     input: { type: 'object', properties: { index: { type: 'integer', minimum: 0 } }, required: ['index'] } },
-  { name: 'chapter.list', label: 'Chapters', scope: 'read',
-    description: 'List the chapters (title, startS, endS) and the current chapter index; panel opens or closes the chapters panel.',
-    input: { type: 'object', properties: { panel: panelFlag }, required: [] } },
+  { name: 'chapter.list', label: 'Chapters', scope: 'read', input: none,
+    description: 'List the chapters (title, startS, endS), the current chapter index and whether the chapters panel is open.' },
+  { name: 'chapter.panel', label: 'Chapters panel', scope: 'write', readTwin: 'chapter.list', input: panelInput,
+    description: 'Open or close the chapters panel; with no input it toggles.' },
   { name: 'playback.jump-to', label: 'Jump to time', scope: 'write', readTwin: 'state.read',
     description: 'Seek to a typed time such as "1:23:45", "83:20", "90" (seconds) or "45%"; with no time it opens the jump-to-time box.',
     input: { type: 'object', properties: {
@@ -52,16 +53,17 @@ export const COMMANDS = [
       index: { type: 'integer', minimum: 0 },
       delta: { type: 'integer', description: 'Tracks to move; negative goes back' } }, required: [] },
     shortcuts: [{ key: 'v' }] },
-  { name: 'audio.delay', label: 'Audio delay', scope: 'write', readTwin: 'audio.read',
+  { name: 'audio.delay', label: 'Audio delay', scope: 'write', readTwin: 'audio.read', repeat: true,
     description: 'Offset the audio against the video from -10 to 10 seconds (positive plays audio later): set delayS, step by deltaS, or reset to 0.',
     input: { type: 'object', properties: {
       delayS: { type: 'number', minimum: -10, maximum: 10 },
       deltaS: { type: 'number', description: 'Change from the current delay in seconds' },
       reset: { type: 'boolean' } }, required: [] },
     shortcuts: [{ key: 'j', input: { deltaS: -AUDIO_DELAY_STEP_S } }, { key: 'k', input: { deltaS: AUDIO_DELAY_STEP_S } }] },
-  { name: 'audio.read', label: 'Audio tracks', scope: 'read',
-    description: 'List the audio tracks (title, language, codec, channels), the selected index and the audio delay; panel opens or closes the audio panel.',
-    input: { type: 'object', properties: { panel: panelFlag }, required: [] } },
+  { name: 'audio.read', label: 'Audio tracks', scope: 'read', input: none,
+    description: 'List the audio tracks (title, language, codec, channels), the selected index, the audio delay and whether the audio panel is open.' },
+  { name: 'audio.panel', label: 'Audio panel', scope: 'write', readTwin: 'audio.read', input: panelInput,
+    description: 'Open or close the audio panel (tracks and delay); with no input it toggles.' },
 ];
 
 export const STRINGS = {
@@ -205,15 +207,15 @@ export function install(ctx) {
     title: `${t('transport.frame.forward')} (.)`, onclick: () => run('frame.step', { direction: 1 }) });
   const loopButton = el('button', { type: 'button', 'data-command': 'loop.set', text: 'A-B', 'aria-label': t('transport.loop.button'),
     title: `${t('transport.loop.button')} (l)`, onclick: () => run('loop.set', { action: 'cycle' }) });
-  const chapterButton = el('button', { type: 'button', 'data-command': 'chapter.list', text: '☰', hidden: true,
+  const chapterButton = el('button', { type: 'button', 'data-command': 'chapter.panel', text: '☰', hidden: true,
     'aria-label': t('transport.chapter.button'), 'aria-expanded': 'false',
     title: `${t('transport.chapter.button')} (PageUp, PageDown)`,
-    onclick: () => run('chapter.list', { panel: ctx.panels.current() !== CHAPTER_PANEL }) });
+    onclick: () => run('chapter.panel', {}) });
   ctx.mounts.controlsLeft.append(chapterLabel, frameBack, frameForward, loopButton, chapterButton);
 
-  const audioButton = el('button', { type: 'button', 'data-command': 'audio.read', text: '♪', hidden: true,
+  const audioButton = el('button', { type: 'button', 'data-command': 'audio.panel', text: '♪', hidden: true,
     'aria-label': t('transport.audio.button'), 'aria-expanded': 'false', title: `${t('transport.audio.button')} (v, j, k)`,
-    onclick: () => run('audio.read', { panel: ctx.panels.current() !== AUDIO_PANEL }) });
+    onclick: () => run('audio.panel', {}) });
   ctx.mounts.controlsRight.append(audioButton);
 
   const marks = el('div', { class: 'transport-marks' });
@@ -423,11 +425,12 @@ export function install(ctx) {
     return {
       chapters: state.chapters.map(({ startS, endS, title }) => ({ startS, endS, title })),
       currentIndex: chapterIndexAt(state.chapters, position()),
+      panelOpen: ctx.panels.current() === CHAPTER_PANEL,
     };
   }
 
   function audioRead() {
-    return { tracks: audioTracks(), selected: store.tracks.selected?.audio ?? 0, delayS: currentDelay() };
+    return { tracks: audioTracks(), selected: store.tracks.selected?.audio ?? 0, delayS: currentDelay(), panelOpen: ctx.panels.current() === AUDIO_PANEL };
   }
 
   /* ------------------------------------------------------- handlers -- */
@@ -504,8 +507,9 @@ export function install(ctx) {
     return index < 0 ? { ...chapterRead(), moved: false } : goToChapter(index);
   });
   registry.handle('chapter.go', ({ index }) => goToChapter(index));
-  registry.handle('chapter.list', ({ panel }) => {
-    setPanel(CHAPTER_PANEL, panel);
+  registry.handle('chapter.list', () => chapterRead());
+  registry.handle('chapter.panel', ({ open }) => {
+    setPanel(CHAPTER_PANEL, typeof open === 'boolean' ? open : ctx.panels.current() !== CHAPTER_PANEL);
     return chapterRead();
   });
 
@@ -556,8 +560,9 @@ export function install(ctx) {
     renderAudioPanel();
     return audioRead();
   });
-  registry.handle('audio.read', ({ panel }) => {
-    setPanel(AUDIO_PANEL, panel);
+  registry.handle('audio.read', () => audioRead());
+  registry.handle('audio.panel', ({ open }) => {
+    setPanel(AUDIO_PANEL, typeof open === 'boolean' ? open : ctx.panels.current() !== AUDIO_PANEL);
     return audioRead();
   });
 

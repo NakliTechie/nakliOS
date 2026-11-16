@@ -2,10 +2,10 @@
  * Contract: docs/build/reel-v1-contract.md.
  * No DOM access at module top level, so Node can import COMMANDS for commands.json. */
 
-import { decodeSubtitleBytes } from './decode.mjs';
-import { parseSubtitles, detectFormat, cuesFromEngine, serialiseSubtitles, buildAssDocument } from './parse.mjs';
+import { decodeSubtitleBytes, utf8ByteLength } from './decode.mjs';
+import { parseSubtitles, detectFormat, cuesFromEngine, serialiseSubtitles, buildAssDocument, MAX_CUES } from './parse.mjs';
 import { pgsPacketsToSup, isBitmapCodec } from './pgs.mjs';
-import { createStyledRenderer } from './styled.mjs';
+import { createStyledRenderer, pickFonts, FONT_LIMITS } from './styled.mjs';
 import { createBitmapRenderer } from './bitmap.mjs';
 import { CueIndex } from './cues.mjs';
 import { matchSidecars, isSubtitleName, stripExtension, describeSidecar, SUBTITLE_EXTENSIONS } from './match.mjs';
@@ -13,7 +13,6 @@ import { createCaptions, normaliseStyle, DEFAULT_STYLE, STYLE_LIMITS } from './c
 
 const STYLE_KEY = 'subtitles:style';
 const RENDERER_KEY = 'subtitles:renderer';
-const FONT_RE = /\.(ttf|otf|ttc|woff2?)$/i;
 const DELAY_STEP_S = 0.05;
 const DELAY_LIMIT_S = 60;
 const MAX_SIDECAR_BYTES = 20 * 1024 * 1024;
@@ -27,7 +26,7 @@ export const COMMANDS = [
       id: { type: 'string', description: 'Track id from subtitle.read' },
       next: { type: 'boolean', description: 'Step to the next track, wrapping through Off' } }, required: [] },
     shortcuts: [{ key: 's', input: { next: true } }] },
-  { name: 'subtitle.delay', label: 'Subtitle delay', scope: 'write', readTwin: 'subtitle.read',
+  { name: 'subtitle.delay', label: 'Subtitle delay', scope: 'write', readTwin: 'subtitle.read', repeat: true,
     description: 'Set the subtitle delay in seconds (positive shows subtitles later), or change it by a delta. It resets for each file.',
     input: { type: 'object', properties: {
       delayS: { type: 'number', minimum: -DELAY_LIMIT_S, maximum: DELAY_LIMIT_S },
@@ -123,6 +122,12 @@ export const STRINGS = {
   'subtitles.toast.secondary': 'Second subtitles: {label}',
   'subtitles.toast.secondaryOff': 'Second subtitles off',
   'subtitles.error.load': 'Subtitles could not be read',
+  'subtitles.error.styledStopped': 'Styled subtitles stopped, so Reel shows them as plain text',
+  'subtitles.error.bitmapStopped': 'Bitmap subtitles stopped',
+  'subtitles.toast.fontsDropped': 'Some fonts in this file were not loaded, so some lines use the fallback font',
+  'subtitles.toast.fontsDroppedDetail': '{count} skipped; Reel loads at most {files} fonts and {mb} MB of fonts.',
+  'subtitles.toast.fontsUnread': 'The fonts in this file could not be read, so subtitles use the fallback font',
+  'subtitles.toast.truncated': 'Reel loaded the first {count} subtitles of {name}; the rest are not shown.',
 };
 
 export function install(ctx) {
@@ -144,8 +149,22 @@ export function install(ctx) {
   };
   const captions = createCaptions(ctx);
   captions.setStyle(S.style);
-  const styled = createStyledRenderer({ layer: captions.layer, onLayout: fn => captions.onLayout(fn) });
-  const bitmap = createBitmapRenderer({ layer: captions.layer });
+  const styled = createStyledRenderer({
+    layer: captions.layer,
+    onLayout: fn => captions.onLayout(fn),
+    onFailure: message => rendererStopped('styled', message),
+  });
+  const bitmap = createBitmapRenderer({ layer: captions.layer, onFailure: message => rendererStopped('bitmap', message) });
+
+  /* A canvas renderer failed after it started (a worker error or a watchdog): show plain text
+   * again where there is any, and tell the person. */
+  function rendererStopped(kind, message) {
+    if (S.active !== kind) return;
+    S.active = null;
+    captions.setPrimaryHidden(false);
+    ctx.toast(t(kind === 'styled' ? 'subtitles.error.styledStopped' : 'subtitles.error.bitmapStopped'), 'err', message);
+    publish();
+  }
 
   Promise.resolve(ctx.Storage?.get?.(RENDERER_KEY)).then(saved => {
     if (saved === 'plain' || saved === 'styled') { S.rendererMode = saved; publish(); }
@@ -262,16 +281,26 @@ export function install(ctx) {
     captions.setPrimaryHidden(false);
   }
 
+  /* The file's attached fonts, capped (review finding V17). The person hears about fonts that
+   * were left out, because libass then draws those lines in the fallback font. The returned
+   * arrays are views of the engine's bytes; this module keeps no copy after the start. */
   async function attachedFonts() {
     if (typeof ctx.Engine.attachments !== 'function') return [];
+    let list;
     try {
-      const list = await ctx.Engine.attachments();
-      return (list || [])
-        .filter(item => item?.data && (/font|truetype|opentype|woff/i.test(item.mimeType || '') || FONT_RE.test(item.name || '')))
-        .map(item => (item.data instanceof Uint8Array ? item.data : new Uint8Array(item.data)));
-    } catch {
+      list = await ctx.Engine.attachments();
+    } catch (error) {
+      ctx.toast(t('subtitles.toast.fontsUnread'), 'info', error?.message || String(error));
       return [];
     }
+    const { fonts, dropped } = pickFonts(list);
+    const engineDropped = Number(list?.dropped) || 0;
+    if (dropped + engineDropped > 0) {
+      ctx.toast(t('subtitles.toast.fontsDropped'), 'info', t('subtitles.toast.fontsDroppedDetail', {
+        count: dropped + engineDropped, files: FONT_LIMITS.files, mb: FONT_LIMITS.bytes / (1024 * 1024),
+      }));
+    }
+    return fonts;
   }
 
   async function startStyled(track, gen) {
@@ -281,9 +310,11 @@ export function install(ctx) {
       if (gen !== S.gen || S.selectedId !== track.id) return;
       S.active = 'styled';
       publish();
-      await styled.start({ content, fonts });
+      const started = await styled.start({ content, fonts });
       if (gen !== S.gen || S.selectedId !== track.id) return;
-      captions.setPrimaryHidden(true);
+      // A superseded start (track A, B, then A again) returns early while the newest start is
+      // still loading; plain text stays until the renderer reports ready (V49).
+      if (started === 'ready' && styled.status() === 'ready') captions.setPrimaryHidden(true);
       publish();
     } catch (error) {
       if (gen !== S.gen || S.selectedId !== track.id) return;
@@ -365,9 +396,12 @@ export function install(ctx) {
 
   function addSidecarText(name, text, { key = `${name}\0text\0${text.length}`, encoding = 'utf-8', origin = 'user', replace = null } = {}) {
     if (!S.name) throw new Error(t('subtitles.error.noMedia'));
+    // Every load path passes here, so the 20 MB cap holds for agent text too (V16).
+    if (utf8ByteLength(text, MAX_SIDECAR_BYTES) > MAX_SIDECAR_BYTES) throw new RangeError(t('subtitles.error.tooLarge', { name }));
     const format = detectFormat(text, name);
     const cues = parseSubtitles(text, format);
     if (!cues.length) throw new Error(t('subtitles.error.empty', { name }));
+    if (cues.truncated) ctx.toast(t('subtitles.toast.truncated', { count: MAX_CUES.toLocaleString(), name }), 'info');
     const info = describeSidecar(S.name, name);
     if (!replace) S.sidecarCount += 1;
     const track = {
@@ -624,6 +658,7 @@ export function install(ctx) {
     if (file && typeof file.arrayBuffer === 'function' && replace) {
       const fileName = file.name || name || 'subtitles.srt';
       if (/\.sup$/i.test(fileName)) throw new TypeError(t('subtitles.error.replace'));
+      if (file.size > MAX_SIDECAR_BYTES) throw new RangeError(t('subtitles.error.tooLarge', { name: fileName }));
       const { text: decoded, encoding } = decodeSubtitleBytes(await file.arrayBuffer());
       track = addSidecarText(fileName, decoded, { encoding, origin: replace.origin, replace });
     } else if (file && typeof file.arrayBuffer === 'function') {

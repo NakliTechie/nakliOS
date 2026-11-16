@@ -18,6 +18,10 @@ export const STRINGS = {
   'platform.pip.play': 'Play',
   'platform.pip.pause': 'Pause',
   'platform.pip.close': 'Close Picture-in-Picture',
+  'platform.pip.back': 'Back 10 seconds',
+  'platform.pip.forward': 'Forward 10 seconds',
+  'platform.pip.seek': 'Position',
+  'platform.pip.volume': 'Volume',
   'platform.pip.unsupported': 'This browser has no Picture-in-Picture.',
   'platform.pip.noVideo': 'Open a video before using Picture-in-Picture.',
   'platform.pip.iframe': 'Picture-in-Picture is blocked in this frame.',
@@ -44,6 +48,49 @@ export function pipRoute(win = globalThis) {
   return 'none';
 }
 
+/* The canvas the host put in place after a GPU loss (`ui:canvas-replaced` carries its id): looked up
+ * in each document that may hold it, the PiP window's first. Exported for the check. */
+export function findCanvas(id, docs) {
+  for (const doc of docs) {
+    const found = id && doc?.getElementById?.(id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/* The Document PiP window's controls (V63): seek range, back and forward 10 s, play, volume and
+ * close, appended to `bar`. Each control runs a registry command through `run`. Exported so the
+ * check can build them in a detached document, because a PiP window needs a real gesture. */
+export function pipControls(doc, bar, { t, run }) {
+  const button = (command, text, label, input) => {
+    const node = doc.createElement('button');
+    node.type = 'button';
+    node.dataset.command = command;
+    if (text) node.textContent = text;
+    if (label) node.setAttribute('aria-label', t(label));
+    node.addEventListener('click', () => run(command, input));
+    return node;
+  };
+  const range = (command, className, label, attrs, toInput) => {
+    const node = doc.createElement('input');
+    node.type = 'range';
+    node.className = className;
+    node.dataset.command = command;
+    for (const [key, value] of Object.entries(attrs)) node[key] = value;
+    node.setAttribute('aria-label', t(label));
+    node.addEventListener('input', () => run(command, toInput(Number(node.value))));
+    return node;
+  };
+  const play = button('playback.toggle', '', '', undefined);
+  const back = button('playback.skip', '−10', 'platform.pip.back', { seconds: -TOUCH_SKIP_S });
+  const forward = button('playback.skip', '+10', 'platform.pip.forward', { seconds: TOUCH_SKIP_S });
+  const seek = range('playback.seek', 'platform-pip-seek', 'platform.pip.seek', { min: '0', step: '0.1' }, positionS => ({ positionS }));
+  const volume = range('audio.volume', 'platform-pip-volume', 'platform.pip.volume', { min: '0', max: '1', step: '0.05' }, value => ({ volume: value }));
+  const close = button('view.pip', '✕', 'platform.pip.close', { on: false });
+  bar.append(seek, back, play, forward, volume, close);
+  return { play, back, forward, seek, volume, close };
+}
+
 export function install(ctx) {
   const { Engine, store, t, registry } = ctx;
   const state = store.ui.platform = {
@@ -51,9 +98,10 @@ export function install(ctx) {
     mediaSession: { supported: 'mediaSession' in navigator, title: null, handlers: [] },
     wakeLock: { supported: 'wakeLock' in navigator, active: false, requests: 0, outcome: null, error: null },
   };
-  // Held once: during Document Picture-in-Picture the canvas lives in another document,
-  // where ctx.canvas() (a lookup in this document) returns null.
-  const videoCanvas = ctx.canvas();
+  // Held, because during Document Picture-in-Picture the canvas lives in another document, where
+  // ctx.canvas() (a lookup in this document) returns null. Re-pointed on ui:canvas-replaced.
+  let videoCanvas = ctx.canvas();
+  let recapture = null;      // captureStream route: re-captures the current canvas
   const run = (name, input) => Promise.resolve(registry.run(name, input)).catch(error => ctx.surface('platform', error));
   const stageMount = ctx.mounts.stage;
   const stageBox = stageMount.parentElement;
@@ -109,7 +157,11 @@ export function install(ctx) {
     .platform-pip-bar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:6px;justify-content:center;opacity:0;transition:opacity .2s}
     .platform-pip-stage:hover .platform-pip-bar, .platform-pip-bar:focus-within{opacity:1}
     .platform-pip-bar button{min-width:40px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(11,11,14,.8);color:#fff;font:inherit;cursor:pointer}
-    .platform-pip-bar button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+    .platform-pip-bar button:focus-visible,.platform-pip-bar input:focus-visible{outline:2px solid #fff;outline-offset:2px}
+    .platform-pip-bar{flex-wrap:wrap;align-items:center}
+    .platform-pip-bar input[type=range]{accent-color:#fff;height:34px}
+    .platform-pip-bar .platform-pip-seek{flex:1 1 100%;min-width:120px;margin:0}
+    .platform-pip-bar .platform-pip-volume{width:80px}
   `);
 
   /* ---------------------------------------------------------- I1 Picture-in-Picture */
@@ -128,6 +180,8 @@ export function install(ctx) {
   let pipVideo = null;       // hidden <video> for the fallback route
   let placeholder = null;
   let pipPlayButton = null;
+  let pipSeek = null;        // range inputs in the Document PiP window (V63)
+  let pipVolume = null;
 
   function setActive(active, mode) {
     state.pip.active = active;
@@ -153,6 +207,18 @@ export function install(ctx) {
         targetDoc.head.append(link);
       }
     }
+  }
+
+  /* Seek and volume follow the player, except the range the person is dragging. */
+  function updatePipRanges() {
+    if (!pipSeek) return;
+    const doc = pipSeek.ownerDocument;
+    const duration = Number(store.media?.duration) || 0;
+    pipSeek.max = String(duration);
+    pipSeek.disabled = !(duration > 0);
+    if (doc.activeElement !== pipSeek) pipSeek.value = String(store.clock?.positionS ?? 0);
+    pipSeek.setAttribute('aria-valuetext', `${ctx.formatTime(Number(pipSeek.value))} / ${ctx.formatTime(duration)}`);
+    if (doc.activeElement !== pipVolume) pipVolume.value = String(Math.min(1, Number(store.clock?.volume ?? 1)));
   }
 
   function updatePipPlayButton() {
@@ -190,26 +256,20 @@ export function install(ctx) {
     box.className = 'platform-pip-stage';
     const bar = doc.createElement('div');
     bar.className = 'platform-pip-bar';
-    pipPlayButton = doc.createElement('button');
-    pipPlayButton.type = 'button';
-    pipPlayButton.dataset.command = 'playback.toggle';
-    pipPlayButton.addEventListener('click', () => run('playback.toggle'));
-    const close = doc.createElement('button');
-    close.type = 'button';
-    close.textContent = '✕';
-    close.setAttribute('aria-label', t('platform.pip.close'));
-    close.dataset.command = 'view.pip';
-    close.addEventListener('click', () => run('view.pip', { on: false }));
-    bar.append(pipPlayButton, close);
+    ({ play: pipPlayButton, seek: pipSeek, volume: pipVolume } = pipControls(doc, bar, { t, run }));
     box.append(canvas, stageMount, bar);
     doc.body.append(box);
     updatePipPlayButton();
+    updatePipRanges();
     doc.addEventListener('keydown', event => {
       if (event.ctrlKey || event.metaKey || event.target.tagName === 'BUTTON') return;
       if (event.key === ' ') { event.preventDefault(); run('playback.toggle'); }
     });
 
-    win.addEventListener('pagehide', () => restoreFromDocumentPip(canvas), { once: true });
+    // The canvas may be replaced while the window is open, so restore whichever is current.
+    // Only the window still current restores: a closed window's late pagehide must not pull the
+    // canvas out of a newer PiP window.
+    win.addEventListener('pagehide', () => { if (pipWindow === win) restoreFromDocumentPip(videoCanvas); }, { once: true });
     pipWindow = win;
     setActive(true, 'document');
   }
@@ -223,12 +283,14 @@ export function install(ctx) {
     }
     placeholder = null;
     pipPlayButton = null;
+    pipSeek = null;
+    pipVolume = null;
     pipWindow = null;
     setActive(false);
   }
 
   async function openVideoPip() {
-    const stream = videoCanvas.captureStream();
+    let stream = videoCanvas.captureStream();
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
@@ -238,10 +300,16 @@ export function install(ctx) {
     video.srcObject = stream;
     ctx.mounts.dialogs.append(video);
     pipVideo = video;
+    recapture = () => {
+      for (const track of stream.getTracks()) track.stop();
+      stream = videoCanvas.captureStream();
+      video.srcObject = stream;
+      if (store.clock?.playing) video.play().catch(() => {});
+    };
     const cleanup = () => {
       for (const track of stream.getTracks()) track.stop();
       video.remove();
-      if (pipVideo === video) pipVideo = null;
+      if (pipVideo === video) { pipVideo = null; recapture = null; }
       setActive(false);
     };
     video.addEventListener('leavepictureinpicture', cleanup, { once: true });
@@ -266,6 +334,22 @@ export function install(ctx) {
       restoreFromDocumentPip(videoCanvas);
     }
     if (pipVideo && document.pictureInPictureElement === pipVideo) await document.exitPictureInPicture();
+  }
+
+  /* After a GPU loss the host swaps in a fresh canvas (same id) and attaches the engine to it.
+   * Document PiP keeps the fresh canvas in its window; the captureStream route captures it again. */
+  ctx.on('ui:canvas-replaced', ({ id } = {}) => {
+    const fresh = findCanvas(id || videoCanvas?.id, [pipWindow?.document, document]);
+    if (!fresh || fresh === videoCanvas) return;
+    videoCanvas = fresh;
+    state.pip.canvasReplaced = (state.pip.canvasReplaced || 0) + 1;
+    if (pipWindow && fresh.ownerDocument !== pipWindow.document) {
+      pipWindow.document.querySelector('.platform-pip-stage')?.prepend(fresh);
+    }
+    recapture?.();
+  });
+  if (new URLSearchParams(location.search).get('dev') === '1') {
+    globalThis.__reelPlatform = Object.freeze({ canvas: () => videoCanvas });
   }
 
   registry.handle('view.pip', async ({ on }) => {
@@ -363,6 +447,7 @@ export function install(ctx) {
   }
 
   ctx.onFrame(frameState => {
+    updatePipRanges();
     if (!session || !state.mediaSession.title) return;
     const canvas = videoCanvas;
     if (artworkPending && canvas.width > 1 && canvas.height > 1 && (frameState.playback?.renderer?.renderedFrames ?? 1) > 0) {

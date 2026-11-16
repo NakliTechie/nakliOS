@@ -2,6 +2,8 @@
  * Stored per content fingerprint with ctx.Storage under "bookmarks:<fingerprint>", so a renamed or
  * moved file keeps its bookmarks. With no fingerprint they live in memory for this file only. */
 
+import { keysWithPrefix, deleteKeys } from '../library/forget.mjs';
+import { BOOKMARK_PREFIX } from '../library/logic.mjs';
 import {
   normaliseBookmarks, addBookmark, renameBookmark, removeBookmark, findBookmark, BOOKMARK_NAME_MAX,
 } from './logic.mjs';
@@ -19,15 +21,20 @@ export const BOOKMARK_COMMANDS = [
       name: { type: 'string', maxLength: BOOKMARK_NAME_MAX },
       id: { type: 'string', description: 'Rename this existing bookmark' } }, required: [] },
     shortcuts: [{ key: 'b' }] },
-  { name: 'bookmark.list', label: 'Bookmarks', scope: 'read',
-    description: 'List this file\'s bookmarks (id, timeS, name) sorted by time; panel opens or closes the bookmarks panel.',
-    input: { type: 'object', properties: { panel: { type: 'boolean', description: 'true opens the panel, false closes it' } }, required: [] } },
+  { name: 'bookmark.list', label: 'Bookmarks', scope: 'read', input: { type: 'object', properties: {}, required: [] },
+    description: 'List this file\'s bookmarks (id, timeS, name) sorted by time, whether they are stored, how many files have stored bookmarks, and whether the bookmarks panel is open.' },
+  { name: 'bookmark.panel', label: 'Bookmarks panel', scope: 'write', readTwin: 'bookmark.list',
+    description: 'Open or close the bookmarks panel; with no input it toggles.',
+    input: { type: 'object', properties: { open: { type: 'boolean', description: 'true opens the panel, false closes it' } }, required: [] } },
   { name: 'bookmark.go', label: 'Go to bookmark', scope: 'write', readTwin: 'bookmark.list',
     description: 'Seek to a bookmark, chosen by id or by index.',
     input: { type: 'object', properties: target, required: [] } },
-  { name: 'bookmark.remove', label: 'Remove bookmark', scope: 'write', readTwin: 'bookmark.list',
-    description: 'Remove a bookmark, chosen by id or by index.',
+  { name: 'bookmark.remove', label: 'Remove bookmark', scope: 'destructive', readTwin: 'bookmark.list',
+    description: 'Delete a stored bookmark, chosen by id or by index. It cannot be undone.',
     input: { type: 'object', properties: target, required: [] } },
+  { name: 'bookmark.clear-all', label: 'Clear all bookmarks', scope: 'destructive', readTwin: 'bookmark.list',
+    description: 'Delete the stored bookmarks of every file in this browser. It cannot be undone. Returns how many files had bookmarks.',
+    input: { type: 'object', properties: {}, required: [] } },
 ];
 
 export const BOOKMARK_STRINGS = {
@@ -36,6 +43,7 @@ export const BOOKMARK_STRINGS = {
   'transport.bookmark.addHere': 'Add bookmark here',
   'transport.bookmark.added': 'Bookmark added at {time}',
   'transport.bookmark.removed': 'Bookmark removed',
+  'transport.bookmark.cleared': 'Deleted the bookmarks of {count} files',
   'transport.bookmark.renamed': 'Bookmark renamed',
   'transport.bookmark.unnamed': 'Bookmark at {time}',
   'transport.bookmark.item': '{name}, at {time}',
@@ -80,9 +88,9 @@ export function installBookmarks(ctx, { el, run, duration, position, markLeft, s
   let renamingId = null;
   let loadToken = 0;
 
-  const button = el('button', { type: 'button', text: '⚑', 'data-command': 'bookmark.list',
+  const button = el('button', { type: 'button', text: '⚑', 'data-command': 'bookmark.panel',
     'aria-label': t('transport.bookmark.button'), 'aria-expanded': 'false', title: `${t('transport.bookmark.button')} (b)`,
-    onclick: () => run('bookmark.list', { panel: ctx.panels.current() !== PANEL }) });
+    onclick: () => run('bookmark.panel', {}) });
   ctx.mounts.controlsLeft.append(button);
   const ticks = el('div', { class: 'transport-bookmarks' });
   ctx.mounts.seek.append(ticks);
@@ -144,7 +152,9 @@ export function installBookmarks(ctx, { el, run, duration, position, markLeft, s
   async function save() {
     if (!storageKey) return;
     try {
-      await ctx.Storage.set(storageKey, list);
+      // An empty list deletes the record, so a file with no bookmarks leaves nothing stored.
+      if (list.length) await ctx.Storage.set(storageKey, list);
+      else await deleteKeys(ctx.Storage, [storageKey]);
     } catch (error) {
       toast(t('transport.bookmark.saveFailed'), 'err', error.message);
     }
@@ -154,7 +164,12 @@ export function installBookmarks(ctx, { el, run, duration, position, markLeft, s
     return {
       bookmarks: list.map((item, index) => ({ index, id: item.id, timeS: item.timeS, name: item.name })),
       persisted: Boolean(storageKey),
+      panelOpen: ctx.panels.current() === PANEL,
     };
+  }
+
+  async function storedFiles() {
+    try { return (await keysWithPrefix(ctx.Storage, BOOKMARK_PREFIX)).length; } catch { return null; }
   }
 
   function pick(input) {
@@ -185,10 +200,24 @@ export function installBookmarks(ctx, { el, run, duration, position, markLeft, s
     return read();
   });
 
-  registry.handle('bookmark.list', async ({ panel }) => {
+  registry.handle('bookmark.list', async () => {
     await ready;
-    setPanel(PANEL, panel);
+    return { ...read(), storedFiles: await storedFiles() };
+  });
+  registry.handle('bookmark.panel', async ({ open }) => {
+    await ready;
+    setPanel(PANEL, typeof open === 'boolean' ? open : ctx.panels.current() !== PANEL);
     return read();
+  });
+  registry.handle('bookmark.clear-all', async () => {
+    await ready;
+    const keys = await keysWithPrefix(ctx.Storage, BOOKMARK_PREFIX);
+    const removed = await deleteKeys(ctx.Storage, keys);
+    list = [];
+    renamingId = null;
+    render();
+    toast(t('transport.bookmark.cleared', { count: removed }));
+    return { removedFiles: removed, ...read() };
   });
 
   registry.handle('bookmark.go', async input => {

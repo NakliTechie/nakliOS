@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<!-- CSP: default-src 'self'. Inline style+script allowed for the no-build app shell;
-     NO 'unsafe-eval' (handoff §7: no eval outside wasm instantiation); 'wasm-unsafe-eval' lets the
-     software audio rung (AC-3, E-AC-3, DTS) compile its WebAssembly, which is that one exception.
-     CDN/wasm origins (jsdelivr/unpkg) get added to connect-src/script-src when the
-     R2 rung + Whisper sidecar land. Tighten inline to sha256 hashes once the M1
-     service-worker shim is in place. -->
+<!-- CSP: default-src 'self'. Inline style is allowed for the no-build app shell. Inline script runs
+     only by hash (review V41): scripts/build-commands.mjs writes a 'sha256-…' pin for each inline
+     script element into script-src, and scripts/verify-delivery.mjs fails while a pin is stale. The NakliOS
+     mirror re-pins the SDK script its splice rewrites. NO 'unsafe-eval' (handoff §7: no eval outside
+     wasm instantiation); 'wasm-unsafe-eval' lets the software audio rung (AC-3, E-AC-3, DTS) compile
+     its WebAssembly, which is that one exception. -->
 <!-- frame-ancestors must be delivered as an HTTP response header; browsers ignore it in meta CSP. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-33MgyLU1H2Cr/GM152Dr9LzgAbTjKrASVIFq7rzssPY=' 'sha256-apOTInHoqp+IhnuNDmFtHp6x0heKs439I6Lp4Di1J9w=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="reel-version" content="0.0.11-m0">
 <meta name="description" content="Play MKV, MP4, and WebM videos privately in your browser. Files stay on your device.">
 <meta name="theme-color" content="#000000">
@@ -93,8 +93,10 @@
   .player-copy p{color:var(--dim);font-size:12px;margin-top:3px}
   .player-stage{position:relative;display:grid;place-items:center;min-height:360px;flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   #engine-canvas{display:block;width:100%;height:100%;max-height:calc(100vh - 190px);background:#000;object-fit:contain}
-  .player-capsule{position:absolute;left:18px;right:18px;bottom:16px;padding:11px 14px 12px;background:rgba(11,11,14,.8);border:1px solid rgba(255,255,255,.1);border-radius:var(--capsule-radius);backdrop-filter:blur(20px) saturate(1.3)}
+  .player-capsule{position:absolute;left:18px;right:18px;bottom:16px;padding:11px 14px 12px;background:rgba(11,11,14,.92);border:1px solid rgba(255,255,255,.1);border-radius:var(--capsule-radius);backdrop-filter:blur(20px) saturate(1.3)}
   .player-honesty{pointer-events:none;display:flex;gap:14px;align-items:center;padding:0 3px 9px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.07);color:var(--dim);font-size:10.5px}
+  /* Over a white frame the capsule is rgb(31,31,34): --dim measures 4.83:1 and this faint 5.93:1 (review V36). */
+  .player-capsule{--faint:#9A9AA4}
   .player-honesty .local{margin-left:auto;color:var(--faint)}
   .player-honesty .local b{color:var(--dim);font-weight:500}
   .rung{display:flex;gap:6px;align-items:center}
@@ -159,6 +161,14 @@
     box-shadow:0 8px 30px rgba(0,0,0,.5)}
   .toast.err{border-color:var(--refused)}
   .toast .sub{color:var(--dim);font-size:11px;margin-top:2px}
+  .toast.err{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:start}
+  .toast.err .sub{grid-column:1}
+  .toast-dismiss{grid-column:2;grid-row:1/span 2;min-width:28px;height:28px;border-radius:8px;border:1px solid var(--line);
+    background:transparent;color:var(--text);font:inherit;cursor:pointer}
+  .toast-dismiss:hover{background:rgba(255,255,255,.08)}
+  .licence-line{margin-top:8px;font-size:11.5px;color:var(--dim)}
+  .licence-line a{color:var(--dim);text-decoration:underline;text-underline-offset:2px}
+  .licence-line a:hover{color:var(--text)}
 
 </style>
 </head>
@@ -175,6 +185,7 @@
     </div>
     <div class="mount-row" id="mount-empty-actions"></div>
     <p class="privacy-line" data-t-html="privacy">Plays entirely on this device. <em>No upload, no account, no telemetry.</em></p>
+    <p class="licence-line"><a id="licences-link" href="licences.html" target="_blank" rel="noopener" data-t="licences.link">Licences and source</a></p>
     <div class="metadata-sync" id="metadata-sync" hidden>
       <button id="metadata-sync-action" type="button"></button>
       <span id="metadata-sync-status" role="status" aria-live="polite"></span>
@@ -197,7 +208,7 @@
     <button id="player-open" data-command="media.open" data-t="action.openAnother">Open another…</button>
   </header>
   <div class="player-stage">
-    <canvas id="engine-canvas" width="1" height="1" aria-labelledby="player-title"></canvas>
+    <canvas id="engine-canvas" width="1" height="1" role="img" aria-labelledby="player-title"></canvas>
     <div class="mount-stage" id="mount-stage"></div>
     <div class="player-capsule">
       <div class="player-honesty" id="player-honesty"></div>
@@ -205,7 +216,7 @@
         <input id="player-seek" data-command="playback.seek" type="range" min="0" max="0" value="0" step="0.001" data-t-aria-label="control.seek">
       </div>
       <div class="player-controls">
-        <button id="player-play" data-command="playback.toggle" type="button" data-t-aria-label="control.play">▶</button>
+        <button id="player-play" data-command="playback.toggle" type="button" data-t-aria-label="control.play" data-t-title="control.play">▶</button>
         <button id="player-back-ten" data-command="playback.skip" type="button" data-t-aria-label="control.backTen">↶ 10</button>
         <span class="timecode"><b id="player-position">0:00</b> / <span id="player-duration">0:00</span></span>
         <span class="mount-controls" id="mount-controls-left"></span>
@@ -216,10 +227,10 @@
           <option value="1.25">1.25×</option><option value="1.5">1.5×</option>
           <option value="2">2×</option><option value="3">3×</option><option value="4">4×</option>
         </select>
-        <button id="player-mute" data-command="audio.mute" type="button" data-t-aria-label="control.mute">🔊</button>
+        <button id="player-mute" data-command="audio.mute" type="button" data-t-aria-label="control.mute" data-t-title="control.mute">🔊</button>
         <input id="player-volume" data-command="audio.volume" type="range" min="0" max="2" value="1" step="0.05" data-t-aria-label="control.volume">
         <span class="mount-controls" id="mount-controls-right"></span>
-        <button id="player-fullscreen" data-command="view.fullscreen" type="button" data-t-aria-label="control.fullscreen">⛶</button>
+        <button id="player-fullscreen" data-command="view.fullscreen" type="button" data-t-aria-label="control.fullscreen" data-t-title="control.fullscreen">⛶</button>
       </div>
     </div>
   </div>
@@ -244,6 +255,7 @@
 <div id="toast-host" aria-live="polite" aria-atomic="false"></div>
 <div id="mount-dialogs"></div>
 
+<!-- accept is rebuilt at boot from the engine's VIDEO_EXTENSIONS (review V28). -->
 <input type="file" id="file-input" accept="video/mp4,video/webm,video/x-matroska,.mp4,.mkv,.webm" hidden>
 
 <script>
@@ -1590,6 +1602,8 @@ const STRINGS = {
     'err.open': "Can't open this video",
     'notice.fileReceived': 'File received',
     'toast.repeated': '{message} ×{count}',
+    'toast.dismiss': 'Dismiss',
+    'licences.link': 'Licences and source',
     'control.play': 'Play',
     'control.pause': 'Pause',
     'control.seek': 'Seek',
@@ -1598,6 +1612,9 @@ const STRINGS = {
     'control.mute': 'Mute',
     'control.unmute': 'Unmute',
     'control.volume': 'Volume',
+    'control.seekValue': '{position} of {duration}',
+    'control.volumeValue': '{percent}%',
+    'control.fullscreenUnavailable': 'Fullscreen is not available in this browser.',
     'control.fullscreen': 'Fullscreen',
     'honesty.webCodecs': 'WebCodecs R1',
     'honesty.software': 'software decoder',
@@ -1630,6 +1647,7 @@ function applyI18n(root = document) {
   root.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
   root.querySelectorAll('[data-t-html]').forEach(el => { el.innerHTML = t(el.dataset.tHtml); });
   root.querySelectorAll('[data-t-aria-label]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.tAriaLabel)); });
+  root.querySelectorAll('[data-t-title]').forEach(el => { el.title = t(el.dataset.tTitle); });
 }
 
 /* ----------------------------------------------------------------- STORE -- */
@@ -1675,18 +1693,35 @@ const Storage = (() => {
     },
   });
   let _db = null;
+  let opening = null;
+  /* Review V24: another Reel window holding an older version blocks the upgrade. The open request then
+     rejects at once (resume and recents fall back to empty) instead of waiting for ever; if the other
+     window closes later, the late connection is kept for the next call. Every connection closes when a
+     newer Reel asks for a version change, so this window never blocks that one. */
   function open() {
     if (_db) return Promise.resolve(_db);
-    return new Promise((res, rej) => {
+    if (opening) return opening;
+    opening = new Promise((res, rej) => {
       const r = indexedDB.open(DB, VERSION);
       r.onupgradeneeded = event => {
         for (let version = event.oldVersion + 1; version <= event.newVersion; version += 1) {
           MIGRATIONS[version]?.(r.result, r.transaction);
         }
       };
-      r.onsuccess = () => { _db = r.result; res(_db); };
-      r.onerror = () => rej(r.error);
+      r.onblocked = () => {
+        opening = null;
+        rej(Object.assign(new Error('Another Reel window is using an older version of its storage. Close it, then reload.'), { code: 'ERR_STORAGE_BLOCKED' }));
+      };
+      r.onsuccess = () => {
+        const db = r.result;
+        db.onversionchange = () => { db.close(); if (_db === db) _db = null; };
+        _db = db;
+        opening = null;
+        res(db);
+      };
+      r.onerror = () => { opening = null; rej(r.error); };
     });
+    return opening;
   }
   async function get(key) {
     const db = await open();
@@ -1796,10 +1831,25 @@ const MetadataSync = (() => {
     }
   }
 
+  /* Review V62: a library.json that does not parse is read as empty (watch history keeps working), and
+     the next write replaces it with a clean file. */
   async function readCrateLibrary() {
     if (!crateActive()) throw new Error('Crate metadata is selected but unavailable.');
     if (!await bridge.fs.exists(LIBRARY_PATH)) return { version: 1, items: [] };
-    return normalizeLibrary(JSON.parse(await bridge.fs.read(LIBRARY_PATH)));
+    const text = await bridge.fs.read(LIBRARY_PATH);
+    try {
+      return normalizeLibrary(JSON.parse(text));
+    } catch (_) {
+      return { version: 1, items: [], damaged: true };
+    }
+  }
+
+  /* Merge by updatedAt: for each fingerprint the newer entry wins, so a write from this device never
+     replaces a newer position another device saved between this read and this write. */
+  function mergeLibrary(library, entry) {
+    const existing = library.items.find(item => item.fingerprint === entry.fingerprint);
+    const winner = existing && existing.updatedAt > entry.updatedAt ? existing : entry;
+    return normalizeLibrary({ items: [winner, ...library.items.filter(item => item.fingerprint !== entry.fingerprint)] });
   }
 
   async function subscribeCrate() {
@@ -1816,6 +1866,10 @@ const MetadataSync = (() => {
   }
 
   async function init() {
+    // Tell the host Reel is ready before any storage call (review V24): a blocked IndexedDB must never
+    // keep the NakliOS window waiting on ready().
+    const bridgeReady = NakliOSRuntime.bridge();
+    bridgeReady.then(host => host?.ready()).catch(() => {});
     try {
       mode = await Storage.get(PREF_KEY) === 'crate' ? 'crate' : 'browser';
     } catch (error) {
@@ -1823,13 +1877,12 @@ const MetadataSync = (() => {
       lastError = error;
     }
     try {
-      bridge = await NakliOSRuntime.bridge();
+      bridge = await bridgeReady;
       if (bridge) {
         bridge.onCapabilitiesChange(() => {
           subscribeCrate().catch(error => { lastError = error; emit(); });
           emit();
         });
-        bridge.ready();
         bridge.requestCapabilities();
         bridge.theme.request();
       }
@@ -1888,10 +1941,8 @@ const MetadataSync = (() => {
         emit();
         return result;
       }
-      const library = await readCrateLibrary();
-      const items = library.items.filter(item => item.fingerprint !== normalized.fingerprint);
-      items.unshift(normalized);
-      await bridge.fs.write(LIBRARY_PATH, JSON.stringify({ version: 1, items: items.slice(0, 100) }, null, 2));
+      const library = mergeLibrary(await readCrateLibrary(), normalized);
+      await bridge.fs.write(LIBRARY_PATH, JSON.stringify(library, null, 2));
       lastError = null;
       emit();
       return normalized;
@@ -1924,7 +1975,7 @@ const MetadataSync = (() => {
     bridge?.openSettings('storage');
   }
 
-  return { init, enableCrate, useBrowser, listResume, upsertResume, state, onChange, openStorageSettings };
+  return { init, enableCrate, useBrowser, listResume, upsertResume, state, onChange, openStorageSettings, mergeLibrary };
 })();
 
 const Engine = createReelEngine({
@@ -1945,24 +1996,32 @@ function show(name) {
 }
 
 let lastToast = null;
+const KEPT_ERRORS = 3;
+/* Info toasts are polite and leave after 6 s. Error toasts (review V69) use role="alert", stay until the
+   person dismisses them, and carry a Dismiss button; at most KEPT_ERRORS stay, the oldest goes first. */
 function toast(msg, kind = 'info', sub = '') {
   const now = performance.now();
   const key = `${kind}\0${msg}\0${sub}`;
+  const isError = kind === 'err';
+  const removeLater = entry => {
+    clearTimeout(entry.timer);
+    if (isError) return;
+    entry.timer = setTimeout(() => {
+      entry.element.remove();
+      if (lastToast === entry) lastToast = null;
+    }, 6000);
+  };
   if (lastToast && lastToast.key === key && now - lastToast.atMs < 400 && lastToast.element.isConnected) {
     const entry = lastToast;
     entry.count += 1;
     entry.atMs = now;
     entry.title.textContent = t('toast.repeated', { message: msg, count: entry.count });
-    clearTimeout(entry.timer);
-    entry.timer = setTimeout(() => {
-      entry.element.remove();
-      if (lastToast === entry) lastToast = null;
-    }, 6000);
+    removeLater(entry);
     return entry.element;
   }
   const host = $('#toast-host');
   const el = document.createElement('div');
-  el.className = 'toast' + (kind === 'err' ? ' err' : '');
+  el.className = 'toast' + (isError ? ' err' : '');
   const title = document.createElement('div');
   title.textContent = msg;
   el.appendChild(title);
@@ -1972,12 +2031,25 @@ function toast(msg, kind = 'info', sub = '') {
     detail.textContent = sub;
     el.appendChild(detail);
   }
-  host.appendChild(el);
   const entry = { key, atMs: now, count: 1, element: el, title, timer: 0 };
-  entry.timer = setTimeout(() => {
-    el.remove();
-    if (lastToast === entry) lastToast = null;
-  }, 6000);
+  if (isError) {
+    el.setAttribute('role', 'alert');
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'toast-dismiss';
+    dismiss.textContent = '×';
+    dismiss.setAttribute('aria-label', t('toast.dismiss'));
+    dismiss.title = t('toast.dismiss');
+    dismiss.addEventListener('click', () => {
+      el.remove();
+      if (lastToast === entry) lastToast = null;
+    });
+    el.appendChild(dismiss);
+    const kept = [...host.querySelectorAll('.toast.err')];
+    for (const old of kept.slice(0, Math.max(0, kept.length - KEPT_ERRORS + 1))) old.remove();
+  }
+  host.appendChild(el);
+  removeLater(entry);
   lastToast = entry;
   return el;
 }
@@ -2062,15 +2134,22 @@ function updatePlayerUi() {
   if (store.ui.screen !== 'player') return;
   const state = Engine.state();
   const seek = $('#player-seek');
-  if (document.activeElement !== seek) seek.value = String(state.clock.positionS);
+  // The thumb follows the clock except while the person drags it (review V5).
+  if (!seekDragging) {
+    seek.value = String(state.clock.positionS);
+    setSeekValueText(state.clock.positionS);
+  }
   const playing = state.clock.playing;
   $('#player-position').textContent = formatTime(state.clock.positionS);
   $('#player-play').textContent = playing ? '❚❚' : '▶';
   $('#player-play').setAttribute('aria-label', t(playing ? 'control.pause' : 'control.play'));
+  $('#player-play').title = t(playing ? 'control.pause' : 'control.play');
   $('#player-rate').value = String(state.clock.rate);
   $('#player-volume').value = String(state.clock.volume);
+  setVolumeValueText(state.clock.volume);
   $('#player-mute').textContent = state.clock.muted ? '🔇' : '🔊';
   $('#player-mute').setAttribute('aria-label', t(state.clock.muted ? 'control.unmute' : 'control.mute'));
+  $('#player-mute').title = t(state.clock.muted ? 'control.unmute' : 'control.mute');
   if (state.playback.lastError && state.playback.lastError.code !== lastPlaybackError) {
     lastPlaybackError = state.playback.lastError.code;
     surface('playback', state.playback.lastError);
@@ -2083,6 +2162,19 @@ function updatePlayerUi() {
     try { fn(state); } catch (error) { surface('module', error); }
   }
   playerUiFrame = requestAnimationFrame(updatePlayerUi);
+}
+
+let seekDragging = false;
+/* Sliders announce formatted values, not raw numbers (review V35). Written only when the text changes. */
+function setSeekValueText(positionS) {
+  const seek = $('#player-seek');
+  const text = t('control.seekValue', { position: formatTime(positionS), duration: formatTime(Number(seek.max) || 0) });
+  if (seek.getAttribute('aria-valuetext') !== text) seek.setAttribute('aria-valuetext', text);
+}
+function setVolumeValueText(volume) {
+  const slider = $('#player-volume');
+  const text = t('control.volumeValue', { percent: Math.round((Number(volume) || 0) * 100) });
+  if (slider.getAttribute('aria-valuetext') !== text) slider.setAttribute('aria-valuetext', text);
 }
 
 function startPlayerUi() {
@@ -2148,6 +2240,8 @@ function clearPlayerMedia() {
   $('#player-honesty').replaceChildren();
   $('#player-seek').max = '0';
   $('#player-seek').value = '0';
+  seekDragging = false;
+  setSeekValueText(0);
   $('#player-position').textContent = '0:00';
   $('#player-duration').textContent = '0:00';
   $('#player-play').textContent = '▶';
@@ -2163,6 +2257,7 @@ function returnToEmpty() {
   renderRecent();
   globalThis.naklios?.title('Reel');
   $('#drop').focus({ preventScroll: true });
+  applyWorkerUpdate();
 }
 
 async function openFile(handle) {
@@ -2358,8 +2453,12 @@ function setPlayerVolume(value) {
   Engine.setVolume(Math.max(0, Math.min(2, value)));
 }
 
+/* iPhone Safari has no element fullscreen API (review V65): the control is hidden there and the
+   command reports why instead of throwing a TypeError. */
+const fullscreenAvailable = () => document.fullscreenEnabled === true && typeof Element.prototype.requestFullscreen === 'function';
 function toggleFullscreen() {
   if (document.fullscreenElement) return document.exitFullscreen();
+  if (!fullscreenAvailable()) throw Object.assign(new Error(t('control.fullscreenUnavailable')), { code: 'ERR_FULLSCREEN_UNAVAILABLE' });
   return $('#player').requestFullscreen();
 }
 
@@ -2390,14 +2489,36 @@ function bindCoreCommands() {
   h('caps.read', () => Engine.caps());
 }
 
+/* Keys that run on every screen (review V70); everything else needs the player screen. */
+const ANY_SCREEN_COMMANDS = new Set(['help.show', 'library.open']);
+/* Inputs where typing goes to the field. Ranges, checkboxes and the like are not text entry (review V5). */
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number', 'date', 'time',
+  'datetime-local', 'month', 'week', 'color', 'file']);
+const NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
+function isTextEntry(target) {
+  if (!target || target.isContentEditable) return !!target?.isContentEditable;
+  if (target.tagName === 'TEXTAREA') return true;
+  return target.tagName === 'INPUT' && TEXT_INPUT_TYPES.has((target.type || 'text').toLowerCase());
+}
+
 function handlePlayerKeydown(event) {
-  if (store.ui.screen !== 'player' || event.ctrlKey || event.metaKey) return;
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName) || event.target.isContentEditable) return;
-  // Buttons keep Space and Enter for activation; every other key reaches the table.
-  if (event.target.tagName === 'BUTTON' && (event.key === ' ' || event.key === 'Enter')) return;
+  if (event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+  const target = event.target;
+  if (isTextEntry(target)) return;
+  // A select keeps the keys it uses itself: arrows, Space, Enter, Home, End, Page keys.
+  if (target.tagName === 'SELECT' && (NAVIGATION_KEYS.has(event.key) || event.key === ' ' || event.key === 'Enter')) return;
+  // Buttons, checkboxes and links keep Space and Enter for activation.
+  if ((target.tagName === 'BUTTON' || target.tagName === 'A' || (target.tagName === 'INPUT' && target.type !== 'range'))
+    && (event.key === ' ' || event.key === 'Enter')) return;
+  // A scrolling panel keeps arrows and Page keys for scrolling (review V67).
+  if (NAVIGATION_KEYS.has(event.key) && target.closest?.('#mount-panels')) return;
   const hit = registry.forShortcut(keySpec(event));
   if (!hit) return;
+  if (store.ui.screen !== 'player' && !ANY_SCREEN_COMMANDS.has(hit.def.name)) return;
+  // Range sliders (seek, volume) send Space and arrows to the command table, not to their own value.
   event.preventDefault();
+  // A held key repeats only the commands marked repeat: true (review V34).
+  if (event.repeat && !hit.def.repeat) return;
   Promise.resolve(registry.run(hit.def.name, hit.input)).catch(error => surface('playback', error));
 }
 
@@ -2516,19 +2637,57 @@ function wireEmpty() {
   $('#player-open').addEventListener('click', beginPick);
   $('#player-play').addEventListener('click', () => togglePlayerPlayback().catch(error => surface('playback', error)));
   $('#player-back-ten').addEventListener('click', () => seekPlayerBy(-10).catch(error => surface('playback', error)));
+  /* Review V5: the thumb is frozen only between pointerdown and pointerup, and a slider or the speed
+     menu changed with the pointer gives focus back, so Space and the other keys keep working. */
+  let pointerChangeUntil = 0;
+  const releaseAfterPointer = element => {
+    if (performance.now() <= pointerChangeUntil && document.activeElement === element) element.blur();
+  };
+  for (const slider of [$('#player-seek'), $('#player-volume')]) {
+    slider.addEventListener('pointerdown', () => {
+      if (slider.id === 'player-seek') seekDragging = true;
+      pointerChangeUntil = Infinity;
+    });
+  }
+  let seekPending = 0;
+  const endPointer = () => {
+    if (pointerChangeUntil !== Infinity) return;
+    pointerChangeUntil = performance.now() + 500;
+    // change fires after pointerup; wait one task so a pending seek keeps the thumb where it was dropped.
+    setTimeout(() => {
+      if (!seekPending) seekDragging = false;
+      for (const slider of [$('#player-seek'), $('#player-volume')]) releaseAfterPointer(slider);
+    }, 0);
+  };
+  addEventListener('pointerup', endPointer, true);
+  addEventListener('pointercancel', endPointer, true);
   $('#player-seek').addEventListener('input', event => {
     $('#player-position').textContent = formatTime(Number(event.target.value));
+    setSeekValueText(Number(event.target.value));
   });
   $('#player-seek').addEventListener('change', event => {
-    Engine.seek(Number(event.target.value)).catch(error => surface('playback', error));
+    const pointer = seekDragging;
+    seekPending += 1;
+    Promise.resolve(Engine.seek(Number(event.target.value)))
+      .catch(error => surface('playback', error))
+      .finally(() => { seekPending -= 1; if (!seekPending && pointer) seekDragging = false; });
+    releaseAfterPointer(event.target);
   });
+  let ratePointer = false;
+  $('#player-rate').addEventListener('pointerdown', () => { ratePointer = true; });
+  $('#player-rate').addEventListener('blur', () => { ratePointer = false; });
   $('#player-rate').addEventListener('change', event => {
     try { Engine.setRate(Number(event.target.value)); } catch (error) { surface('playback', error); }
+    if (ratePointer) event.target.blur();
   });
   $('#player-mute').addEventListener('click', () => {
     Engine.setMuted(!store.clock.muted);
   });
-  $('#player-volume').addEventListener('input', event => setPlayerVolume(Number(event.target.value)));
+  $('#player-volume').addEventListener('input', event => {
+    setPlayerVolume(Number(event.target.value));
+    setVolumeValueText(Number(event.target.value));
+  });
+  $('#player-volume').addEventListener('change', event => releaseAfterPointer(event.target));
   $('#player-fullscreen').addEventListener('click', () => {
     Promise.resolve(toggleFullscreen()).catch(error => surface('playback', error));
   });
@@ -2634,9 +2793,66 @@ function installAgentFace() {
         return toast(message, kind, detail);
       },
       storageVersion: Storage.version,
+      workerUpdate({ dryRun } = {}) {
+        if (typeof dryRun === 'boolean') workerUpdate.dryRun = dryRun;
+        return { ...workerUpdate, idle: idleOnStart() };
+      },
+      controllerChange() {
+        return onControllerChange();
+      },
+      mergeLibrary(library, entry) {
+        return MetadataSync.mergeLibrary(library, entry);
+      },
     }),
     version: CONFIG.version,
   }), configurable: true });
+}
+
+/* Review V26: after a lost GPU device the engine emits playback:renderer-lost. A canvas keeps the one
+   context kind it first had, so the host puts a fresh canvas (same id, attributes and ARIA) in its place
+   and attaches the engine again, which then picks a new GPU device or Canvas2D. Modules that hold the
+   canvas get ui:canvas-replaced. Works in whichever document holds the canvas (the PiP window too). */
+let attachedCanvas = null;
+function attachCanvas(canvas) {
+  attachedCanvas = canvas;
+  return Engine.attach(canvas);
+}
+Events.on('playback:renderer-lost', () => {
+  const old = attachedCanvas;
+  if (!old || typeof Engine.attach !== 'function') return;
+  const fresh = old.cloneNode(false);
+  old.replaceWith(fresh);
+  Promise.resolve(attachCanvas(fresh))
+    .then(() => Events.emit('ui:canvas-replaced', { id: fresh.id }))
+    .catch(error => surface('playback', error));
+});
+
+/* Review V61: sw.js takes over open pages at once (skipWaiting and clients.claim). When a new worker
+   takes control of a page an older worker served, the page reloads, but only while it sits idle on the
+   start screen with no dialog open, never during playback; otherwise it waits until the person is back
+   on the start screen. The first install (no earlier controller) never reloads. */
+const workerUpdate = { hadController: false, pending: false, reloads: 0, dryRun: false };
+function idleOnStart() {
+  return store.ui.screen === 'empty' && !document.querySelector('dialog[open]') && !store.clock.playing;
+}
+function applyWorkerUpdate() {
+  if (!workerUpdate.pending || !idleOnStart()) return false;
+  workerUpdate.pending = false;
+  workerUpdate.reloads += 1;
+  if (!workerUpdate.dryRun) location.reload(); // dryRun: set only by the dev agent face's checks
+
+  return true;
+}
+function onControllerChange() {
+  if (!workerUpdate.hadController) { workerUpdate.hadController = true; return; }
+  workerUpdate.pending = true;
+  applyWorkerUpdate();
+}
+function watchWorkerUpdates() {
+  const container = navigator.serviceWorker;
+  if (!container) return;
+  workerUpdate.hadController = !!container.controller;
+  container.addEventListener('controllerchange', onControllerChange);
 }
 
 /* ------------------------------------------------------------------ BOOT -- */
@@ -2644,8 +2860,13 @@ function boot() {
   bindCoreCommands();
   installModules();
   applyI18n();
-  Engine.attach($('#engine-canvas'));
+  attachCanvas($('#engine-canvas'));
   wireEmpty();
+  // Review V28: the fallback picker (Safari has no showOpenFilePicker) accepts every extension the engine opens.
+  $('#file-input').accept = [...new Set([...VIDEO_EXTENSIONS, 'video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/mp2t'])].join(',');
+  // Review V65: no fullscreen control where the browser has no element fullscreen (iPhone Safari).
+  $('#player-fullscreen').hidden = !fullscreenAvailable();
+  watchWorkerUpdates();
   MetadataSync.onChange(state => {
     renderMetadataSync(state);
     if (store.ui.screen === 'empty') renderRecent();

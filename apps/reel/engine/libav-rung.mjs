@@ -1,14 +1,17 @@
 // libav rung: software demux and decode for the formats Mediabunny and WebCodecs refuse.
 //
-// Containers: AVI, FLV, ASF/WMV, MPEG program stream (.mpg/.vob), MPEG-TS, Matroska.
+// Containers: AVI, FLV, ASF/WMV, MPEG program stream (.mpg/.vob), MPEG-TS, Matroska, and MP4/MOV
+// (for browsers without AudioDecoder, whose MP4 audio has no other route).
 // Video: MPEG-1/2, MPEG-4 Part 2 (Xvid, DivX), MS-MPEG-4 v1/v2/v3, WMV 7/8/9, VC-1,
 // H.263, Sorenson Spark (FLV1) and H.264. Audio: MP1/2/3, AC-3, E-AC-3, AAC, WMA v1/v2,
 // Nellymoser, ADPCM (MS, IMA, SWF) and PCM.
 //
 // The decoder is a custom libav.js 6.10.9.0 build (variant "reel", FFmpeg 9.0, LGPL-2.1,
-// no --enable-gpl); see VENDOR.md, section "libav.js". It is loaded lazily, once, after a
-// SHA-256 check of every file, and runs in its own Web Worker without threads, so it needs
-// no COOP/COEP inside the NakliOS iframe. H.264 goes to WebCodecs when the browser accepts
+// no --enable-gpl); see VENDOR.md, section "libav.js". It is loaded lazily after a SHA-256
+// check of every file against vendor/libav/pins.json, and runs in its own Web Worker without
+// threads, so it needs no COOP/COEP inside the NakliOS iframe. The worker runs from a blob of the
+// checked glue and checks the wasm's hash itself. The worker stops when the last source closes,
+// and is replaced when a call makes no progress for 30 s or the wasm aborts. H.264 goes to WebCodecs when the browser accepts
 // the configuration, because hardware decode is far faster than wasm; wasm is the fallback.
 //
 // Reading: the input is never read whole. Each demuxer opens a libav.js block reader device
@@ -21,31 +24,27 @@
 //   openLibavSource(input, { requestDownload, log }) -> source, or null when libav cannot
 //   (input: File, Blob, a Blob-shaped view with slice(), or a ranged reader
 //   { name, size, read(offset, length) -> Promise<Uint8Array | ArrayBuffer> });
-//   open the file or finds no decodable track. Loading failures throw a LibavRungError
-//   with a code (ERR_LIBAV_DECLINED, ERR_LIBAV_UNAVAILABLE, ERR_LIBAV_INTEGRITY).
+//   open the file or finds no decodable track. Loading failures and refusals throw a
+//   LibavRungError with a code: ERR_LIBAV_DECLINED, ERR_LIBAV_UNAVAILABLE, ERR_LIBAV_INTEGRITY,
+//   ERR_LIBAV_FRAME_TOO_LARGE (a video frame above 8192 pixels a side, refused from the
+//   container headers before any decoder runs), ERR_LIBAV_TIMEOUT (a call made no progress for
+//   `callTimeoutMs`, default 30 s), ERR_LIBAV_ABORTED (the wasm aborted). After a timeout or an
+//   abort the instance is retired and the next open starts a fresh one; calls on sources of the
+//   retired instance fail with the same error. libavRungState() gives { live, instancesCreated }.
 //   source.tracks, source.duration, source.videoFrames(fromS), source.audioData(fromS),
-//   source.close().
+//   source.close(). audioData yields WebCodecs AudioData, or, where the browser has no AudioData
+//   (Safari 17.4 to 18.x), plain f32-planar blocks with the same reading surface (audioBlock).
 //
 // Self-contained ES module: relative imports only, no DOM, no UI.
 
-const VERSION = '6.10.9.0';
-const VARIANT = 'reel';
 const VENDOR_DIR = '../vendor/libav/';
-const FILES = Object.freeze([
-  { key: 'loader', name: `libav-${VERSION}-${VARIANT}.mjs`, bytes: 28408, type: 'text/javascript',
-    sha256: '3b3de436145b875715c394d47946d62f38b7c90cea167bb016ee513ff37808ec' },
-  { key: 'factory', name: `libav-${VERSION}-${VARIANT}.wasm.mjs`, bytes: 251298, type: 'text/javascript',
-    sha256: '75eadd3ab9614c3b99099c33cca2fe6c43db59f7f5643adb58c1a245c9d11d55' },
-  { key: 'wasm', name: `libav-${VERSION}-${VARIANT}.wasm.wasm`, bytes: 3516872, type: 'application/wasm',
-    sha256: '505bbd5a65fa85990a6539f22b735b770d7807ad86c07e3cb080e6e25ed79304' },
-]);
-const TOTAL_BYTES = FILES.reduce((sum, file) => sum + file.bytes, 0);
+// The SHA-256 pins live beside the binaries, so the LGPL library can be replaced by replacing its
+// files and editing this JSON, with no edit to this module (review V37; VENDOR.md, "libav.js").
+const PINS_FILE = 'pins.json';
+const FILE_KEYS = Object.freeze(['loader', 'factory', 'wasm']);
 const ASK_OVER_BYTES = 5 * 1024 * 1024;
-const DOWNLOAD = Object.freeze({
-  name: 'libav.js video decoder (Reel variant)',
-  bytes: TOTAL_BYTES,
-  licence: 'LGPL-2.1',
-});
+const DOWNLOAD_NAME = 'libav.js video decoder (Reel variant)';
+const LICENCE = 'LGPL-2.1';
 
 // libav constants used here (FFmpeg 9.0 values, as libav.js exports them).
 const AVMEDIA_TYPE_VIDEO = 0;
@@ -79,25 +78,101 @@ export class LibavRungError extends Error {
 
 /* ---------------------------------------------------------------- loading */
 
-let instancePromise = null;
+const WORKER_START_MS = 20_000;
+// Watchdog for one call into libav: how long it may run without progress (a block answered to the
+// demuxer counts as progress, so a slow input is not mistaken for a hung decoder).
+const CALL_TIMEOUT_MS = 30_000;
+// Largest frame the rung accepts, checked from the container headers before any decoder runs and
+// again on every decoded frame (review V27): 8192 pixels a side, which also bounds it at 64 MiP.
+const MAX_FRAME_SIDE = 8192;
+
+let instancePromise = null; // Promise<host> for the live instance, or null
+let instancesCreated = 0; // for libavRungState(): a retired instance is never reused
 
 function hex(buffer) {
   return [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+async function loadPins() {
+  const url = new URL(VENDOR_DIR + PINS_FILE, import.meta.url).href;
+  let pins;
+  try {
+    const response = await fetch(url, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    pins = await response.json();
+  } catch (error) {
+    throw new LibavRungError('ERR_LIBAV_UNAVAILABLE', `${PINS_FILE} did not load (${error?.message ?? error}).`, error);
+  }
+  const files = {};
+  for (const file of Array.isArray(pins?.files) ? pins.files : []) {
+    if (FILE_KEYS.includes(file?.key) && typeof file.name === 'string' && /^[0-9a-f]{64}$/.test(file.sha256 || '')
+      && !file.name.includes('/') && Number.isFinite(file.bytes)) {
+      files[file.key] = Object.freeze({ ...file, url: new URL(VENDOR_DIR + file.name, import.meta.url).href });
+    }
+  }
+  const missing = FILE_KEYS.filter(key => !files[key]);
+  if (missing.length || typeof pins.variant !== 'string') {
+    throw new LibavRungError('ERR_LIBAV_INTEGRITY', `${PINS_FILE} lacks a valid entry for ${missing.join(', ') || 'variant'}.`);
+  }
+  const bytes = FILE_KEYS.reduce((sum, key) => sum + files[key].bytes, 0);
+  return { version: String(pins.version || ''), variant: pins.variant, files, bytes };
+}
+
 async function fetchVerified(file) {
-  const url = new URL(VENDOR_DIR + file.name, import.meta.url).href;
-  const response = await fetch(url);
+  const response = await fetch(file.url);
   if (!response.ok) throw new LibavRungError('ERR_LIBAV_UNAVAILABLE', `${file.name} did not load (HTTP ${response.status}).`);
   const bytes = await response.arrayBuffer();
   const digest = hex(await crypto.subtle.digest('SHA-256', bytes));
   if (digest !== file.sha256) {
     throw new LibavRungError('ERR_LIBAV_INTEGRITY', `${file.name} failed its SHA-256 check (got ${digest.slice(0, 12)}).`);
   }
-  return { url, blob: URL.createObjectURL(new Blob([bytes], { type: file.type })) };
+  return bytes;
 }
 
-const WORKER_START_MS = 20_000;
+const blobUrl = (parts, type) => URL.createObjectURL(new Blob(parts, { type }));
+
+/* Appended to the hash-checked glue, which then runs as the worker from a blob URL (review V72).
+ * The worker inherits the page's Content-Security-Policy, whose connect-src does not list blob:, so
+ * the worker fetches the wasm from its vendored URL and checks its SHA-256 itself before compiling.
+ * When that check fails the worker start is rejected, and the page thread takes over with the
+ * bytes the page checked. */
+function workerGuard(wasm) {
+  return `
+;{
+  const REEL_WASM = ${JSON.stringify({ url: wasm.url, sha256: wasm.sha256, name: wasm.name })};
+  const plainFetch = self.fetch.bind(self);
+  self.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+    if (url !== REEL_WASM.url) return plainFetch(input, init);
+    const bytes = await (await plainFetch(url, init)).arrayBuffer();
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    if (digest !== REEL_WASM.sha256) throw new Error(REEL_WASM.name + ' failed its SHA-256 check in the worker');
+    return new Response(bytes, { headers: { 'Content-Type': 'application/wasm' } });
+  };
+  // Emscripten falls back to a synchronous XMLHttpRequest when its fetch fails; that read could not
+  // be hash-checked, so it is refused for the wasm and the failed fetch stands.
+  if (self.XMLHttpRequest) {
+    const plainOpen = self.XMLHttpRequest.prototype.open;
+    self.XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      if (String(url) === REEL_WASM.url) throw new Error(REEL_WASM.name + ' may only load through the checked fetch');
+      return plainOpen.call(this, method, url, ...rest);
+    };
+  }
+  // libav.js reports a failed start as ["error", "error", false, ex], which its page side handles
+  // with a missing reject function: the page throws an uncaught TypeError and the start promise
+  // never settles (a page paused on exceptions then hangs). Sent with the success flag, the same
+  // message reaches the start promise's reject, so the page thread takes over at once.
+  const plainPost = self.postMessage.bind(self);
+  self.postMessage = (message, ...rest) => {
+    if (Array.isArray(message) && message[0] === 'error' && message[1] === 'error' && message[2] === false) {
+      return plainPost(['error', 'error', true, String(message[3] && message[3].message || message[3])], ...rest);
+    }
+    return plainPost(message, ...rest);
+  };
+}
+`;
+}
 
 /** libav.js leaves its promise pending when the worker fails to load, so bound the wait. */
 function withTimeout(promise, ms, message) {
@@ -108,13 +183,61 @@ function withTimeout(promise, ms, message) {
   ]).finally(() => clearTimeout(timer));
 }
 
-/** Serialise every call into one libav instance: libav.js uses Asyncify, which is not re-entrant. */
-function serialiser() {
+/** A wasm abort leaves the instance unusable: these are Emscripten's and the engine's words for it. */
+function isAbort(error) {
+  return error?.name === 'RuntimeError' || /\bAborted\(|RuntimeError|unreachable|out of bounds|out of memory/i.test(String(error?.message ?? error));
+}
+
+/* Retire an instance: stop its worker, forget it, and fail every later call into it. The next
+ * openLibavSource() starts a fresh instance. */
+function retire(host, reason) {
+  if (host.dead) return;
+  host.dead = reason instanceof Error ? reason : new LibavRungError('ERR_LIBAV_RETIRED', String(reason));
+  try { host.lib.terminate?.(); } catch { /* already stopped */ }
+  host.devices.clear();
+  if (host.promise && instancePromise === host.promise) instancePromise = null;
+}
+
+/**
+ * Serialise every call into one libav instance (libav.js uses Asyncify, which is not re-entrant)
+ * and guard each one: a call that makes no progress for `timeoutMs`, or that aborts the wasm,
+ * retires the instance (review V27).
+ */
+function guardedRunner(host) {
   let tail = Promise.resolve();
-  return fn => {
-    const run = tail.then(fn);
-    tail = run.catch(() => {});
-    return run;
+  return (fn, timeoutMs = CALL_TIMEOUT_MS) => {
+    const call = tail.then(async () => {
+      if (host.dead) throw host.dead;
+      host.progressAt = Date.now();
+      let timer;
+      const watchdog = new Promise((_, reject) => {
+        const step = Math.max(50, Math.min(1000, timeoutMs / 4));
+        const tick = () => {
+          if (host.dead) { reject(host.dead); return; }
+          if (Date.now() - host.progressAt >= timeoutMs) {
+            reject(new LibavRungError('ERR_LIBAV_TIMEOUT', `A libav call made no progress for ${Math.round(timeoutMs / 1000)} s; the decoder was restarted.`));
+            return;
+          }
+          timer = setTimeout(tick, step);
+        };
+        timer = setTimeout(tick, step);
+      });
+      try {
+        return await Promise.race([fn(), watchdog]);
+      } catch (error) {
+        if (error?.code === 'ERR_LIBAV_TIMEOUT') { retire(host, error); throw error; }
+        if (host.dead) throw host.dead;
+        if (isAbort(error)) {
+          retire(host, new LibavRungError('ERR_LIBAV_ABORTED', `The libav decoder stopped (${error?.message ?? error}); it was restarted.`, error));
+          throw host.dead;
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+    tail = call.catch(() => {});
+    return call;
   };
 }
 
@@ -122,49 +245,67 @@ async function createInstance(requestDownload, log) {
   if (typeof WebAssembly !== 'object' || !globalThis.crypto?.subtle || typeof fetch !== 'function') {
     throw new LibavRungError('ERR_LIBAV_UNAVAILABLE', 'The software video decoder needs WebAssembly, Web Crypto and fetch.');
   }
-  if (TOTAL_BYTES > ASK_OVER_BYTES) {
-    const yes = typeof requestDownload === 'function' && (await requestDownload({ ...DOWNLOAD })) === true;
-    if (!yes) throw new LibavRungError('ERR_LIBAV_DECLINED', `The ${DOWNLOAD.name} download was declined.`);
+  const pins = await loadPins();
+  if (pins.bytes > ASK_OVER_BYTES) {
+    const yes = typeof requestDownload === 'function'
+      && (await requestDownload({ name: DOWNLOAD_NAME, bytes: pins.bytes, licence: LICENCE })) === true;
+    if (!yes) throw new LibavRungError('ERR_LIBAV_DECLINED', `The ${DOWNLOAD_NAME} download was declined.`);
   }
-  const urls = {};
-  for (const file of FILES) urls[file.key] = await fetchVerified(file);
-  const module = await import(urls.loader.blob);
+  const { loader, factory, wasm } = pins.files;
+  const loaderBytes = await fetchVerified(loader);
+  const glueBytes = await fetchVerified(factory);
+  // The page checks the wasm too, so a mismatch fails here by name before any worker starts; the
+  // worker checks its own copy again (workerGuard), and the page-thread fallback compiles these bytes.
+  const wasmBytes = await fetchVerified(wasm);
+  const module = await import(blobUrl([loaderBytes], loader.type));
   const LibAV = module.default ?? module;
   let lib;
   let mode = 'worker';
   try {
     if (typeof Worker !== 'function') throw new Error('no Worker');
-    // The worker starts from the vendored URL, not a blob: in Chrome 2026-11 a blob-URL glue
-    // worker given a blob-URL wasm failed to load, while either half alone loaded. The glue's
-    // bytes were hash-checked above from the same URL; the wasm itself runs from the checked blob.
+    const glue = blobUrl([glueBytes, workerGuard(wasm)], factory.type);
     lib = await withTimeout(
-      LibAV.LibAV({ variant: VARIANT, toImport: urls.factory.url, wasmurl: urls.wasm.blob, nothreads: true }),
+      LibAV.LibAV({ variant: pins.variant, toImport: glue, wasmurl: wasm.url, nothreads: true }),
       WORKER_START_MS, 'the libav worker did not start');
   } catch (error) {
     // A page without module workers, or a worker that failed to start, decodes on this thread.
     log?.(`libav worker unavailable (${error?.message ?? error}); decoding on the page thread`);
-    const factory = (await import(urls.factory.blob)).default;
-    lib = await LibAV.LibAV({ variant: VARIANT, factory, wasmurl: urls.wasm.blob, noworker: true, nothreads: true });
+    const pageFactory = (await import(blobUrl([glueBytes], factory.type))).default;
+    // The checked bytes go in as wasmBinary, so nothing is fetched again (connect-src has no blob:).
+    const withBinary = options => pageFactory({ ...options, wasmBinary: new Uint8Array(wasmBytes) });
+    lib = await LibAV.LibAV({ variant: pins.variant, factory: withBinary, noworker: true, nothreads: true });
     mode = 'direct';
   }
-  await lib.av_log_set_level(AV_LOG_QUIET);
-  const devices = new Map(); // device name -> { read, size, ahead }
+  const host = { lib, mode, sequence: 0, devices: new Map(), users: 0, dead: null, progressAt: Date.now(), promise: null };
+  host.run = guardedRunner(host);
+  instancesCreated += 1;
+  await host.run(() => lib.av_log_set_level(AV_LOG_QUIET));
   // Block requests come back to this thread in both modes. They are answered directly, never
   // through the call queue: the call that asked is suspended inside libav until the answer lands.
   lib.onblockread = (name, position, length) => {
-    const device = devices.get(name);
-    if (!device) return lib.ff_block_reader_dev_send(name, position, null, { errorCode: 5 /* EIO */ });
-    return serveBlock(lib, device, name, position, length);
+    host.progressAt = Date.now();
+    const device = host.devices.get(name);
+    if (host.dead || !device) return lib.ff_block_reader_dev_send(name, position, null, { errorCode: 5 /* EIO */ });
+    return serveBlock(lib, device, name, position, length, host);
   };
-  return { lib, mode, run: serialiser(), sequence: 0, devices };
+  return host;
 }
 
 async function instance(requestDownload, log) {
-  instancePromise ??= createInstance(requestDownload, log).catch(error => {
-    instancePromise = null; // a decline or a network failure may be retried later
-    throw error;
-  });
-  return instancePromise;
+  for (;;) {
+    if (!instancePromise) {
+      const promise = createInstance(requestDownload, log).then(host => { host.promise = promise; return host; });
+      promise.catch(() => { if (instancePromise === promise) instancePromise = null; }); // a decline or a network failure may be retried later
+      instancePromise = promise;
+    }
+    const host = await instancePromise;
+    if (!host.dead) { host.users += 1; return host; } // retired while this caller waited: start another
+  }
+}
+
+/** For checks and the host's diagnostics: whether an instance is alive, and how many were made. */
+export function libavRungState() {
+  return { live: !!instancePromise, instancesCreated };
 }
 
 /* ---------------------------------------------------------------- input reading */
@@ -195,12 +336,14 @@ async function readExactly(device, offset) {
   return data.length > length ? data.subarray(0, length) : data;
 }
 
-async function serveBlock(lib, device, name, position, length) {
+async function serveBlock(lib, device, name, position, length, host) {
   device.want = length;
   try {
     let data = null;
     if (device.ahead && device.ahead.offset === position) data = await device.ahead.promise.catch(() => null);
     data ??= await readExactly(device, position);
+    if (host.dead) return;
+    host.progressAt = Date.now();
     await lib.ff_block_reader_dev_send(name, position, data);
     const next = position + data.length;
     if (data.length && next < device.size) {
@@ -212,7 +355,94 @@ async function serveBlock(lib, device, name, position, length) {
     }
   } catch (error) {
     device.ahead = null;
-    await lib.ff_block_reader_dev_send(name, position, null, { error });
+    if (!host.dead) await lib.ff_block_reader_dev_send(name, position, null, { error }).catch(() => {});
+  }
+}
+
+/**
+ * WebCodecs AudioData where the browser has it; otherwise (Safari 17.4 to 18.x) a plain object with
+ * the same reading surface the engine uses: format, sampleRate, numberOfFrames, numberOfChannels,
+ * timestamp (microseconds), copyTo(dest, { planeIndex, format: 'f32-planar' }) and close().
+ */
+function audioBlock(init) {
+  if (typeof globalThis.AudioData === 'function') return new globalThis.AudioData(init);
+  const { data, numberOfFrames, numberOfChannels } = init;
+  let closed = false;
+  return {
+    format: 'f32-planar',
+    sampleRate: init.sampleRate,
+    numberOfFrames,
+    numberOfChannels,
+    timestamp: init.timestamp,
+    duration: Math.round((numberOfFrames * 1e6) / init.sampleRate),
+    allocationSize: () => numberOfFrames * 4,
+    copyTo(dest, { planeIndex = 0, format = 'f32-planar', frameOffset = 0, frameCount } = {}) {
+      if (closed) throw new DOMException('The audio block is closed.', 'InvalidStateError');
+      if (format !== 'f32-planar') throw new DOMException(`Only f32-planar copies are supported, not ${format}.`, 'NotSupportedError');
+      if (!(planeIndex >= 0 && planeIndex < numberOfChannels)) throw new RangeError(`No plane ${planeIndex}.`);
+      const count = frameCount ?? numberOfFrames - frameOffset;
+      const start = planeIndex * numberOfFrames + frameOffset;
+      const target = dest instanceof Float32Array ? dest : new Float32Array(dest.buffer ?? dest, dest.byteOffset ?? 0, count);
+      target.set(data.subarray(start, start + count));
+    },
+    close() { closed = true; },
+  };
+}
+
+/* ---------------------------------------------------------------- demuxer */
+
+function tooLarge(width, height) {
+  return width > MAX_FRAME_SIDE || height > MAX_FRAME_SIDE;
+}
+
+function frameTooLargeError(name, width, height) {
+  return new LibavRungError('ERR_LIBAV_FRAME_TOO_LARGE',
+    `${name || 'The file'} declares a ${width}x${height} video frame; the software decoder accepts at most ${MAX_FRAME_SIDE}x${MAX_FRAME_SIDE}.`);
+}
+
+/**
+ * libav.js's ff_init_demuxer_file in two steps, so the frame size declared in the container
+ * headers is checked before avformat_find_stream_info runs a decoder (and allocates frames).
+ * Returns [fmt, streams] in ff_init_demuxer_file's shape, or throws.
+ */
+async function openDemuxer(lib, deviceName, label) {
+  const fmt = await lib.avformat_open_input_js(deviceName, null, null);
+  if (!fmt) throw new Error('Could not open source file');
+  try {
+    const declared = async () => {
+      const count = await lib.AVFormatContext_nb_streams(fmt);
+      for (let i = 0; i < count; i += 1) {
+        const par = await lib.AVStream_codecpar(await lib.AVFormatContext_streams_a(fmt, i));
+        if ((await lib.AVCodecParameters_codec_type(par)) !== AVMEDIA_TYPE_VIDEO) continue;
+        const width = await lib.AVCodecParameters_width(par);
+        const height = await lib.AVCodecParameters_height(par);
+        if (tooLarge(width, height)) throw frameTooLargeError(label, width, height);
+      }
+    };
+    await declared();
+    const ret = await lib.avformat_find_stream_info(fmt, 0);
+    if (ret < 0) throw new Error(`avformat_find_stream_info failed (${ret})`);
+    await declared();
+    const count = await lib.AVFormatContext_nb_streams(fmt);
+    const streams = [];
+    for (let i = 0; i < count; i += 1) {
+      const ptr = await lib.AVFormatContext_streams_a(fmt, i);
+      const codecpar = await lib.AVStream_codecpar(ptr);
+      const timeBaseNum = await lib.AVStream_time_base_num(ptr);
+      const timeBaseDen = await lib.AVStream_time_base_den(ptr);
+      const durationTb = (await lib.AVStream_duration(ptr)) + (await lib.AVStream_durationhi(ptr)) * 4294967296;
+      streams.push({
+        ptr, index: i, codecpar,
+        codec_type: await lib.AVCodecParameters_codec_type(codecpar),
+        codec_id: await lib.AVCodecParameters_codec_id(codecpar),
+        time_base_num: timeBaseNum, time_base_den: timeBaseDen,
+        duration: timeBaseDen ? (durationTb * timeBaseNum) / timeBaseDen : 0,
+      });
+    }
+    return [fmt, streams];
+  } catch (error) {
+    try { await lib.avformat_close_input_js(fmt); } catch { /* gone */ }
+    throw error;
   }
 }
 
@@ -289,12 +519,32 @@ function avcCodecString(extradata, firstPacket) {
  * Options beyond the contract: `deinterlace` (default false) runs yadif on frames flagged
  * interlaced; `source.setDeinterlace(on)` changes it for the next videoFrames() call.
  */
-export async function openLibavSource(file, { requestDownload, log, deinterlace = false } = {}) {
+export async function openLibavSource(file, { requestDownload, log, deinterlace = false, callTimeoutMs = CALL_TIMEOUT_MS } = {}) {
   const read = readerFor(file);
   if (!read) return null;
   const say = message => { try { log?.(message); } catch { /* the host's logger failed; keep decoding */ } };
-  const host = await instance(requestDownload, say);
-  const { lib, run } = host;
+  const host = await instance(requestDownload, say); // counts this caller as a user
+  try {
+    const source = await openOn(host, file, read, say, deinterlace, callTimeoutMs);
+    if (source) return source;
+  } catch (error) {
+    release(host);
+    throw error;
+  }
+  release(host);
+  return null;
+}
+
+/* One fewer source on this instance; the last one out stops the worker, so its wasm heap goes too. */
+function release(host) {
+  host.users = Math.max(0, host.users - 1);
+  if (!host.users) retire(host, 'the last libav source closed');
+}
+
+async function openOn(host, file, read, say, deinterlace, callTimeoutMs) {
+  const { lib } = host;
+  const timeoutMs = Number.isFinite(callTimeoutMs) && callTimeoutMs > 0 ? callTimeoutMs : CALL_TIMEOUT_MS;
+  const run = fn => host.run(fn, timeoutMs);
   const makeDevice = async name => {
     host.devices.set(name, { read, size: file.size, want: BLOCK_BYTES, ahead: null });
     await lib.mkblockreaderdev(name, file.size);
@@ -322,7 +572,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
   try {
     probe = await run(async () => {
       await makeDevice(probeName);
-      const [fmt, streams] = await lib.ff_init_demuxer_file(probeName);
+      const [fmt, streams] = await openDemuxer(lib, probeName, file?.name);
       try {
         const startLo = await lib.AVFormatContext_start_time(fmt);
         const startHi = await lib.AVFormatContext_start_timehi(fmt);
@@ -360,7 +610,10 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
     });
   } catch (error) {
     say(`libav could not open ${file?.name}: ${error?.message ?? error}`);
-    await run(() => dropDevice(probeName));
+    // A refusal by name (frame too large, decoder timeout or abort) reaches the host; any other
+    // failure means libav cannot demux the file.
+    if (!host.dead) await run(() => dropDevice(probeName)).catch(() => {});
+    if (error instanceof LibavRungError) throw error;
     return null;
   }
   await run(() => dropDevice(probeName));
@@ -383,7 +636,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
   async function openSession(track) {
     const name = deviceName();
     await makeDevice(name);
-    const [fmt, streams] = await lib.ff_init_demuxer_file(name);
+    const [fmt, streams] = await openDemuxer(lib, name, file?.name);
     const stream = streams[track.id];
     for (const other of streams) {
       if (other.index !== track.id) await lib.AVStream_discard_s(other.ptr, AVDISCARD_ALL);
@@ -440,8 +693,8 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
       try { session.webcodecs.decoder.close(); } catch { /* already closed */ }
       session.webcodecs = null;
     }
-    if (closed) {
-      await run(() => freeSession(session));
+    if (closed || host.dead) {
+      if (!host.dead) await run(() => freeSession(session)).catch(() => {});
       return;
     }
     const pool = idle.get(session.track.id) ?? [];
@@ -495,6 +748,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
   async function buildGraph(session, ptr, interlace) {
     const width = await lib.AVFrame_width(ptr);
     const height = await lib.AVFrame_height(ptr);
+    if (tooLarge(width, height)) throw frameTooLargeError(file?.name, width, height);
     const format = await lib.AVFrame_format(ptr);
     const sarNum = await lib.AVFrame_sample_aspect_ratio_num(ptr);
     const sarDen = await lib.AVFrame_sample_aspect_ratio_den(ptr);
@@ -741,7 +995,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
           if (nextUs <= fromUs) continue; // wholly before the requested start
           const data = new Float32Array(frames * planes.length);
           planes.forEach((plane, c) => data.set(plane.subarray(0, frames), c * frames));
-          yield new AudioData({
+          yield audioBlock({
             format: 'f32-planar',
             sampleRate,
             numberOfFrames: frames,
@@ -762,10 +1016,16 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
     closed = true;
     const sessions = [...idle.values()].flat();
     idle.clear();
-    await run(async () => {
-      for (const session of sessions) await freeSession(session);
-      for (const name of [...devices]) await dropDevice(name);
-    });
+    try {
+      if (!host.dead) {
+        await run(async () => {
+          for (const session of sessions) await freeSession(session);
+          for (const name of [...devices]) await dropDevice(name);
+        });
+      }
+    } catch { /* the instance is retired below or was already */ } finally {
+      release(host);
+    }
   }
 
   return {
@@ -782,8 +1042,8 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
 
 /** What this rung can open, for the engine's routing and the help sheet. */
 export const LIBAV_RUNG = Object.freeze({
-  version: VERSION,
-  variant: VARIANT,
-  download: DOWNLOAD,
+  pins: `vendor/libav/${PINS_FILE}`,
+  licence: LICENCE,
+  maxFrameSide: MAX_FRAME_SIDE,
   extensions: Object.freeze(['.avi', '.divx', '.xvid', '.flv', '.wmv', '.asf', '.mpg', '.mpeg', '.vob', '.ts', '.m2ts', '.mkv']),
 });

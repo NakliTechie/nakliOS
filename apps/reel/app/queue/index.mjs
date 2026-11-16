@@ -16,6 +16,7 @@ import {
   createOrder, currentIndex, setShuffle, setRepeat, cycleRepeat, jumpTo, next, previous,
 } from './logic.mjs';
 import { setQueueSource, hostStore, onHostStore, itemFile, recordFile } from './shared.mjs';
+import { deleteKeys } from '../library/forget.mjs';
 
 const LAST_FOLDER_KEY = 'queue:lastFolder';
 
@@ -44,6 +45,8 @@ export const COMMANDS = [
     input: { type: 'object', properties: { on: { type: 'boolean' } }, required: [] } },
   { name: 'queue.reopen-folder', label: 'Reopen last folder', scope: 'write', input: none, readTwin: 'queue.read',
     description: 'Reopen the folder picked last time (Chromium only): ask for read permission again, queue it and play the first video.' },
+  { name: 'queue.forget-folder', label: 'Forget folder', scope: 'destructive', input: none, readTwin: 'queue.read',
+    description: 'Delete the remembered folder (the stored folder handle behind "Reopen last folder"). It cannot be undone; picking the folder again remembers it again.' },
   { name: 'queue.read', label: 'Queue', scope: 'read', input: none,
     description: 'Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names, whether the panel is open and the stored last folder.' },
   { name: 'queue.panel', label: 'Queue panel', scope: 'write', readTwin: 'queue.read',
@@ -589,6 +592,13 @@ export function install(ctx) {
     order = setShuffle(order, typeof on === 'boolean' ? on : !order.shuffle);
     publish();
     return snapshot();
+  });
+  registry.handle('queue.forget-folder', async () => {
+    const forgotten = lastFolder?.name ?? null;
+    lastFolder = null;
+    render();
+    await deleteKeys(ctx.Storage, [LAST_FOLDER_KEY]);
+    return { ...snapshot(), forgotten };
   });
   registry.handle('queue.read', () => snapshot());
   registry.handle('queue.panel', ({ open }) => {

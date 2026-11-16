@@ -26,9 +26,9 @@ export const CROPS = [
 
 export const COMMANDS = [
   { name: 'view.snapshot', label: 'Snapshot', scope: 'write', readTwin: 'view.read',
-    description: 'Save the current video frame as a PNG at the size the video is drawn; with save false, return it as a data URL instead.',
+    description: 'Save the current video frame as a PNG at the size the video is drawn, and return its name and size (never the image). save false is the explicit export request: it saves nothing and returns the PNG as a data URL.',
     input: { type: 'object', properties: {
-      save: { type: 'boolean', description: 'false returns the PNG as a data URL and saves nothing; default true' } }, required: [] },
+      save: { type: 'boolean', description: 'false exports the PNG as a data URL and saves nothing; default true returns only the name and size' } }, required: [] },
     shortcuts: [{ key: 'shift+s' }] },
   { name: 'view.aspect', label: 'Aspect ratio', scope: 'write', readTwin: 'view.read',
     description: 'Set the display aspect ratio (auto, 16:9, 4:3, 2.35:1 or 1:1); with no input it moves to the next one.',
@@ -65,8 +65,15 @@ export const COMMANDS = [
     description: 'For HDR10 and HLG video: auto maps HDR to the screen (SDR, or HDR where the display and browser offer it); off clips at SDR white. With no input it toggles.',
     input: { type: 'object', properties: { mode: { type: 'string', enum: ['auto', 'off'] } }, required: [] } },
   { name: 'view.read', label: 'Picture state', scope: 'read', input: none,
-    description: 'Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.' },
+    description: 'Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, which path maps HDR now (hdrPath: shader is Reel\'s tone curve, browser is the browser\'s own conversion, extended, off or none), the last snapshot, and the Picture-in-Picture state.' },
 ];
+
+/* Which path maps HDR, from the engine's view state: 'shader', 'browser', 'extended', 'off',
+ * 'none', or null before a frame is drawn or without WebGPU. Pure, exported for tests. */
+export function hdrPath(view) {
+  const value = view?.renderer?.tonemap;
+  return ['shader', 'browser', 'extended', 'off', 'none'].includes(value) ? value : null;
+}
 
 export const ADJUST_DEFAULTS = Object.freeze({ brightness: 0, contrast: 1, saturation: 1, gamma: 1 });
 export const ADJUST_RANGES = Object.freeze({
@@ -153,6 +160,10 @@ export const STRINGS = {
   'picture.tonemap.auto': 'Auto',
   'picture.tonemap.off': 'Off (clip)',
   'picture.toast.tonemap': 'HDR tone mapping: {mode}',
+  'picture.hdr.shader': 'HDR on this video: Reel\'s tone curve maps it to the screen.',
+  'picture.hdr.browser': 'HDR on this video: the browser converts it to SDR, not Reel, so bright highlights can clip.',
+  'picture.hdr.extended': 'HDR on this video: passed through to an HDR display.',
+  'picture.hdr.off': 'HDR on this video: clipped at SDR white, as chosen.',
   'picture.status.unsupported': 'This browser draws without WebGPU, so this setting has no effect.',
 };
 
@@ -195,7 +206,12 @@ export function install(ctx) {
   };
   // Held once: during Document Picture-in-Picture the canvas lives in another document,
   // where ctx.canvas() (a lookup in this document) returns null.
-  const videoCanvas = ctx.canvas();
+  let videoCanvas = ctx.canvas();
+  // After a GPU loss the host replaces the canvas (same id); follow it, in the PiP window too.
+  ctx.on('ui:canvas-replaced', ({ id } = {}) => {
+    const picture = store.ui.platform?.pip?.active ? globalThis.documentPictureInPicture?.window?.document : null;
+    videoCanvas = picture?.getElementById(id) || document.getElementById(id) || videoCanvas;
+  });
 
   function applyView() {
     if (typeof Engine.setView !== 'function') {
@@ -338,6 +354,7 @@ export function install(ctx) {
       deinterlace: state.deinterlace,
       tonemap: state.tonemap,
       engineView,
+      hdrPath: hdrPath(engineView),
       lastSnapshot: state.lastSnapshot,
       pip: store.ui.platform?.pip ?? null,
     };
@@ -460,11 +477,16 @@ export function install(ctx) {
   const status = document.createElement('p');
   status.className = 'picture-hint';
   status.hidden = true;
+  // V30: which path maps HDR now (engine view.renderer.tonemap from engine/gpu-renderer.mjs state()).
+  const hdrNote = document.createElement('p');
+  hdrNote.className = 'picture-hint';
+  hdrNote.dataset.picture = 'hdr-path';
+  hdrNote.hidden = true;
 
   body.append(group('aspect', 'picture.panel.aspect', ASPECTS, 'view.aspect'),
     group('crop', 'picture.panel.crop', CROPS, 'view.crop'), zoomSet, adjustSet,
     group('deinterlace', 'picture.panel.deinterlace', modeList(DEINTERLACE_MODES), 'view.deinterlace'),
-    group('tonemap', 'picture.panel.tonemap', modeList(['auto', 'off']), 'view.tonemap'), status, panelSnap);
+    group('tonemap', 'picture.panel.tonemap', modeList(['auto', 'off']), 'view.tonemap'), hdrNote, status, panelSnap);
 
   ctx.addStyle(`
     .picture-panel .picture-readout{align-self:center;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;margin-left:4px}
@@ -491,7 +513,27 @@ export function install(ctx) {
     try { view = Engine.state().view; } catch { view = null; }
     status.hidden = !(view && (view.deinterlace === 'unsupported' || view.tonemap === 'unsupported'));
     status.textContent = t('picture.status.unsupported');
+    renderHdrPath(view);
   }
+
+  function renderHdrPath(view) {
+    const path = hdrPath(view);
+    hdrNote.hidden = !path || path === 'none';
+    if (!hdrNote.hidden) hdrNote.textContent = t(`picture.hdr.${path}`);
+    hdrNote.dataset.path = path || 'none';
+  }
+
+  // The path is known only after a frame is drawn, so the open panel re-reads it once a second.
+  let hdrReadAt = 0;
+  ctx.onFrame(() => {
+    if (ctx.panels.current() !== 'picture') return;
+    const now = performance.now();
+    if (now - hdrReadAt < 1000) return;
+    hdrReadAt = now;
+    let view = null;
+    try { view = Engine.state().view; } catch { view = null; }
+    renderHdrPath(view);
+  });
 
   /* ---- drag to pan while zoomed. The platform module's transparent hit layer covers the picture;
    * a capture listener on the stage box sees the press first, and a drag of more than 4 px
