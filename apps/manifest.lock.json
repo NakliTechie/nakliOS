@@ -199,21 +199,21 @@
       "id": "draft",
       "repo": "NakliTechie/draft",
       "requestedRef": "main",
-      "resolvedCommit": "9eab2f4a43761d0c00ada20670163ff7d7a28ee9",
+      "resolvedCommit": "049be08a8815bec6a969d85e8c2d5a1e28321ecf",
       "files": [
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "d900e4a4f028ed1a4b78d1605dee453a6c68b394054e30e39405274506f178c9",
-          "bytes": 1410990,
-          "originalSourceSha256": "9cb8a0f58c96adf4cd86e3caf9195a3339b5131fcb9bd1c29c19e2cac9c8bb3d",
+          "sha256": "bd60b10719c33e4e372e36024f3d1512d7e045612967416681ad0ecd4f9d8d34",
+          "bytes": 1559484,
+          "originalSourceSha256": "3c389cb4fb09b27e17f2e69059b7c7063da8844eb29bad910fdcdad49b06a3dc",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "ec6281e645b85a909c6a6234a98a297661408dc1826b3f536d11d9fa1c29b85d",
-          "bytes": 44119
+          "sha256": "31bf334593668a983cf0343ef9483dbdd465b72f17cbf844644cbad52226edbb",
+          "bytes": 44298
         }
       ]
     },
