@@ -92,7 +92,9 @@
        "sticky",
        "frame",
        "image",
-       "ink"
+       "ink",
+       "path",
+       "table"
       ]
      },
      "x": {
@@ -338,6 +340,63 @@
      "simulatePressure": {
       "type": "boolean",
       "description": "Ink: pressure simulated from speed (mouse input)"
+     },
+     "d": {
+      "type": "string",
+      "description": "Path: SVG path data, drawn in viewBox and scaled to the box"
+     },
+     "viewBox": {
+      "type": "array",
+      "items": {
+       "type": "number",
+       "exclusiveMinimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Path: [width, height] of the path data's coordinate space"
+     },
+     "stencil": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 120,
+      "description": "Path: the library item it came from, such as \"flowchart:database\" or \"lucide:star\""
+     },
+     "cells": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "array",
+       "maxItems": 50,
+       "items": {
+        "type": "string",
+        "maxLength": 5000
+       }
+      },
+      "description": "Table: cell text by row then column"
+     },
+     "colWidths": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "number",
+       "minimum": 24
+      },
+      "description": "Table: column widths in board units (w is their sum)"
+     },
+     "rowHeights": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "number",
+       "minimum": 24
+      },
+      "description": "Table: row heights in board units (h is their sum)"
+     },
+     "headerRow": {
+      "type": "boolean",
+      "description": "Table: the first row is a header"
      }
     }
    },
