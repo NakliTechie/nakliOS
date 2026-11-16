@@ -2516,6 +2516,107 @@
       }
     },
     {
+      "name": "ai.diagram",
+      "label": "Diagram from text",
+      "description": "Describe a flowchart, mind map or sequence and get editable shapes and bound arrows on this page. The model writes Mermaid; Chartella's own layout places it. Runs inside NakliOS on the model chosen in Settings → AI. Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "What to draw"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Diagram kind",
+            "enum": [
+              "flowchart",
+              "mindmap",
+              "sequence",
+              "auto"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "ai.cluster",
+      "label": "Cluster stickies",
+      "description": "Group sticky notes (default: the selection, else every sticky on this page) by meaning: similar notes gather into coloured, named frames. Grouping runs on this device; the host model names the groups (keywords name them without one). Returns { groups: [{ name, ids }] }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sticky ids"
+          },
+          "groups": {
+            "type": "number",
+            "description": "How many groups (default: chosen from the notes)",
+            "minimum": 2,
+            "maximum": 12
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ai.summarize",
+      "label": "Summarize stickies",
+      "description": "Summarize the selected sticky notes (and text) into a new text box beside them, on the host model. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shapes to summarize"
+          },
+          "style": {
+            "type": "string",
+            "description": "Summary style",
+            "enum": [
+              "bullets",
+              "paragraph",
+              "actions"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ui.chat",
+      "label": "Chat with the board",
+      "description": "Open the chat panel: ask for edits in words; the host model edits the board through these same commands, and one click undoes a whole request.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+J"
+    },
+    {
       "name": "script.run",
       "label": "Run script",
       "description": "Run a list of commands as one undo step: steps is [{ command, input }]. A string \"$N.key\" in an input is replaced by step N's result key (1-based), e.g. \"$1.id\". If a step fails, nothing changes. Returns { steps, results }.",
