@@ -1,13 +1,23 @@
 {
   "accepts": [
-    { "action": "import", "label": "Open in Reckon", "extensions": [".csv", ".xlsx"] }
+    {
+      "action": "import",
+      "label": "Open in Reckon",
+      "extensions": [
+        ".csv",
+        ".xlsx"
+      ]
+    }
   ],
   "commands": [
     {
       "name": "sheets.list",
       "description": "List the sheets in the open Reckon workbook, e.g. \"what sheets are in my spreadsheet\".",
       "scope": "read",
-      "input": { "type": "object", "properties": {} }
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "range.read",
@@ -16,9 +26,15 @@
       "input": {
         "type": "object",
         "properties": {
-          "ref": { "type": "string", "minLength": 1, "description": "Sheet name and A1 range of at most 2,000 cells, e.g. \"Sheet1!A1:C10\"" }
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of at most 2,000 cells, e.g. \"Sheet1!A1:C10\""
+          }
         },
-        "required": ["ref"]
+        "required": [
+          "ref"
+        ]
       }
     },
     {
@@ -28,14 +44,24 @@
       "input": {
         "type": "object",
         "properties": {
-          "ref": { "type": "string", "minLength": 1, "description": "Sheet name and top-left cell, e.g. \"Sheet1!B2\"" },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and top-left cell, e.g. \"Sheet1!B2\""
+          },
           "values": {
             "type": "array",
-            "items": { "type": "array", "items": {} },
+            "items": {
+              "type": "array",
+              "items": {}
+            },
             "description": "Rows of cells, e.g. [[1, 2], [3, \"=A1+B1\"]]. Text that starts with = is a formula; null clears the cell."
           }
         },
-        "required": ["ref", "values"]
+        "required": [
+          "ref",
+          "values"
+        ]
       }
     },
     {
@@ -45,17 +71,1213 @@
       "input": {
         "type": "object",
         "properties": {
-          "formula": { "type": "string", "minLength": 1, "description": "The formula, e.g. \"=SUM(A1:A9)\"" },
-          "sheet": { "type": "string", "minLength": 1, "description": "The sheet its cell references read from, e.g. \"Sheet1\"" }
+          "formula": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The formula, e.g. \"=SUM(A1:A9)\""
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The sheet its cell references read from, e.g. \"Sheet1\""
+          }
         },
-        "required": ["formula"]
+        "required": [
+          "formula"
+        ]
       }
     },
     {
       "name": "recalc",
       "description": "Recompute every formula in the Reckon workbook, e.g. \"recalculate my spreadsheet\".",
       "scope": "write",
-      "input": { "type": "object", "properties": {} }
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "workbook.read",
+      "description": "Summarise the Reckon workbook for an agent: each sheet with its used range, data blocks and their header rows, frozen panes, hidden rows and columns, charts, pivot tables, conditional formatting and validation rules, notes, named ranges and the selection, e.g. \"what is in my spreadsheet and where\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "maxBlocks": {
+            "type": "integer",
+            "description": "Data blocks listed per sheet, 1 to 20 (default 5)",
+            "minimum": 1,
+            "maximum": 20
+          }
+        }
+      }
+    },
+    {
+      "name": "sheet.add",
+      "label": "Add sheet",
+      "description": "Add a sheet to the Reckon workbook, e.g. \"add a sheet called Summary\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of the new sheet, e.g. \"Summary\"; \"SheetN\" when left out"
+          },
+          "index": {
+            "type": "integer",
+            "description": "Position from 0 (first); the end when left out",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "sheet.rename",
+      "label": "Rename sheet",
+      "description": "Rename a sheet in the Reckon workbook, e.g. \"rename Sheet1 to Sales\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Current sheet name, e.g. \"Sheet1\""
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New name, e.g. \"Sales\""
+          }
+        },
+        "required": [
+          "sheet",
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "sheet.delete",
+      "label": "Delete sheet",
+      "description": "Delete a sheet from the Reckon workbook (undo restores it), e.g. \"delete the Scratch sheet\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          }
+        },
+        "required": [
+          "sheet"
+        ]
+      }
+    },
+    {
+      "name": "sheet.duplicate",
+      "label": "Duplicate sheet",
+      "description": "Copy a sheet with its cells, formats and rules but without its charts or pivot tables, e.g. \"duplicate the March sheet as April\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of the copy, e.g. \"April\"; \"<name> (2)\" when left out"
+          }
+        },
+        "required": [
+          "sheet"
+        ]
+      }
+    },
+    {
+      "name": "sheet.move",
+      "label": "Move sheet",
+      "description": "Move a sheet to another position among the tabs, e.g. \"make Summary the first sheet\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          },
+          "index": {
+            "type": "integer",
+            "description": "New position from 0 (first)",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "sheet",
+          "index"
+        ]
+      }
+    },
+    {
+      "name": "sheet.hide",
+      "label": "Hide sheet",
+      "description": "Hide a sheet tab while at least one sheet stays visible, e.g. \"hide the Lookup sheet\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          }
+        },
+        "required": [
+          "sheet"
+        ]
+      }
+    },
+    {
+      "name": "sheet.unhide",
+      "label": "Unhide sheet",
+      "description": "Show a hidden sheet tab again, e.g. \"unhide the Lookup sheet\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          }
+        },
+        "required": [
+          "sheet"
+        ]
+      }
+    },
+    {
+      "name": "sheet.color",
+      "label": "Tab colour",
+      "description": "Set or remove the colour of a sheet tab, e.g. \"colour the Sales tab blue\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\""
+          },
+          "color": {
+            "description": "Colour as #rrggbb, e.g. \"#1a5fb4\"; null removes it"
+          }
+        },
+        "required": [
+          "sheet",
+          "color"
+        ]
+      }
+    },
+    {
+      "name": "rows.insert",
+      "label": "Insert rows",
+      "description": "Insert blank rows above a row, e.g. \"insert 3 rows above row 5 on Sheet1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "description": "Row number from 1; the new rows go above it",
+            "minimum": 1
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many rows, 1 to 10000 (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "shortcut": "Mod+Shift+="
+    },
+    {
+      "name": "rows.delete",
+      "label": "Delete rows",
+      "description": "Delete rows and move the rows below up, e.g. \"delete rows 4 to 6\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "description": "First row number to delete, from 1",
+            "minimum": 1
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many rows, 1 to 10000 (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "shortcut": "Mod+-"
+    },
+    {
+      "name": "rows.hide",
+      "label": "Hide rows",
+      "description": "Hide rows without deleting them, e.g. \"hide rows 10 to 20\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "description": "First row number, from 1",
+            "minimum": 1
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many rows (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "row"
+        ]
+      }
+    },
+    {
+      "name": "rows.unhide",
+      "label": "Unhide rows",
+      "description": "Show hidden rows again, e.g. \"unhide rows 10 to 20\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "description": "First row number, from 1",
+            "minimum": 1
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many rows (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "row"
+        ]
+      }
+    },
+    {
+      "name": "cols.insert",
+      "label": "Insert columns",
+      "description": "Insert blank columns to the left of a column, e.g. \"insert a column before C\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Column letter; the new columns go to its left, e.g. \"C\""
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many columns, 1 to 10000 (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "col"
+        ]
+      },
+      "shortcut": "Mod+Shift+="
+    },
+    {
+      "name": "cols.delete",
+      "label": "Delete columns",
+      "description": "Delete columns and move the columns to their right leftwards, e.g. \"delete columns D and E\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "First column letter to delete, e.g. \"D\""
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many columns (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "col"
+        ]
+      },
+      "shortcut": "Mod+-"
+    },
+    {
+      "name": "cols.hide",
+      "label": "Hide columns",
+      "description": "Hide columns without deleting them, e.g. \"hide column B\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "First column letter, e.g. \"B\""
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many columns (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "col"
+        ]
+      }
+    },
+    {
+      "name": "cols.unhide",
+      "label": "Unhide columns",
+      "description": "Show hidden columns again, e.g. \"unhide column B\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "First column letter, e.g. \"B\""
+          },
+          "count": {
+            "type": "integer",
+            "description": "How many columns (default 1)",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "col"
+        ]
+      }
+    },
+    {
+      "name": "range.merge",
+      "label": "Merge cells",
+      "description": "Merge a range into one cell, keeping only the top-left value, e.g. \"merge A1 to D1 for a title\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:C10\"; without a sheet name it means the active sheet"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "range.unmerge",
+      "label": "Unmerge cells",
+      "description": "Split every merged cell that overlaps a range, e.g. \"unmerge A1 to D1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:C10\"; without a sheet name it means the active sheet"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "range.clear",
+      "label": "Clear",
+      "description": "Clear the contents, the formats or both from a range, e.g. \"clear B2 to D20 but keep the formatting\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:C10\"; without a sheet name it means the active sheet"
+          },
+          "what": {
+            "type": "string",
+            "enum": [
+              "contents",
+              "formats",
+              "all"
+            ],
+            "description": "contents (default) keeps formats, formats keeps values, all clears both"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      },
+      "shortcut": "Delete"
+    },
+    {
+      "name": "format.set",
+      "label": "Format cells",
+      "description": "Format a range: number format, bold, italic, underline, strikethrough, font size and family, text and fill colour, alignment, wrap and borders, e.g. \"make row 1 bold and show column C as rupees\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of at most 20,000 cells, e.g. \"Sheet1!A1:D1\""
+          },
+          "numberFormat": {
+            "description": "A format code such as \"#,##0.00\", \"0%\", \"dd-mm-yyyy\" or \"General\", or an object such as {\"kind\":\"currency\",\"code\":\"INR\",\"decimals\":2}; kinds are general, number, currency (INR, USD, EUR, GBP, JPY), percent, date, text, custom"
+          },
+          "bold": {
+            "type": "boolean",
+            "description": "true sets bold, false removes it"
+          },
+          "italic": {
+            "type": "boolean",
+            "description": "true sets italic, false removes it"
+          },
+          "underline": {
+            "type": "boolean",
+            "description": "true sets underline, false removes it"
+          },
+          "strike": {
+            "type": "boolean",
+            "description": "true sets strikethrough, false removes it"
+          },
+          "size": {
+            "description": "Font size in points (8, 9, 10, 11, 12, 14, 16, 18, 22, 24, 26 or 36); null resets it"
+          },
+          "font": {
+            "enum": [
+              "sans",
+              "serif",
+              "mono",
+              null
+            ],
+            "description": "Font family; null resets it"
+          },
+          "color": {
+            "description": "Text colour slot: \"0\" to \"9\" grey (0 lightest), \"a\" accent blue, \"r\" red, \"g\" green, \"o\" amber; null resets it"
+          },
+          "fill": {
+            "description": "Fill colour slot: \"0\" to \"9\" grey (0 lightest) or \"a\" accent blue; null removes the fill"
+          },
+          "align": {
+            "enum": [
+              "left",
+              "center",
+              "right",
+              null
+            ],
+            "description": "Horizontal alignment; null resets it"
+          },
+          "valign": {
+            "enum": [
+              "top",
+              "middle",
+              "bottom",
+              null
+            ],
+            "description": "Vertical alignment; null resets it"
+          },
+          "wrap": {
+            "type": "boolean",
+            "description": "true wraps text in the cell, false stops wrapping"
+          },
+          "border": {
+            "description": "\"all\" (every cell edge), \"outline\" (around the range), \"top\", \"bottom\", \"left\", \"right\", a set of sides such as \"tb\", or \"none\"; null removes borders"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      },
+      "shortcut": [
+        "Mod+B",
+        "Mod+I",
+        "Mod+U"
+      ]
+    },
+    {
+      "name": "range.sort",
+      "label": "Sort range",
+      "description": "Sort the rows of a range by one or more columns, keeping a header row in place, e.g. \"sort A1 to D50 by column C, largest first\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of the whole table, e.g. \"Sheet1!A1:D50\""
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Sort keys in order, 1 to 8, e.g. [{\"column\":\"C\",\"order\":\"desc\"},{\"column\":\"A\",\"order\":\"asc\"}]"
+          },
+          "header": {
+            "type": "boolean",
+            "description": "true keeps the first row in place; detected from the data when left out"
+          }
+        },
+        "required": [
+          "ref",
+          "keys"
+        ]
+      }
+    },
+    {
+      "name": "range.filter",
+      "label": "Filter",
+      "description": "Show only the rows whose value in one column is in a list, or clear the filter, changing only the view and not the data, e.g. \"show only rows where column B is North\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Column letter to filter by, e.g. \"B\"; row 1 stays as the header"
+          },
+          "keep": {
+            "type": "array",
+            "items": {},
+            "description": "Values to show, as the cells display them, e.g. [\"North\", \"South\"]; \"(blanks)\" keeps empty cells"
+          },
+          "clear": {
+            "type": "boolean",
+            "description": "true removes the filter and shows every row"
+          }
+        }
+      }
+    },
+    {
+      "name": "data.remove_duplicates",
+      "label": "Remove duplicates",
+      "description": "Remove repeated rows from a range, keeping the first of each, e.g. \"remove duplicate rows from A1 to C100 by email in column B\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of the table, e.g. \"Sheet1!A1:C100\""
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Column letters to compare, e.g. [\"B\"]; every column of the range when left out"
+          },
+          "header": {
+            "type": "boolean",
+            "description": "true leaves the first row out of the comparison; detected when left out"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "data.trim",
+      "label": "Trim spaces",
+      "description": "Remove spaces at the start and end of text cells and collapse repeated inner spaces, e.g. \"trim the spaces in column A\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:C10\"; without a sheet name it means the active sheet"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "data.split",
+      "label": "Split text to columns",
+      "description": "Split text in one column into several columns at a delimiter, overwriting the cells to the right, e.g. \"split the names in A2 to A40 at the comma\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and cells in one column, e.g. \"Sheet1!A2:A40\""
+          },
+          "delimiter": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Where to split, 1 to 10 characters, e.g. \",\" (default), \";\" or \" \""
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "names.set",
+      "label": "Named ranges",
+      "description": "Define or change a named range, e.g. \"name B2 to B20 on Sheet1 Sales\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name, starting with a letter or underscore, e.g. \"Sales\""
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The range it names, e.g. \"Sheet1!B2:B20\", or a formula starting with ="
+          }
+        },
+        "required": [
+          "name",
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "names.delete",
+      "label": "Delete name",
+      "description": "Delete a named range, e.g. \"remove the name Sales\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name to delete, e.g. \"Sales\""
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "freeze.set",
+      "label": "Freeze panes",
+      "description": "Freeze rows at the top and columns at the left so they stay in view, or unfreeze with zeros, e.g. \"freeze the header row\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Rows to freeze from the top, 0 to 1000 (default 0)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Columns to freeze from the left, 0 to 100 (default 0)",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    {
+      "name": "note.set",
+      "label": "Edit note",
+      "description": "Add or replace the note on a cell, e.g. \"add a note to B4 saying check this figure\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and one cell, e.g. \"Sheet1!B4\""
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The note text, up to 32,767 characters"
+          }
+        },
+        "required": [
+          "ref",
+          "text"
+        ]
+      },
+      "shortcut": "Shift+F2"
+    },
+    {
+      "name": "note.delete",
+      "label": "Delete note",
+      "description": "Delete the notes on every cell in a range, e.g. \"remove the notes in column B\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:C10\"; without a sheet name it means the active sheet"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "chart.add",
+      "label": "Insert chart",
+      "description": "Add a chart drawn from a range, with labels taken from a text first row or column, e.g. \"chart A1 to C13 as a line chart titled Monthly sales\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of the data with its labels, e.g. \"Sheet1!A1:C13\""
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "column",
+              "bar",
+              "line",
+              "area",
+              "pie",
+              "scatter",
+              "combo"
+            ],
+            "description": "Chart type (default column)"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Chart title, e.g. \"Monthly sales\""
+          },
+          "position": {
+            "type": "object",
+            "description": "Top-left corner in pixels from the sheet corner, e.g. {\"x\": 400, \"y\": 40}"
+          },
+          "size": {
+            "type": "object",
+            "description": "Size in pixels, 40 to 4000, e.g. {\"width\": 480, \"height\": 300}"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "chart.update",
+      "label": "Chart settings",
+      "description": "Change the type, title, data range, orientation, label rows, position or size of a chart, e.g. \"make chart ch1 a bar chart\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Chart id from workbook.read or chart.add"
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet the chart is on; searched when left out"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "column",
+              "bar",
+              "line",
+              "area",
+              "pie",
+              "scatter",
+              "combo"
+            ],
+            "description": "Chart type"
+          },
+          "title": {
+            "description": "Chart title; null removes it"
+          },
+          "dataRange": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A1 range on the sheet of the chart, e.g. \"A1:C13\""
+          },
+          "orientation": {
+            "type": "string",
+            "enum": [
+              "cols",
+              "rows"
+            ],
+            "description": "Series in columns or in rows"
+          },
+          "headerRow": {
+            "type": "boolean",
+            "description": "true when the first row holds series names"
+          },
+          "headerCol": {
+            "type": "boolean",
+            "description": "true when the first column holds category labels"
+          },
+          "position": {
+            "type": "object",
+            "description": "Top-left corner in pixels, e.g. {\"x\": 400, \"y\": 40}"
+          },
+          "size": {
+            "type": "object",
+            "description": "Size in pixels, e.g. {\"width\": 480, \"height\": 300}"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "chart.delete",
+      "label": "Delete chart",
+      "description": "Delete a chart, e.g. \"remove chart ch1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Chart id from workbook.read or chart.add"
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet the chart is on; searched when left out"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "cf.set",
+      "label": "Conditional formatting",
+      "description": "Set the conditional formatting rules for a range, replacing the rules already on exactly that range, e.g. \"highlight values over 100 in B2 to B50 in red\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range the rules apply to, e.g. \"Sheet1!B2:B50\""
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Rules in priority order; [] removes the rules on this range. Shapes: {\"type\":\"cellValue\",\"op\":\"gt\",\"v1\":100,\"format\":{\"bg\":\"#f8d7da\",\"fg\":\"#842029\",\"bold\":true}} (ops gt, lt, ge, le, eq, ne, between, notBetween with v2, contains, notContains, beginsWith, endsWith, duplicate, unique, top, bottom, aboveAvg, belowAvg, blank, notBlank); {\"type\":\"formula\",\"formula\":\"=$C2>$B2\",\"format\":{...}}; {\"type\":\"colorScale\",\"scale\":{\"min\":\"#ffffff\",\"max\":\"#8fb4dd\"}}; {\"type\":\"dataBar\",\"bar\":{\"color\":\"#1a5fb4\"}}"
+          }
+        },
+        "required": [
+          "ref",
+          "rules"
+        ]
+      }
+    },
+    {
+      "name": "dv.set",
+      "label": "Data validation",
+      "description": "Set or remove the data validation rule for a range, e.g. \"only allow Yes or No in C2 to C100\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range the rule checks, e.g. \"Sheet1!C2:C100\""
+          },
+          "rule": {
+            "description": "null removes the rule on this range. Shapes: {\"type\":\"list\",\"values\":[\"Yes\",\"No\"]}; {\"type\":\"list\",\"source\":\"range\",\"ref\":\"E2:E10\"}; {\"type\":\"number\",\"op\":\"between\",\"v1\":0,\"v2\":100} (also date and textLength; ops between, notBetween, gt, lt, ge, le, eq, ne); {\"type\":\"custom\",\"formula\":\"=ISNUMBER(C2)\"}; add \"onInvalid\":\"warn\" to flag instead of reject (default reject) and \"help\" for the message"
+          }
+        },
+        "required": [
+          "ref",
+          "rule"
+        ]
+      }
+    },
+    {
+      "name": "pivot.set",
+      "label": "Pivot table",
+      "description": "Add or replace a pivot table that summarises a table on the same sheet, e.g. \"pivot A1 to D200 to total Sales by Region\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of the table with its header row, e.g. \"Sheet1!A1:D200\""
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Header names to group rows by, e.g. [\"Region\"]"
+          },
+          "cols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Header names to spread across columns, e.g. [\"Year\"]"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What to total, e.g. [{\"field\":\"Sales\",\"agg\":\"sum\"}]; agg is sum, count, countUnique, average, min or max"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Values to keep per header, e.g. [{\"field\":\"Year\",\"values\":[2025]}]"
+          },
+          "position": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Top-left cell of the pivot on the same sheet, e.g. \"H1\"; two columns right of the source when left out"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Pivot title"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Id of an existing pivot to replace; a new pivot when left out"
+          }
+        },
+        "required": [
+          "source",
+          "values"
+        ]
+      }
+    },
+    {
+      "name": "pivot.delete",
+      "label": "Delete pivot table",
+      "description": "Delete a pivot table, e.g. \"remove pivot pv1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Pivot id from workbook.read or pivot.set"
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet the pivot is on; searched when left out"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "workbook.export",
+      "label": "Export",
+      "description": "Export the Reckon workbook as csv (one sheet), xlsx or the reckon json file and return the file in the result, e.g. \"give me Sheet1 as a csv file\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx",
+              "json"
+            ],
+            "description": "File type (default json); xlsx comes back base64-encoded"
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet to export as csv; the active sheet when left out"
+          }
+        }
+      }
+    },
+    {
+      "name": "view.select",
+      "description": "Show a sheet and select a range on it, changing only the view, e.g. \"go to Sales and select B2\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 cell or range, e.g. \"Sales!B2:D10\""
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "script.run",
+      "label": "Run script",
+      "description": "Run a list of Reckon commands as one change with one undo step, where a later step can use the results of earlier steps and a failing step leaves the workbook unchanged, e.g. \"add a Summary sheet, write a table on it and make the header bold\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Steps in order, 1 to 200, each {\"command\": name, \"input\": {...}}; a string \"$N.key\" in an input stands for that key of the result of step N (from 1), e.g. \"$1.id\"; read steps see the workbook as it was before the script; view steps run after the change applies; workbook.export and script.run cannot be steps"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A short name for the change, e.g. \"Build summary\""
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
     }
   ]
 }
