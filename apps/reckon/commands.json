@@ -163,7 +163,7 @@
       "name": "sheet.delete",
       "label": "Delete sheet",
       "description": "Delete a sheet from the Reckon workbook (undo restores it), e.g. \"delete the Scratch sheet\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -323,7 +323,7 @@
       "name": "rows.delete",
       "label": "Delete rows",
       "description": "Delete rows and move the rows below up, e.g. \"delete rows 4 to 6\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -445,7 +445,7 @@
       "name": "cols.delete",
       "label": "Delete columns",
       "description": "Delete columns and move the columns to their right leftwards, e.g. \"delete columns D and E\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -574,7 +574,7 @@
       "name": "range.clear",
       "label": "Clear",
       "description": "Clear the contents, the formats or both from a range, e.g. \"clear B2 to D20 but keep the formatting\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -732,7 +732,7 @@
           "column": {
             "type": "string",
             "minLength": 1,
-            "description": "Column letter to filter by, e.g. \"B\"; row 1 stays as the header"
+            "description": "Column letter to filter by, e.g. \"B\"; the top row of the block of filled cells around the selection (or around the column's first value) stays as the header"
           },
           "keep": {
             "type": "array",
@@ -750,7 +750,7 @@
       "name": "data.remove_duplicates",
       "label": "Remove duplicates",
       "description": "Remove repeated rows from a range, keeping the first of each, e.g. \"remove duplicate rows from A1 to C100 by email in column B\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -848,7 +848,7 @@
       "name": "names.delete",
       "label": "Delete name",
       "description": "Delete a named range, e.g. \"remove the name Sales\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -921,7 +921,7 @@
       "name": "note.delete",
       "label": "Delete note",
       "description": "Delete the notes on every cell in a range, e.g. \"remove the notes in column B\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -1076,7 +1076,7 @@
       "name": "chart.delete",
       "label": "Delete chart",
       "description": "Delete a chart, e.g. \"remove chart ch1\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -1217,7 +1217,7 @@
       "name": "pivot.delete",
       "label": "Delete pivot table",
       "description": "Delete a pivot table, e.g. \"remove pivot pv1\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -1298,7 +1298,7 @@
             "items": {
               "type": "object"
             },
-            "description": "Steps in order, 1 to 200, each {\"command\": name, \"input\": {...}}; a string \"$N.key\" in an input stands for that key of the result of step N (from 1), e.g. \"$1.id\"; read steps see the workbook as it was before the script; view steps run after the change applies; workbook.export and script.run cannot be steps"
+            "description": "Steps in order, 1 to 200, each {\"command\": name, \"input\": {...}}; a string \"$N.key\" in an input stands for that key of the result of step N (from 1), e.g. \"$1.id\"; read steps see the workbook as it was before the script; view steps run after the change applies; workbook.export and script.run cannot be steps; a step that deletes (sheet.delete, rows.delete, range.clear and the other destructive commands) is refused here, so use script.run_destructive for it"
           },
           "label": {
             "type": "string",
@@ -1310,6 +1310,32 @@
           "steps"
         ]
       }
+    },
+    {
+      "name": "script.run_destructive",
+      "description": "Run a list of Reckon commands as one change with one undo step, including steps that delete or replace work, which the person reviews every time, e.g. \"delete the old Draft sheet and rename Final to Summary\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Steps in order, 1 to 200, each {\"command\": name, \"input\": {...}}, with the same rules as script.run; destructive steps such as sheet.delete and rows.delete are allowed here"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A short name for the change, e.g. \"Build summary\""
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      },
+      "label": "Run script that deletes"
     },
     {
       "name": "style.apply",
@@ -1585,7 +1611,7 @@
       "name": "table.delete",
       "label": "Convert table to range",
       "description": "Turn a table back into a plain range, keeping its cells and rewriting formulas that use its name to cell ranges, e.g. \"convert the Orders table to a normal range\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -1675,7 +1701,7 @@
       "name": "sparkline.delete",
       "label": "Delete sparklines",
       "description": "Remove sparklines by id, or every sparkline group drawn in a range, e.g. \"remove the sparklines in column F\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -1981,7 +2007,7 @@
       "name": "version.restore",
       "label": "Restore version",
       "description": "Restore the workbook to a saved version as one change you can undo, e.g. \"go back to the version called Before cleanup\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -2000,7 +2026,7 @@
       "name": "version.delete",
       "label": "Delete version",
       "description": "Delete a saved version after the person confirms it in Reckon, e.g. \"delete the version called Draft\".",
-      "scope": "write",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -2049,6 +2075,24 @@
         },
         "required": [
           "id"
+        ]
+      }
+    },
+    {
+      "name": "review.status",
+      "description": "Tell whether a change Reckon staged for the person's review is still pending, was committed or discarded, or was dropped because the sheet changed, e.g. \"did the person accept my change\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The proposal_id a staged write returned, e.g. \"prop_123\""
+          }
+        },
+        "required": [
+          "proposal_id"
         ]
       }
     }
