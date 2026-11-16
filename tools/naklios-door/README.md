@@ -10,7 +10,7 @@ Download the binary for your machine from the
 `SHA256SUMS`, and put it on your PATH:
 
 ```bash
-curl -fLO https://github.com/NakliTechie/nakliOS/releases/download/naklios-door-v0.1.0/naklios-door-darwin-arm64
+curl -fLO https://github.com/NakliTechie/nakliOS/releases/download/naklios-door-v0.2.0/naklios-door-darwin-arm64
 chmod +x naklios-door-darwin-arm64 && mv naklios-door-darwin-arm64 ~/bin/naklios-door
 ```
 
