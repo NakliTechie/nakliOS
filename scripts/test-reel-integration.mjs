@@ -29,7 +29,9 @@ assert.match(host, /id:'reel'[\s\S]*?url:'\.\/apps\/reel\/'/, 'Reel opens from N
 const reelEmbed = host.match(/id:'reel'[\s\S]*?embedUrl:'([^']+)'/);
 assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includes(reelEmbed[1]),
   `Reel uses a same-origin Immersive mirror (got ${reelEmbed && reelEmbed[1]})`);
-assert.match(mirror, /script\.src = '\/sdk\/naklios\.js'/, 'Reel mirror loads the same-origin NakliOS SDK');
+assert.match(mirror, /naklios-sdk/, 'Reel mirror carries the managed NakliOS SDK inline (2c9a65a)');
+assert.doesNotMatch(mirror, /script\.src = '\/sdk\/naklios\.js'/, 'Reel no longer loads the SDK at runtime');
+assert.equal(declared.files.find(f => f.destination === 'index.html')?.managedSdk, 'inline', 'Reel index.html is a managed-SDK file');
 assert.match(mirror, /const LIBRARY_PATH = 'library\.json'/, 'Reel scopes hosted writes to its metadata library');
 assert.match(mirror, /Media bytes never cross this boundary/, 'Reel documents the hosted media-byte boundary');
 assert.match(harness, /Crate metadata escaped library\.json/, 'Browser harness rejects path expansion');

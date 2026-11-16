@@ -21,11 +21,19 @@ export const STRINGS = {
   'platform.pip.unsupported': 'This browser has no Picture-in-Picture.',
   'platform.pip.noVideo': 'Open a video before using Picture-in-Picture.',
   'platform.pip.iframe': 'Picture-in-Picture is blocked in this frame.',
+  'platform.touch.back': '\u221210 s',
+  'platform.touch.forward': '+10 s',
+  'platform.touch.volume': 'Volume',
   'platform.pip.iframeHint': 'The page that embeds Reel must add allow="picture-in-picture" to its iframe.',
 };
 
 const IDLE_MS = 3000;
 const CLICK_DELAY_MS = 200;
+const TAP_SLOP_PX = 10;       // movement below this is a tap
+const DOUBLE_TAP_MS = 300;    // window for the second tap
+const TOUCH_SKIP_S = 10;
+const TOUCH_SEEK_SPAN_S = 180; // a swipe across the full width moves this far (or the whole video if shorter)
+const TOUCH_GHOST_MS = 600;    // the browser's synthesised mouse events after a touch are ignored for this long
 
 /* Which PiP route the browser offers. Exported for the check and tests. */
 export function pipRoute(win = globalThis) {
@@ -51,7 +59,45 @@ export function install(ctx) {
   const stageBox = stageMount.parentElement;
 
   ctx.addStyle(`
-    .platform-hit{position:absolute;inset:0;pointer-events:auto;background:transparent}
+    .platform-hit{position:absolute;inset:0;pointer-events:auto;background:transparent;touch-action:none}
+    .platform-touch-hide .player-capsule{opacity:0;pointer-events:none}
+    .platform-ripple{position:absolute;top:0;bottom:0;width:34%;display:grid;place-items:center;pointer-events:none;
+      background:radial-gradient(circle,rgba(255,255,255,.28) 0,rgba(255,255,255,.1) 55%,transparent 70%);
+      color:#fff;font-size:15px;font-weight:600;opacity:0;animation:platform-ripple .6s ease-out forwards}
+    .platform-ripple.left{left:0}
+    .platform-ripple.right{right:0}
+    @keyframes platform-ripple{0%{opacity:0;transform:scale(.85)}25%{opacity:1}100%{opacity:0;transform:scale(1.05)}}
+    .platform-touch-preview{position:absolute;left:50%;top:18%;transform:translateX(-50%);padding:8px 14px;border-radius:12px;
+      background:rgba(11,11,14,.82);color:#fff;font-size:18px;font-variant-numeric:tabular-nums;pointer-events:none;white-space:nowrap}
+    .platform-touch-preview[hidden]{display:none}
+    #player{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
+    .mount-panels{padding-bottom:max(14px,env(safe-area-inset-bottom))}
+    @media (max-width:600px){
+      html,body{overflow-x:hidden}
+      #player{padding:max(8px,env(safe-area-inset-top)) 0 max(8px,env(safe-area-inset-bottom));padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);overflow-x:hidden;max-width:100vw;gap:10px}
+      #player .player-topbar{padding:0 12px}
+      #player .player-topbar button{min-height:44px}
+      #player .player-stage{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;min-height:0;width:100%;border-radius:0;border-left:0;border-right:0}
+      #player #engine-canvas{flex:0 0 auto;width:100%;height:auto;aspect-ratio:16/9;max-height:56vh}
+      #player .player-capsule{position:relative;z-index:2;left:auto;right:auto;bottom:auto;margin:0;padding:8px 10px;border-radius:0 0 var(--capsule-radius) var(--capsule-radius);border-width:1px 0 0}
+      #player .player-honesty{flex-wrap:wrap;gap:6px}
+      #player #player-seek{height:44px}
+      #player .player-controls{flex-wrap:wrap;gap:2px;row-gap:4px}
+      #player .player-controls .spacer{flex:1 1 100%;height:0}
+      #player .player-controls button,#player .player-controls select{min-width:44px;min-height:44px;height:44px;padding-left:4px;padding-right:4px}
+      #player .player-controls .timecode{flex:1 1 auto;text-align:center}
+      #player #player-volume{display:none}
+      #player-details{display:none}
+      #mount-panels{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:70vh;border-radius:16px 16px 0 0;border-width:1px 0 0;
+        padding:14px 16px max(14px,env(safe-area-inset-bottom));z-index:20;box-shadow:0 -12px 32px rgba(0,0,0,.45)}
+      .platform-touch-hide .player-capsule{visibility:hidden}
+      .platform-touch-preview{top:12%}
+    }
+    @media (orientation:portrait) and (min-width:601px) and (max-width:900px){
+      #player #engine-canvas{max-height:56vh}
+      #mount-panels{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:60vh;border-radius:16px 16px 0 0;
+        padding:14px 20px max(14px,env(safe-area-inset-bottom));z-index:20}
+    }
     .platform-pip-placeholder{display:grid;place-items:center;gap:10px;min-height:200px;color:var(--dim);font-size:13px;text-align:center}
     .platform-pip-placeholder button{color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:transparent;font:inherit;cursor:pointer}
     .player-capsule{transition:opacity .25s}
@@ -412,13 +458,16 @@ export function install(ctx) {
   stageMount.prepend(hit); // first child, so caption layers and settings stay above it
 
   let clickTimer = 0;
+  let lastTouchEnd = -Infinity;
   hit.addEventListener('click', event => {
     if (event.target !== hit || event.button !== 0) return;
+    if (event.pointerType === 'touch' || performance.now() - lastTouchEnd < TOUCH_GHOST_MS) return; // touch has its own handler
     if (clickTimer) { clearTimeout(clickTimer); clickTimer = 0; return; } // second click of a double-click
     clickTimer = setTimeout(() => { clickTimer = 0; run('playback.toggle'); }, CLICK_DELAY_MS);
   });
   hit.addEventListener('dblclick', event => {
     if (event.target !== hit) return;
+    if (performance.now() - lastTouchEnd < TOUCH_GHOST_MS) return;
     if (clickTimer) { clearTimeout(clickTimer); clickTimer = 0; }
     if (hit.ownerDocument !== document) return; // inside the PiP window there is no page fullscreen
     run('view.fullscreen');
@@ -429,6 +478,118 @@ export function install(ctx) {
     run('audio.volume', { delta: event.deltaY < 0 ? 0.05 : -0.05 });
   }, { passive: false });
 
+  /* ---------------------------------------------------------- I5 touch on the video */
+  const preview = document.createElement('div');
+  preview.className = 'platform-touch-preview';
+  preview.setAttribute('aria-hidden', 'true');
+  preview.hidden = true;
+  stageMount.append(preview);
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const touchZone = (event, rect) => {
+    const x = (event.clientX - rect.left) / (rect.width || 1);
+    return x < 1 / 3 ? 'left' : x > 2 / 3 ? 'right' : 'center';
+  };
+  let gesture = null;
+  let lastTap = { at: -Infinity, zone: '' };
+  let singleTapTimer = 0;
+  let previewTimer = 0;
+
+  function showPreview(text, holdMs = 0) {
+    clearTimeout(previewTimer);
+    preview.textContent = text;
+    preview.hidden = false;
+    if (holdMs) previewTimer = setTimeout(() => { preview.hidden = true; }, holdMs);
+  }
+  function ripple(zone) {
+    const el = document.createElement('div');
+    el.className = `platform-ripple ${zone}`;
+    el.setAttribute('aria-hidden', 'true');
+    el.textContent = t(zone === 'left' ? 'platform.touch.back' : 'platform.touch.forward');
+    stageMount.append(el);
+    el.addEventListener('animationend', () => el.remove());
+    setTimeout(() => el.remove(), 900); // reduced motion turns the animation off
+  }
+  function toggleTouchControls() { stageBox.classList.toggle('platform-touch-hide'); }
+  function endGesture() { gesture = null; }
+
+  hit.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'touch' || gesture) return;
+    const rect = hit.getBoundingClientRect();
+    gesture = {
+      id: event.pointerId, x: event.clientX, y: event.clientY, rect, mode: '',
+      position: store.clock?.positionS || 0, volume: store.clock?.volume ?? 1,
+      duration: store.media?.duration || 0, target: null,
+    };
+    try { hit.setPointerCapture(event.pointerId); } catch { /* a synthetic pointer has no capture */ }
+  });
+  hit.addEventListener('pointermove', event => {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    if (!gesture.mode) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < TAP_SLOP_PX) return;
+      if (Math.abs(dx) >= Math.abs(dy)) gesture.mode = gesture.duration > 0 ? 'seek' : 'ignore';
+      else gesture.mode = gesture.x - gesture.rect.left > gesture.rect.width / 2 ? 'volume' : 'ignore';
+      clearTimeout(singleTapTimer);
+      singleTapTimer = 0;
+    }
+    if (gesture.mode === 'seek') {
+      const span = Math.min(gesture.duration, TOUCH_SEEK_SPAN_S);
+      const target = clamp(gesture.position + (dx / (gesture.rect.width || 1)) * span, 0, gesture.duration);
+      gesture.target = target;
+      const delta = target - gesture.position;
+      showPreview(`${ctx.formatTime(target)} (${delta < 0 ? '−' : '+'}${ctx.formatTime(Math.abs(delta))})`);
+    } else if (gesture.mode === 'volume') {
+      const volume = clamp(gesture.volume - dy / (gesture.rect.height || 1), 0, 2);
+      showPreview(`${t('platform.touch.volume')} ${Math.round(volume * 100)}%`);
+      run('audio.volume', { volume });
+    }
+  });
+  hit.addEventListener('pointerup', event => {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    const g = gesture;
+    endGesture();
+    lastTouchEnd = performance.now();
+    try { hit.releasePointerCapture(event.pointerId); } catch { /* not captured */ }
+    if (g.mode === 'seek') {
+      if (g.target != null) run('playback.seek', { positionS: g.target });
+      preview.hidden = true;
+      return;
+    }
+    if (g.mode === 'volume') { previewTimer = setTimeout(() => { preview.hidden = true; }, 700); return; }
+    if (g.mode) return;
+    // A tap.
+    const zone = touchZone(event, g.rect);
+    const now = performance.now();
+    const second = now - lastTap.at < DOUBLE_TAP_MS;
+    if (second && zone === 'center' && lastTap.zone === 'center') {
+      clearTimeout(singleTapTimer);
+      singleTapTimer = 0;
+      lastTap = { at: -Infinity, zone: '' };
+      run('playback.toggle');
+    } else if (second && zone !== 'center' && zone === lastTap.zone) {
+      clearTimeout(singleTapTimer);
+      singleTapTimer = 0;
+      lastTap = { at: now, zone }; // a third tap keeps skipping
+      run('playback.skip', { seconds: zone === 'left' ? -TOUCH_SKIP_S : TOUCH_SKIP_S });
+      ripple(zone);
+    } else {
+      lastTap = { at: now, zone };
+      clearTimeout(singleTapTimer);
+      singleTapTimer = setTimeout(() => { singleTapTimer = 0; toggleTouchControls(); }, DOUBLE_TAP_MS);
+    }
+  });
+  hit.addEventListener('pointercancel', event => {
+    if (!gesture || event.pointerId !== gesture.id) return;
+    endGesture();
+    preview.hidden = true;
+  });
+  ctx.on('ui:media-cleared', () => {
+    stageBox.classList.remove('platform-touch-hide');
+    preview.hidden = true;
+  });
+
   /* Controls hide after 3 s without pointer movement while playing in fullscreen. */
   let idleTimer = 0;
   function showControls() {
@@ -436,6 +597,7 @@ export function install(ctx) {
     idleTimer = 0;
     stageBox.classList.remove('platform-idle');
   }
+  document.addEventListener('keydown', () => stageBox.classList.remove('platform-touch-hide'));
   function keyboardFocusInStage() {
     const active = document.activeElement;
     if (!active || !stageBox.contains(active)) return false;

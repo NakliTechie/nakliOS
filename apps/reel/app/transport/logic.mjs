@@ -166,3 +166,136 @@ export function describeAudioTrack(track, index, t = fallbackT) {
   const detail = [track?.name ? language : null, codec, layout].filter(Boolean).join(' · ');
   return { title, detail };
 }
+
+/* ------------------------------------------------- seek-bar previews (P9) -- */
+
+/* Thumbnail cache bucket width: about 240 buckets per file, never under 0.25 s. */
+export function thumbBucketS(durationS) {
+  return Math.max(0.25, (Number.isFinite(durationS) && durationS > 0 ? durationS : 0) / 240);
+}
+
+/* { key, timeS } for a hovered time: key identifies the bucket, timeS is the bucket's start. */
+export function thumbBucket(timeS, durationS) {
+  const size = thumbBucketS(durationS);
+  const index = Math.max(0, Math.floor((Number.isFinite(timeS) ? timeS : 0) / size));
+  const end = Number.isFinite(durationS) && durationS > 0 ? durationS : Infinity;
+  return { key: index, timeS: Math.min(index * size, end) };
+}
+
+/* Map with a size limit; the least recently used entry is evicted and handed to onEvict. */
+export function createLru(limit, onEvict = () => {}) {
+  const map = new Map();
+  return {
+    get(key) {
+      if (!map.has(key)) return undefined;
+      const value = map.get(key);
+      map.delete(key);
+      map.set(key, value);
+      return value;
+    },
+    set(key, value) {
+      if (map.has(key)) map.delete(key);
+      map.set(key, value);
+      while (map.size > limit) {
+        const [oldKey, oldValue] = map.entries().next().value;
+        map.delete(oldKey);
+        onEvict(oldValue, oldKey);
+      }
+    },
+    has: key => map.has(key),
+    clear() {
+      for (const [key, value] of map) onEvict(value, key);
+      map.clear();
+    },
+    get size() { return map.size; },
+  };
+}
+
+/* Fraction 0..1 along a range input from a pointer x, allowing for the thumb inset on each side. */
+export function pointerFraction(clientX, left, width, insetPx = 8) {
+  const usable = width - 2 * insetPx;
+  if (!(usable > 0)) return 0;
+  return Math.max(0, Math.min(1, (clientX - left - insetPx) / usable));
+}
+
+/* ------------------------------------------ buffered and keyframes (P10) -- */
+
+/* Clips to [0, duration], drops empty ranges, sorts and merges overlaps. Returns [{ startS, endS }]. */
+export function mergeRanges(ranges, durationS) {
+  const end = Number.isFinite(durationS) && durationS > 0 ? durationS : Infinity;
+  const list = (Array.isArray(ranges) ? ranges : [])
+    .filter(range => range && Number.isFinite(range.startS) && Number.isFinite(range.endS))
+    .map(range => ({ startS: Math.max(0, range.startS), endS: Math.min(end, range.endS) }))
+    .filter(range => range.endS > range.startS)
+    .sort((a, b) => a.startS - b.startS);
+  const merged = [];
+  for (const range of list) {
+    const last = merged[merged.length - 1];
+    if (last && range.startS <= last.endS) last.endS = Math.max(last.endS, range.endS);
+    else merged.push({ ...range });
+  }
+  return merged;
+}
+
+export const KEYFRAME_TICK_LIMIT = 400;
+
+/* 'none' with no keyframes, 'ticks' below the limit, otherwise 'band' (a density gradient). */
+export function keyframeMode(count, limit = KEYFRAME_TICK_LIMIT) {
+  if (!(count > 0)) return 'none';
+  return count < limit ? 'ticks' : 'band';
+}
+
+/* Keyframe counts per bin, scaled to 0..1 by the busiest bin. */
+export function keyframeDensity(times, durationS, bins = 100) {
+  const counts = new Array(bins).fill(0);
+  if (!(durationS > 0)) return counts;
+  for (const time of times) {
+    if (!Number.isFinite(time) || time < 0 || time > durationS) continue;
+    counts[Math.min(bins - 1, Math.floor((time / durationS) * bins))] += 1;
+  }
+  const max = Math.max(...counts);
+  return max > 0 ? counts.map(count => count / max) : counts;
+}
+
+/* ------------------------------------------------------- volume (P11) -- */
+
+export function volumePercent(volume) {
+  return Math.round((Number.isFinite(volume) ? volume : 0) * 100);
+}
+
+/* --------------------------------------------------------- bookmarks (L5) -- */
+
+export const BOOKMARK_NAME_MAX = 120;
+
+function cleanName(name) {
+  return String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, BOOKMARK_NAME_MAX);
+}
+
+/* Validates stored bookmarks (they come from storage, so may be old or damaged) and sorts by time. */
+export function normaliseBookmarks(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .filter(item => item && typeof item.id === 'string' && item.id && Number.isFinite(item.timeS) && item.timeS >= 0)
+    .filter(item => (seen.has(item.id) ? false : seen.add(item.id)))
+    .map(item => ({ id: item.id, timeS: item.timeS, name: cleanName(item.name) }))
+    .sort((a, b) => a.timeS - b.timeS);
+}
+
+export function addBookmark(list, { id, timeS, name }) {
+  return normaliseBookmarks([...list, { id, timeS, name }]);
+}
+
+export function renameBookmark(list, id, name) {
+  return list.map(item => (item.id === id ? { ...item, name: cleanName(name) } : item));
+}
+
+export function removeBookmark(list, id) {
+  return list.filter(item => item.id !== id);
+}
+
+/* Finds a bookmark by id, or by zero-based index; null when neither matches. */
+export function findBookmark(list, { id, index } = {}) {
+  if (typeof id === 'string') return list.find(item => item.id === id) || null;
+  if (Number.isInteger(index)) return list[index] || null;
+  return null;
+}

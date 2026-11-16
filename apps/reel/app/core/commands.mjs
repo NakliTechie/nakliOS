@@ -27,9 +27,9 @@ export const COMMANDS = [
       delta: { type: 'number', description: 'Change from the current speed' } }, required: [] },
     shortcuts: [{ key: '[', input: { delta: -0.25 } }, { key: ']', input: { delta: 0.25 } }, { key: 'z', input: { rate: 1 } }] },
   { name: 'audio.volume', label: 'Volume', scope: 'write', readTwin: 'state.read',
-    description: 'Set the volume from 0 to 1, or step it by a delta.',
+    description: 'Set the volume from 0 to 2 (above 1 boosts up to 200%), or step it by a delta.',
     input: { type: 'object', properties: {
-      volume: { type: 'number', minimum: 0, maximum: 1 },
+      volume: { type: 'number', minimum: 0, maximum: 2 },
       delta: { type: 'number' } }, required: [] },
     shortcuts: [{ key: 'arrowup', input: { delta: 0.05 } }, { key: 'arrowdown', input: { delta: -0.05 } }] },
   { name: 'audio.mute', label: 'Mute', scope: 'write', readTwin: 'state.read',

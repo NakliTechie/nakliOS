@@ -40,9 +40,75 @@ export const COMMANDS = [
     input: { type: 'object', properties: {
       mode: { type: 'string', enum: CROPS.map(c => c.id) } }, required: [] },
     shortcuts: [{ key: 'c' }] },
+  { name: 'view.zoom', label: 'Zoom', scope: 'write', readTwin: 'view.read',
+    description: 'Zoom and pan the picture: set scale (1 to 8) and the view centre x, y (0 to 1 across the picture), step in or out, or reset to the whole picture.',
+    input: { type: 'object', properties: {
+      scale: { type: 'number', minimum: 1, maximum: 8 },
+      x: { type: 'number', minimum: 0, maximum: 1, description: 'Centre of the view, 0 left to 1 right' },
+      y: { type: 'number', minimum: 0, maximum: 1, description: 'Centre of the view, 0 top to 1 bottom' },
+      step: { type: 'integer', enum: [-1, 1], description: '1 zooms in by 25%, -1 zooms out' },
+      reset: { type: 'boolean', description: 'true shows the whole picture' } }, required: [] },
+    shortcuts: [{ key: 'alt+z', input: { step: 1 } }, { key: 'alt+x', input: { step: -1 } }, { key: 'shift+z', input: { reset: true } }] },
+  { name: 'view.adjust', label: 'Picture adjustments', scope: 'write', readTwin: 'view.read',
+    description: 'Set brightness (-1 to 1, default 0), contrast (0 to 2, default 1), saturation (0 to 2, default 1) or gamma (0.2 to 5, default 1); reset true restores all four.',
+    input: { type: 'object', properties: {
+      brightness: { type: 'number', minimum: -1, maximum: 1 },
+      contrast: { type: 'number', minimum: 0, maximum: 2 },
+      saturation: { type: 'number', minimum: 0, maximum: 2 },
+      gamma: { type: 'number', minimum: 0.2, maximum: 5 },
+      reset: { type: 'boolean' } }, required: [] } },
+  { name: 'view.deinterlace', label: 'Deinterlace', scope: 'write', readTwin: 'view.read',
+    description: 'Set deinterlacing: off, blend (mixes the two fields) or bob (rebuilds the picture from one field); with no input it moves to the next one.',
+    input: { type: 'object', properties: { mode: { type: 'string', enum: ['off', 'blend', 'bob'] } }, required: [] },
+    shortcuts: [{ key: 'e' }] },
+  { name: 'view.tonemap', label: 'HDR tone mapping', scope: 'write', readTwin: 'view.read',
+    description: 'For HDR10 and HLG video: auto maps HDR to the screen (SDR, or HDR where the display and browser offer it); off clips at SDR white. With no input it toggles.',
+    input: { type: 'object', properties: { mode: { type: 'string', enum: ['auto', 'off'] } }, required: [] } },
   { name: 'view.read', label: 'Picture state', scope: 'read', input: none,
-    description: 'Read the aspect and crop chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.' },
+    description: 'Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.' },
 ];
+
+export const ADJUST_DEFAULTS = Object.freeze({ brightness: 0, contrast: 1, saturation: 1, gamma: 1 });
+export const ADJUST_RANGES = Object.freeze({
+  brightness: [-1, 1, 0.01], contrast: [0, 2, 0.01], saturation: [0, 2, 0.01], gamma: [0.2, 5, 0.01],
+});
+export const DEINTERLACE_MODES = ['off', 'blend', 'bob'];
+const ZOOM_MAX = 8;
+const ZOOM_STEP = 1.25;
+
+/* Zoom state after one command input. Pure, exported for tests. The centre stays where the
+ * picture still fills the view: x and y lie within half a view width of the edges. */
+export function nextZoom(current, { scale, x, y, step, reset } = {}) {
+  if (reset) return { scale: 1, x: 0.5, y: 0.5 };
+  let next = { ...current };
+  if (Number.isFinite(scale)) next.scale = scale;
+  if (step === 1) next.scale = current.scale * ZOOM_STEP;
+  if (step === -1) next.scale = current.scale / ZOOM_STEP;
+  next.scale = Math.min(ZOOM_MAX, Math.max(1, Math.round(next.scale * 1000) / 1000));
+  if (Number.isFinite(x)) next.x = x;
+  if (Number.isFinite(y)) next.y = y;
+  const span = 0.5 / next.scale;
+  next.x = Math.min(1 - span, Math.max(span, next.x));
+  next.y = Math.min(1 - span, Math.max(span, next.y));
+  return next;
+}
+
+export function nextAdjust(current, input = {}) {
+  if (input.reset) return { ...ADJUST_DEFAULTS };
+  const next = { ...current };
+  for (const [key, [min, max]] of Object.entries(ADJUST_RANGES)) {
+    if (Number.isFinite(input[key])) next[key] = Math.min(max, Math.max(min, input[key]));
+  }
+  return next;
+}
+
+/* Whether the engine marked the video track interlaced (from the container). */
+export function trackInterlaced(track) {
+  if (!track) return false;
+  if (track.interlaced === true) return true;
+  const order = String(track.fieldOrder || '').toLowerCase();
+  return !!order && order !== 'progressive' && order !== 'unknown';
+}
 
 export const STRINGS = {
   'picture.button.snapshot': 'Save a snapshot of this frame',
@@ -65,6 +131,29 @@ export const STRINGS = {
   'picture.err.noFrame': 'There is no video frame to save yet.',
   'picture.err.noView': 'This engine cannot change the aspect ratio or crop.',
   'picture.err.badMode': 'Unknown mode: {mode}',
+  'picture.panel.zoom': 'Zoom',
+  'picture.zoom.in': 'Zoom in (Alt+Z)',
+  'picture.zoom.out': 'Zoom out (Alt+X)',
+  'picture.zoom.reset': 'Whole picture (Shift+Z)',
+  'picture.zoom.hint': 'Drag the picture to move around while zoomed.',
+  'picture.toast.zoom': 'Zoom: {percent}%',
+  'picture.panel.adjust': 'Adjustments',
+  'picture.adjust.brightness': 'Brightness',
+  'picture.adjust.contrast': 'Contrast',
+  'picture.adjust.saturation': 'Saturation',
+  'picture.adjust.gamma': 'Gamma',
+  'picture.adjust.reset': 'Reset adjustments',
+  'picture.panel.deinterlace': 'Deinterlace (E)',
+  'picture.deinterlace.off': 'Off',
+  'picture.deinterlace.blend': 'Blend',
+  'picture.deinterlace.bob': 'Bob',
+  'picture.toast.deinterlace': 'Deinterlace: {mode}',
+  'picture.deinterlace.auto': 'This video is interlaced, so deinterlacing is on (blend).',
+  'picture.panel.tonemap': 'HDR tone mapping',
+  'picture.tonemap.auto': 'Auto',
+  'picture.tonemap.off': 'Off (clip)',
+  'picture.toast.tonemap': 'HDR tone mapping: {mode}',
+  'picture.status.unsupported': 'This browser draws without WebGPU, so this setting has no effect.',
 };
 
 /* Pure helpers, exported for tests. */
@@ -100,7 +189,10 @@ export function pngSize(bytes) {
 
 export function install(ctx) {
   const { Engine, store, t, registry } = ctx;
-  const state = store.ui.picture = { aspect: 'auto', crop: 'none', name: null, lastSnapshot: null };
+  const state = store.ui.picture = {
+    aspect: 'auto', crop: 'none', name: null, lastSnapshot: null,
+    zoom: { scale: 1, x: 0.5, y: 0.5 }, adjust: { ...ADJUST_DEFAULTS }, deinterlace: 'off', tonemap: 'auto',
+  };
   // Held once: during Document Picture-in-Picture the canvas lives in another document,
   // where ctx.canvas() (a lookup in this document) returns null.
   const videoCanvas = ctx.canvas();
@@ -112,17 +204,32 @@ export function install(ctx) {
     Engine.setView({
       aspect: ASPECTS.find(a => a.id === state.aspect).value,
       crop: CROPS.find(c => c.id === state.crop).value,
+      zoom: { ...state.zoom },
+      adjust: { ...state.adjust },
+      deinterlace: state.deinterlace,
+      tonemap: state.tonemap,
     });
     render();
   }
 
-  function takeSnapshot() {
+  /* Engine.snapshot() returns a PNG data URL (Canvas2D) or a Promise of a PNG Blob or data URL (WebGPU). */
+  async function takeSnapshot() {
     const canvas = videoCanvas;
     if (!store.media?.name || !canvas || canvas.width <= 1 || canvas.height <= 1) {
       throw Object.assign(new Error(t('picture.err.noFrame')), { code: 'ERR_NO_FRAME' });
     }
-    const dataUrl = typeof Engine.snapshot === 'function' ? Engine.snapshot() : canvas.toDataURL('image/png');
-    const bytes = dataUrlBytes(dataUrl);
+    const raw = await (typeof Engine.snapshot === 'function' ? Engine.snapshot() : canvas.toDataURL('image/png'));
+    let dataUrl;
+    let bytes;
+    if (raw instanceof Blob) {
+      bytes = new Uint8Array(await raw.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      dataUrl = `data:image/png;base64,${btoa(binary)}`;
+    } else {
+      dataUrl = String(raw);
+      bytes = dataUrlBytes(dataUrl);
+    }
     const size = pngSize(bytes) || { width: canvas.width, height: canvas.height };
     return { dataUrl, bytes, ...size };
   }
@@ -156,7 +263,7 @@ export function install(ctx) {
   }
 
   registry.handle('view.snapshot', async ({ save }) => {
-    const shot = takeSnapshot();
+    const shot = await takeSnapshot();
     const positionS = Engine.state().clock?.positionS ?? store.clock?.positionS ?? 0;
     const name = snapshotName(state.name || store.media?.name, positionS);
     const result = { name, width: shot.width, height: shot.height, positionS, burnedCaptions: false };
@@ -184,12 +291,52 @@ export function install(ctx) {
     return readState();
   });
 
+  registry.handle('view.zoom', input => {
+    const before = state.zoom.scale;
+    state.zoom = nextZoom(state.zoom, input);
+    applyView();
+    if (state.zoom.scale !== before || input.reset) {
+      ctx.toast(t('picture.toast.zoom', { percent: Math.round(state.zoom.scale * 100) }));
+    }
+    return readState();
+  });
+
+  registry.handle('view.adjust', input => {
+    state.adjust = nextAdjust(state.adjust, input);
+    applyView();
+    return readState();
+  });
+
+  registry.handle('view.deinterlace', ({ mode }) => {
+    if (mode !== undefined && !DEINTERLACE_MODES.includes(mode)) {
+      throw Object.assign(new TypeError(t('picture.err.badMode', { mode })), { code: 'ERR_COMMAND_INPUT' });
+    }
+    state.deinterlace = mode ?? DEINTERLACE_MODES[(DEINTERLACE_MODES.indexOf(state.deinterlace) + 1) % DEINTERLACE_MODES.length];
+    applyView();
+    ctx.toast(t('picture.toast.deinterlace', { mode: t(`picture.deinterlace.${state.deinterlace}`) }));
+    return readState();
+  });
+
+  registry.handle('view.tonemap', ({ mode }) => {
+    if (mode !== undefined && mode !== 'auto' && mode !== 'off') {
+      throw Object.assign(new TypeError(t('picture.err.badMode', { mode })), { code: 'ERR_COMMAND_INPUT' });
+    }
+    state.tonemap = mode ?? (state.tonemap === 'auto' ? 'off' : 'auto');
+    applyView();
+    ctx.toast(t('picture.toast.tonemap', { mode: t(`picture.tonemap.${state.tonemap}`) }));
+    return readState();
+  });
+
   function readState() {
     let engineView = null;
     try { engineView = Engine.state().view ?? null; } catch { engineView = null; }
     return {
       aspect: state.aspect,
       crop: state.crop,
+      zoom: { ...state.zoom },
+      adjust: { ...state.adjust },
+      deinterlace: state.deinterlace,
+      tonemap: state.tonemap,
       engineView,
       lastSnapshot: state.lastSnapshot,
       pip: store.ui.platform?.pip ?? null,
@@ -255,27 +402,171 @@ export function install(ctx) {
   panelSnap.textContent = t('picture.panel.snapshot');
   panelSnap.dataset.command = 'view.snapshot';
   panelSnap.addEventListener('click', () => run('view.snapshot', {}));
+  // Group helper for the v1.x mode rows (deinterlace, tone mapping), same shape as aspect and crop.
+  optionButtons.deinterlace = new Map();
+  optionButtons.tonemap = new Map();
+  const modeList = ids => ids.map(id => ({ id }));
+
+  function smallButton(labelKey, command, input) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = t(labelKey);
+    button.dataset.command = command;
+    button.addEventListener('click', () => run(command, input));
+    return button;
+  }
+
+  // Zoom: in, out, whole picture, and the current scale.
+  const zoomSet = document.createElement('fieldset');
+  const zoomLegend = document.createElement('legend');
+  zoomLegend.textContent = t('picture.panel.zoom');
+  const zoomRow = document.createElement('div');
+  zoomRow.className = 'picture-options';
+  const zoomReadout = document.createElement('output');
+  zoomReadout.className = 'picture-readout';
+  zoomRow.append(smallButton('picture.zoom.out', 'view.zoom', { step: -1 }),
+    smallButton('picture.zoom.in', 'view.zoom', { step: 1 }),
+    smallButton('picture.zoom.reset', 'view.zoom', { reset: true }), zoomReadout);
+  const zoomHint = document.createElement('p');
+  zoomHint.className = 'picture-hint';
+  zoomHint.textContent = t('picture.zoom.hint');
+  zoomSet.append(zoomLegend, zoomRow, zoomHint);
+
+  // Adjustments: one labelled slider each, and a reset.
+  const adjustSet = document.createElement('fieldset');
+  const adjustLegend = document.createElement('legend');
+  adjustLegend.textContent = t('picture.panel.adjust');
+  adjustSet.append(adjustLegend);
+  const sliders = new Map();
+  for (const [key, [min, max, step]] of Object.entries(ADJUST_RANGES)) {
+    const label = document.createElement('label');
+    label.className = 'picture-slider';
+    const name = document.createElement('span');
+    name.textContent = t(`picture.adjust.${key}`);
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.dataset.command = 'view.adjust';
+    const value = document.createElement('output');
+    input.addEventListener('input', () => run('view.adjust', { [key]: Number(input.value) }));
+    label.append(name, input, value);
+    sliders.set(key, { input, value });
+    adjustSet.append(label);
+  }
+  adjustSet.append(smallButton('picture.adjust.reset', 'view.adjust', { reset: true }));
+
+  const status = document.createElement('p');
+  status.className = 'picture-hint';
+  status.hidden = true;
+
   body.append(group('aspect', 'picture.panel.aspect', ASPECTS, 'view.aspect'),
-    group('crop', 'picture.panel.crop', CROPS, 'view.crop'), panelSnap);
+    group('crop', 'picture.panel.crop', CROPS, 'view.crop'), zoomSet, adjustSet,
+    group('deinterlace', 'picture.panel.deinterlace', modeList(DEINTERLACE_MODES), 'view.deinterlace'),
+    group('tonemap', 'picture.panel.tonemap', modeList(['auto', 'off']), 'view.tonemap'), status, panelSnap);
+
+  ctx.addStyle(`
+    .picture-panel .picture-readout{align-self:center;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;margin-left:4px}
+    .picture-panel .picture-hint{font-size:11px;color:var(--faint);margin-top:6px}
+    .picture-panel .picture-slider{display:grid;grid-template-columns:80px 1fr 38px;align-items:center;gap:8px;font-size:12px;margin-bottom:6px}
+    .picture-panel .picture-slider input{accent-color:var(--accent);width:100%}
+    .picture-panel .picture-slider output{font-variant-numeric:tabular-nums;color:var(--dim);text-align:right}
+    .picture-panning, .picture-panning *{cursor:grabbing !important}
+    .picture-zoomed .platform-hit{cursor:grab}
+  `);
 
   function render() {
-    for (const [id, button] of optionButtons.aspect) button.setAttribute('aria-pressed', String(id === state.aspect));
-    for (const [id, button] of optionButtons.crop) button.setAttribute('aria-pressed', String(id === state.crop));
+    for (const kind of ['aspect', 'crop', 'deinterlace', 'tonemap']) {
+      for (const [id, button] of optionButtons[kind]) button.setAttribute('aria-pressed', String(id === state[kind]));
+    }
+    zoomReadout.textContent = `${Math.round(state.zoom.scale * 100)}%`;
+    for (const [key, { input, value }] of sliders) {
+      if (document.activeElement !== input) input.value = String(state.adjust[key]);
+      value.textContent = state.adjust[key].toFixed(2);
+    }
+    stageBox?.classList.toggle('picture-zoomed', state.zoom.scale > 1);
+    // Canvas2D fallback: the engine reports deinterlace and tone mapping as unsupported.
+    let view = null;
+    try { view = Engine.state().view; } catch { view = null; }
+    status.hidden = !(view && (view.deinterlace === 'unsupported' || view.tonemap === 'unsupported'));
+    status.textContent = t('picture.status.unsupported');
   }
+
+  /* ---- drag to pan while zoomed. The platform module's transparent hit layer covers the picture;
+   * a capture listener on the stage box sees the press first, and a drag of more than 4 px
+   * pans and swallows the click, so a drag never also toggles play. */
+  const stageBox = ctx.mounts.stage.parentElement;
+  let drag = null;
+  let swallowClick = false;
+  function pictureBox() {
+    const rect = videoCanvas.getBoundingClientRect();
+    const fit = Math.min(rect.width / videoCanvas.width, rect.height / videoCanvas.height) || 1;
+    return { width: videoCanvas.width * fit, height: videoCanvas.height * fit };
+  }
+  stageBox?.addEventListener('pointerdown', event => {
+    if (state.zoom.scale <= 1 || event.button !== 0 || !event.target.classList?.contains('platform-hit')) return;
+    drag = { id: event.pointerId, startX: event.clientX, startY: event.clientY, zoom: { ...state.zoom }, moved: false };
+  }, true);
+  stageBox?.addEventListener('pointermove', event => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      stageBox.classList.add('picture-panning');
+      try { event.target.setPointerCapture?.(event.pointerId); } catch { /* capture is optional */ }
+    }
+    const box = pictureBox();
+    run('view.zoom', {
+      x: drag.zoom.x - dx / (box.width * drag.zoom.scale),
+      y: drag.zoom.y - dy / (box.height * drag.zoom.scale),
+    });
+  }, true);
+  const endDrag = event => {
+    if (!drag || event.pointerId !== drag.id) return;
+    swallowClick = drag.moved;
+    drag = null;
+    stageBox.classList.remove('picture-panning');
+  };
+  stageBox?.addEventListener('pointerup', endDrag, true);
+  stageBox?.addEventListener('pointercancel', endDrag, true);
+  stageBox?.addEventListener('click', event => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.stopPropagation();
+    event.preventDefault();
+  }, true);
+
   render();
 
   ctx.on('ui:panel', ({ id }) => menuButton.setAttribute('aria-expanded', String(id === 'picture')));
 
-  /* Persist nothing across files: every new file starts at Auto and no crop. */
-  function reset() {
+  /* Persist nothing across files: every new file starts at Auto, no crop, no zoom, neutral
+   * adjustments and tone mapping on. Deinterlacing starts on (blend) when the engine marks
+   * the video track interlaced. */
+  function reset(interlaced = false) {
     state.aspect = 'auto';
     state.crop = 'none';
     state.lastSnapshot = null;
+    state.zoom = { scale: 1, x: 0.5, y: 0.5 };
+    state.adjust = { ...ADJUST_DEFAULTS };
+    state.deinterlace = interlaced ? 'blend' : 'off';
+    state.tonemap = 'auto';
     if (typeof Engine.setView === 'function') {
-      try { Engine.setView({ aspect: 'auto', crop: 'none' }); } catch { /* nothing loaded */ }
+      try { applyView(); } catch { /* nothing loaded, or an engine without the v1.x view fields */ }
     }
     render();
   }
-  ctx.on('ui:media-loaded', ({ name }) => { state.name = name || null; reset(); });
+  ctx.on('ui:media-loaded', ({ name }) => {
+    state.name = name || null;
+    let track = null;
+    try { track = Engine.state().tracks?.video?.[0] ?? null; } catch { track = null; }
+    const interlaced = trackInterlaced(track);
+    reset(interlaced);
+    if (interlaced) ctx.toast(t('picture.deinterlace.auto'));
+  });
   ctx.on('ui:media-cleared', () => { state.name = null; reset(); });
+  ctx.on('playback:view', () => render());
 }

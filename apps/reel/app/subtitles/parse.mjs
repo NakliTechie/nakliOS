@@ -290,3 +290,34 @@ export function serialiseSubtitles(cues, format = 'srt', offsetS = 0) {
   });
   return `${format === 'vtt' ? 'WEBVTT\n\n' : ''}${blocks.join('\n\n')}\n`;
 }
+
+/* ---------- ASS documents for the styled renderer ---------- */
+
+function assTime(seconds) {
+  const cs = Math.max(0, Math.round(seconds * 100));
+  const pad = n => String(n).padStart(2, '0');
+  return `${Math.floor(cs / 360_000)}:${pad(Math.floor((cs % 360_000) / 6000))}:${pad(Math.floor((cs % 6000) / 100))}.${pad(cs % 100)}`;
+}
+
+/* Rebuilds a whole ASS script from a Matroska track: the CodecPrivate header ([Script Info],
+ * styles, maybe the [Events] Format line) plus one Dialogue line per block. A block holds
+ * "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text"; a full "Dialogue:" line
+ * is kept as it is. */
+export function buildAssDocument(header, rawCues) {
+  let text = String(header || '').replace(/^﻿/, '').replace(/\r\n?/g, '\n').trimEnd();
+  if (!/^\[Script Info\]/im.test(text)) text = `[Script Info]\nScriptType: v4.00+\n\n${text}`;
+  if (!/^\[Events\]/im.test(text)) {
+    text += '\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text';
+  } else if (!/^\[Events\]\s*\nFormat:/im.test(text)) {
+    text = text.replace(/^\[Events\]\s*$/im, '[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text');
+  }
+  const lines = [];
+  for (const cue of rawCues) {
+    const payload = String(cue.text ?? '').replace(/\r\n?/g, '\n').trim();
+    if (/^Dialogue:/i.test(payload)) { lines.push(payload); continue; }
+    const fields = splitFields(payload, 9);
+    const end = Number.isFinite(cue.endS) ? cue.endS : cue.startS + 5;
+    lines.push(`Dialogue: ${fields[1] || '0'},${assTime(cue.startS)},${assTime(end)},${fields.slice(2).join(',')}`);
+  }
+  return `${text}\n${lines.join('\n')}\n`;
+}

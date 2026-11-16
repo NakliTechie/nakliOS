@@ -1,5 +1,7 @@
 /* Reel feature module: transport. Contract: docs/build/reel-v1-contract.md.
- * Rows: P5 frame step, P6 A-B loop, P7 chapters, P8 jump to time, A1 audio track menu, A2 audio delay.
+ * Rows: P5 frame step, P6 A-B loop, P7 chapters, P8 jump to time, A1 audio track menu, A2 audio delay;
+ * batch 2: P9 previews, P10 buffered and keyframe hints, P11 volume read-out (./seekbar.mjs) and
+ * L5 bookmarks (./bookmarks.mjs).
  * No DOM access at module top level, so Node can import COMMANDS for commands.json.
  * Pure logic lives in ./logic.mjs (tested in Node by test/transport.test.mjs). */
 
@@ -8,6 +10,8 @@ import {
   LOOP_OFF, cycleLoop, setLoopPoints, clampAudioDelay, formatDelay, AUDIO_DELAY_STEP_S,
   nextTrackIndex, describeAudioTrack,
 } from './logic.mjs';
+import { SEEKBAR_STRINGS, SEEKBAR_CSS, installSeekbar } from './seekbar.mjs';
+import { BOOKMARK_COMMANDS, BOOKMARK_STRINGS, BOOKMARK_CSS, installBookmarks } from './bookmarks.mjs';
 
 const none = { type: 'object', properties: {}, required: [] };
 const panelFlag = { type: 'boolean', description: 'true opens the panel, false closes it' };
@@ -105,6 +109,9 @@ export const STRINGS = {
   'transport.audio.trackN': 'Track {n}',
 };
 
+COMMANDS.push(...BOOKMARK_COMMANDS);
+Object.assign(STRINGS, SEEKBAR_STRINGS, BOOKMARK_STRINGS);
+
 const CSS = `
 .transport-chapter{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--dim);margin:0 4px}
 .transport-chapter:empty{display:none}
@@ -174,7 +181,7 @@ export function install(ctx) {
     audioDelayS: 0,
   };
   store.ui.transport = state;
-  ctx.addStyle(CSS);
+  ctx.addStyle(CSS + SEEKBAR_CSS + BOOKMARK_CSS);
 
   const run = (name, input) => Promise.resolve(registry.run(name, input))
     .catch(error => ctx.surface('playback', error));
@@ -621,4 +628,7 @@ export function install(ctx) {
   renderChapterPanel();
   renderAudioPanel();
   audioButton.hidden = true;
+
+  installSeekbar(ctx, { el, duration });
+  installBookmarks(ctx, { el, run, duration, position, markLeft, setPanel });
 }

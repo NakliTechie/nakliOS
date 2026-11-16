@@ -58,7 +58,11 @@ export function createCaptions(ctx) {
   stage.append(layer, live);
 
   let index = null;
+  let secondary = null;
+  let primaryHidden = false;
   let delayS = 0;
+  let pictureRect = { width: 0, height: 0 };
+  const canvasHooks = new Set();
   let style = { ...DEFAULT_STYLE };
   let shownKey = '';
   let shownText = '';
@@ -79,6 +83,8 @@ export function createCaptions(ctx) {
     layer.style.top = `${canvasBox.top - stageBox.top + rect.top}px`;
     layer.style.width = `${rect.width}px`;
     layer.style.height = `${rect.height}px`;
+    pictureRect = { width: rect.width, height: rect.height, pictureWidth: canvas.width, pictureHeight: canvas.height };
+    for (const hook of canvasHooks) hook(pictureRect);
     fontPx = Math.max(11, rect.height * 0.05 * style.size);
     layer.style.fontSize = `${fontPx}px`;
     bottom.style.bottom = `${style.position}%`;
@@ -113,23 +119,29 @@ export function createCaptions(ctx) {
     return block;
   }
 
-  function render(active) {
-    const key = active.join(',');
+  /* active: indices into the primary index; second: indices into the secondary index.
+   * The secondary track always sits at the top of the picture. */
+  function render(active, second = []) {
+    const key = `${active.join(',')}|${second.join(',')}`;
     if (key === shownKey) return;
     shownKey = key;
     const cues = active.map(i => index.cues[i]);
-    top.replaceChildren(...cues.filter(cue => cue.placement === 'top').map(cueNode));
+    const extra = second.map(i => secondary.cues[i]);
+    top.replaceChildren(...extra.map(cueNode), ...cues.filter(cue => cue.placement === 'top').map(cueNode));
     bottom.replaceChildren(...cues.filter(cue => cue.placement !== 'top').map(cueNode));
-    shownText = cues.map(plainText).join('\n');
+    shownText = [...cues, ...extra].map(plainText).join('\n');
     // Announce only new text; clearing the screen is silent.
     if (shownText) live.textContent = shownText;
   }
 
   function frame(state) {
     layout();
-    if (!index) { if (shownKey) render([]); return; }
     const positionS = Number(state?.clock?.positionS) || 0;
-    render(index.activeAt(positionS - delayS));
+    const t = positionS - delayS;
+    const first = index && !primaryHidden ? index.activeAt(t) : [];
+    const second = secondary ? secondary.activeAt(t) : [];
+    if (!first.length && !second.length && !shownKey) return;
+    render(first, second);
   }
 
   const relayout = () => layout(true);
@@ -151,10 +163,17 @@ export function createCaptions(ctx) {
 
   return {
     setIndex(next) { index = next; shownKey = '\0'; render([]); shownKey = ''; refresh(); },
+    setSecondary(next) { secondary = next; shownKey = '\0'; render([]); shownKey = ''; refresh(); },
+    /* Hides the primary text while a canvas renderer (styled ASS, PGS) draws it instead. */
+    setPrimaryHidden(hidden) { primaryHidden = !!hidden; refresh(); },
+    /* Calls fn(rect) whenever the picture rect changes; returns an unsubscribe function. */
+    onLayout(fn) { canvasHooks.add(fn); fn(pictureRect); return () => canvasHooks.delete(fn); },
+    picture: () => ({ ...pictureRect }),
+    delay: () => delayS,
     setDelay(next) { delayS = next; refresh(); },
     refresh,
     setStyle(next) { style = { ...next }; layout(true); paintColours(); },
-    clear() { index = null; shownKey = '\0'; render([]); shownKey = ''; live.textContent = ''; },
+    clear() { index = null; secondary = null; primaryHidden = false; shownKey = '\0'; render([]); shownKey = ''; live.textContent = ''; },
     frame,
     text: () => shownText,
     layer,

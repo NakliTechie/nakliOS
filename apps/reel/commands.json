@@ -4,16 +4,23 @@
       "action": "import",
       "label": "Play in Reel",
       "extensions": [
+        ".asf",
         ".ass",
+        ".avi",
+        ".flv",
         ".m4v",
         ".mkv",
         ".mov",
         ".mp4",
+        ".mpeg",
+        ".mpg",
         ".srt",
         ".ssa",
         ".ts",
+        ".vob",
         ".vtt",
-        ".webm"
+        ".webm",
+        ".wmv"
       ]
     }
   ],
@@ -168,7 +175,7 @@
     },
     {
       "name": "audio.volume",
-      "description": "Set the volume from 0 to 1, or step it by a delta.",
+      "description": "Set the volume from 0 to 2 (above 1 boosts up to 200%), or step it by a delta.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -176,7 +183,7 @@
           "volume": {
             "type": "number",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 2
           },
           "delta": {
             "type": "number"
@@ -253,7 +260,8 @@
         "required": []
       },
       "label": "Open file",
-      "readTwin": "state.read"
+      "readTwin": "state.read",
+      "shows": true
     },
     {
       "name": "media.close",
@@ -400,7 +408,7 @@
     },
     {
       "name": "subtitle.load-file",
-      "description": "Load an SRT, WebVTT, ASS or SSA subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text.",
+      "description": "Load an SRT, WebVTT, ASS, SSA or PGS (.sup) subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text (text formats only).",
       "scope": "write",
       "input": {
         "type": "object",
@@ -412,11 +420,70 @@
           "text": {
             "type": "string",
             "description": "The subtitle file contents"
+          },
+          "replaceId": {
+            "type": "string",
+            "description": "Id of a loaded subtitle file track to replace in place (same id, still selected); an unknown id adds a new track"
           }
         },
         "required": []
       },
       "label": "Load subtitles…",
+      "readTwin": "subtitle.read",
+      "shows": true
+    },
+    {
+      "name": "subtitle.secondary",
+      "description": "Show a second text subtitle track at the top of the picture, by list index (-1 turns it off) or id, or step to the next one, Off included.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": -1,
+            "description": "Position in subtitle.read tracks; -1 is Off"
+          },
+          "id": {
+            "type": "string",
+            "description": "Track id from subtitle.read"
+          },
+          "next": {
+            "type": "boolean",
+            "description": "Step to the next text track, wrapping through Off"
+          }
+        },
+        "required": []
+      },
+      "label": "Second subtitle track",
+      "shortcuts": [
+        {
+          "key": "alt+s",
+          "input": {
+            "next": true
+          }
+        }
+      ],
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "subtitle.renderer",
+      "description": "Read or set how ASS/SSA subtitles draw: styled (fonts, colours and positions through libass) or plain text. With no input it reports the mode and the renderer in use.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "styled",
+              "plain"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "ASS renderer",
       "readTwin": "subtitle.read"
     },
     {
@@ -719,6 +786,96 @@
       "label": "Audio tracks"
     },
     {
+      "name": "bookmark.add",
+      "description": "Add a bookmark at timeS (default: the current position) with an optional name; with an id, rename that bookmark instead.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "timeS": {
+            "type": "number",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "id": {
+            "type": "string",
+            "description": "Rename this existing bookmark"
+          }
+        },
+        "required": []
+      },
+      "label": "Add bookmark",
+      "shortcuts": [
+        {
+          "key": "b"
+        }
+      ],
+      "readTwin": "bookmark.list"
+    },
+    {
+      "name": "bookmark.list",
+      "description": "List this file's bookmarks (id, timeS, name) sorted by time; panel opens or closes the bookmarks panel.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "boolean",
+            "description": "true opens the panel, false closes it"
+          }
+        },
+        "required": []
+      },
+      "label": "Bookmarks"
+    },
+    {
+      "name": "bookmark.go",
+      "description": "Seek to a bookmark, chosen by id or by index.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Bookmark id from bookmark.list"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Zero-based position in bookmark.list"
+          }
+        },
+        "required": []
+      },
+      "label": "Go to bookmark",
+      "readTwin": "bookmark.list"
+    },
+    {
+      "name": "bookmark.remove",
+      "description": "Remove a bookmark, chosen by id or by index.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Bookmark id from bookmark.list"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Zero-based position in bookmark.list"
+          }
+        },
+        "required": []
+      },
+      "label": "Remove bookmark",
+      "readTwin": "bookmark.list"
+    },
+    {
       "name": "view.snapshot",
       "description": "Save the current video frame as a PNG at the size the video is drawn; with save false, return it as a data URL instead.",
       "scope": "write",
@@ -795,8 +952,152 @@
       "readTwin": "view.read"
     },
     {
+      "name": "view.zoom",
+      "description": "Zoom and pan the picture: set scale (1 to 8) and the view centre x, y (0 to 1 across the picture), step in or out, or reset to the whole picture.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "scale": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Centre of the view, 0 left to 1 right"
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Centre of the view, 0 top to 1 bottom"
+          },
+          "step": {
+            "type": "integer",
+            "enum": [
+              -1,
+              1
+            ],
+            "description": "1 zooms in by 25%, -1 zooms out"
+          },
+          "reset": {
+            "type": "boolean",
+            "description": "true shows the whole picture"
+          }
+        },
+        "required": []
+      },
+      "label": "Zoom",
+      "shortcuts": [
+        {
+          "key": "alt+z",
+          "input": {
+            "step": 1
+          }
+        },
+        {
+          "key": "alt+x",
+          "input": {
+            "step": -1
+          }
+        },
+        {
+          "key": "shift+z",
+          "input": {
+            "reset": true
+          }
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.adjust",
+      "description": "Set brightness (-1 to 1, default 0), contrast (0 to 2, default 1), saturation (0 to 2, default 1) or gamma (0.2 to 5, default 1); reset true restores all four.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "contrast": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "saturation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "gamma": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 5
+          },
+          "reset": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Picture adjustments",
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.deinterlace",
+      "description": "Set deinterlacing: off, blend (mixes the two fields) or bob (rebuilds the picture from one field); with no input it moves to the next one.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "blend",
+              "bob"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "Deinterlace",
+      "shortcuts": [
+        {
+          "key": "e"
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.tonemap",
+      "description": "For HDR10 and HLG video: auto maps HDR to the screen (SDR, or HDR where the display and browser offer it); off clips at SDR white. With no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "off"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "HDR tone mapping",
+      "readTwin": "view.read"
+    },
+    {
       "name": "view.read",
-      "description": "Read the aspect and crop chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.",
+      "description": "Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -828,15 +1129,25 @@
     },
     {
       "name": "queue.open-folder",
-      "description": "Ask the person to pick a folder, queue its videos in natural sort order and play the first.",
+      "description": "Queue a folder's videos in natural sort order and play the first. Standalone it asks the person to pick a folder. Hosted in NakliOS it reads the folder at `path` in Reel's NakliOS storage (\"\" is the top), starting at the video `start` when given; with no path it opens the NakliOS file list.",
       "scope": "write",
       "input": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Hosted only: folder path in Reel's NakliOS storage, from hosted.list"
+          },
+          "start": {
+            "type": "string",
+            "description": "Hosted only: path of the video to play first"
+          }
+        },
         "required": []
       },
       "label": "Open folder",
-      "readTwin": "queue.read"
+      "readTwin": "queue.read",
+      "shows": true
     },
     {
       "name": "queue.play",
@@ -930,8 +1241,20 @@
       "readTwin": "queue.read"
     },
     {
+      "name": "queue.reopen-folder",
+      "description": "Reopen the folder picked last time (Chromium only): ask for read permission again, queue it and play the first video.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Reopen last folder",
+      "readTwin": "queue.read"
+    },
+    {
       "name": "queue.read",
-      "description": "Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names and whether the panel is open.",
+      "description": "Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names, whether the panel is open and the stored last folder.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -959,7 +1282,174 @@
           "key": "q"
         }
       ],
-      "readTwin": "queue.read"
+      "readTwin": "queue.read",
+      "shows": true
+    },
+    {
+      "name": "hosted.list",
+      "description": "Read the videos and subtitle files in Reel's NakliOS storage under `path` (\"\" or no path is the top): each with its path and kind, the folders that hold videos, the storage location, whether it streams by ranged reads, whether the list is open and the hosted path playing now. Standalone it reports available false.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Folder path in Reel's NakliOS storage"
+          }
+        },
+        "required": []
+      },
+      "label": "NakliOS files"
+    },
+    {
+      "name": "hosted.open",
+      "description": "Play the video at `path` in Reel's NakliOS storage, queueing the videos of its folder with their subtitle files. A subtitle path loads that file for the video playing now.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path from hosted.list"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "label": "Open from NakliOS",
+      "readTwin": "hosted.list"
+    },
+    {
+      "name": "hosted.panel",
+      "description": "Open or close the list of videos in Reel's NakliOS storage; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "NakliOS file list",
+      "readTwin": "hosted.list"
+    },
+    {
+      "name": "library.open",
+      "description": "Open or close the library view of the opened folder; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Library",
+      "shortcuts": [
+        {
+          "key": "y"
+        }
+      ],
+      "readTwin": "library.read",
+      "shows": true
+    },
+    {
+      "name": "library.read",
+      "description": "Read the library: each video with its duration, fingerprint, poster state (cached, placeholder or pending) and watch state (new, partial or watched, from the resume history).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Library contents"
+    },
+    {
+      "name": "ai.transcribe",
+      "description": "Generate subtitles from the speech in the current video, in 30-second windows, and load them as an editable SRT track named \"(generated)\". Inside NakliOS the host speech model is the default; route \"local\" runs Whisper tiny on this device. The one-time local model download is a person-only act: from an agent it refuses unless the model is already kept. cancel stops a running job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "host",
+              "local"
+            ],
+            "description": "Defaults to auto (host inside NakliOS, else local)"
+          },
+          "language": {
+            "type": "string",
+            "description": "Spoken language code such as \"en\" or \"hi\"; omitted lets Whisper detect it"
+          },
+          "fromS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Start of the range to transcribe; defaults to 0"
+          },
+          "toS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "End of the range; defaults to the end of the video"
+          },
+          "cancel": {
+            "type": "boolean",
+            "description": "Cancel the running job"
+          }
+        },
+        "required": []
+      },
+      "label": "Generate subtitles",
+      "readTwin": "ai.read"
+    },
+    {
+      "name": "ai.translate",
+      "description": "Translate the selected subtitle track into a language with the NakliOS host model, keeping cue times, and load it as a new track named \"(translated)\". Outside NakliOS there is no translation model and it refuses. cancel stops a running job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "description": "Target language code or name, such as \"fr\" or \"French\""
+          },
+          "trackIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Subtitle track position from subtitle.read; defaults to the selected track"
+          },
+          "cancel": {
+            "type": "boolean",
+            "description": "Cancel the running job"
+          }
+        },
+        "required": []
+      },
+      "label": "Translate subtitles",
+      "readTwin": "ai.read"
+    },
+    {
+      "name": "ai.read",
+      "description": "Read the local speech model state (absent, cached, loading, loaded), the route for transcription and translation (host, local or none), the running job and its progress, and the last generated track. panel opens or closes the AI panel.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "boolean",
+            "description": "true opens the AI panel, false closes it"
+          }
+        },
+        "required": []
+      },
+      "label": "AI state"
     },
     {
       "name": "help.show",
@@ -981,7 +1471,19 @@
           "key": "?"
         }
       ],
-      "readTwin": "state.read"
+      "readTwin": "state.read",
+      "shows": true
+    },
+    {
+      "name": "door.read",
+      "description": "Read which WebMCP API was found and how many commands it registered as tools, whether Reel is hosted in NakliOS and how many commands it registered there, and whether the offline service worker is registered, with its scope and cache.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Agent and offline status"
     }
   ]
 }

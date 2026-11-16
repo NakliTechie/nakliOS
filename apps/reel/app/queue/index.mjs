@@ -4,19 +4,30 @@
  *
  * Folder walking and folder-drop handling are adapted from NakliAmp app/library/scan-core.mjs (`walk`)
  * and app/library/scan.mjs (`requestFolder`, `directoryFromDrop`) at NakliAmp commit 5eb5937.
- * The NakliOS handoff follows Montella src/host.js `onFiles` (naklios.files.onOpen / read / release). */
+ * The NakliOS handoff follows Montella src/host.js `onFiles` (naklios.files.onOpen / read / release).
+ * Reopening the last folder (O5) follows NakliAmp scan.mjs `adoptFolder` / `reclaimFolder`: the
+ * directory handle lives in IndexedDB and permission is asked again from the person's click.
+ * Hosted in NakliOS with `naklios.fs` (batch 3), folders come from the app's NakliOS storage through
+ * the host store in shared.mjs (set by app/hosted), and items read through ranged readers. */
 
 import {
   MAX_DEPTH, MAX_ENTRIES, REPEAT_MODES,
   classify, siblingsFor, videosPerFolder, dirOf, stripRoot, isHiddenName, isSubtitleName,
   createOrder, currentIndex, setShuffle, setRepeat, cycleRepeat, jumpTo, next, previous,
 } from './logic.mjs';
+import { setQueueSource, hostStore, onHostStore, itemFile, recordFile } from './shared.mjs';
+
+const LAST_FOLDER_KEY = 'queue:lastFolder';
 
 const none = { type: 'object', properties: {}, required: [] };
 
 export const COMMANDS = [
-  { name: 'queue.open-folder', label: 'Open folder', scope: 'write', input: none, readTwin: 'queue.read',
-    description: 'Ask the person to pick a folder, queue its videos in natural sort order and play the first.' },
+  { name: 'queue.open-folder', label: 'Open folder', scope: 'write', readTwin: 'queue.read',
+    description: 'Queue a folder\'s videos in natural sort order and play the first. Standalone it asks the person to pick a folder. Hosted in NakliOS it reads the folder at `path` in Reel\'s NakliOS storage ("" is the top), starting at the video `start` when given; with no path it opens the NakliOS file list.',
+    input: { type: 'object', properties: {
+      path: { type: 'string', description: 'Hosted only: folder path in Reel\'s NakliOS storage, from hosted.list' },
+      start: { type: 'string', description: 'Hosted only: path of the video to play first' },
+    }, required: [] } },
   { name: 'queue.play', label: 'Play queue item', scope: 'write', readTwin: 'queue.read',
     description: 'Play the queue item at an index (natural folder order, starting at 0).',
     input: { type: 'object', properties: { index: { type: 'integer', minimum: 0, description: 'Item index from queue.read' } }, required: ['index'] } },
@@ -31,8 +42,10 @@ export const COMMANDS = [
   { name: 'queue.shuffle', label: 'Shuffle', scope: 'write', readTwin: 'queue.read',
     description: 'Turn shuffle on or off; with no input it toggles. The current item stays current.',
     input: { type: 'object', properties: { on: { type: 'boolean' } }, required: [] } },
+  { name: 'queue.reopen-folder', label: 'Reopen last folder', scope: 'write', input: none, readTwin: 'queue.read',
+    description: 'Reopen the folder picked last time (Chromium only): ask for read permission again, queue it and play the first video.' },
   { name: 'queue.read', label: 'Queue', scope: 'read', input: none,
-    description: 'Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names and whether the panel is open.' },
+    description: 'Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names, whether the panel is open and the stored last folder.' },
   { name: 'queue.panel', label: 'Queue panel', scope: 'write', readTwin: 'queue.read',
     description: 'Open or close the queue panel; with no input it toggles.',
     input: { type: 'object', properties: { open: { type: 'boolean' } }, required: [] }, shortcuts: [{ key: 'q' }] },
@@ -56,11 +69,14 @@ export const STRINGS = {
   'queue.noVideos.detail': 'Reel plays {formats}.',
   'queue.truncated': 'Reel queued the first {count} files only',
   'queue.handoff.failed': 'NakliOS could not hand over a file',
+  'queue.reopen': 'Reopen {name}',
+  'queue.reopen.none': 'No folder to reopen',
+  'queue.reopen.denied': 'Reel needs permission to read {name}',
+  'queue.hosted.only': 'A folder path works only when Reel runs in NakliOS with storage connected',
+  'queue.hosted.top': 'NakliOS storage',
 };
 
-function fileOf(record) {
-  return record.file ? Promise.resolve(record.file) : record.handle.getFile();
-}
+const fileOf = recordFile;
 
 /* Directory handle walk (NakliAmp scan-core `walk`): skips dot entries, caps depth and entry count. */
 async function walkHandle(directory, keep, prefix = '', depth = 0, out = []) {
@@ -109,6 +125,8 @@ export function install(ctx) {
   let order = createOrder(0);
   let expected = null;  // the item the queue itself is opening
   let panelOpen = false;
+  let lastFolder = null; // FileSystemDirectoryHandle from the picker or a folder drop (Chromium)
+  let hostedFolder = null; // NakliOS storage path of the hosted folder in the queue ('' is the top)
 
   const playable = name => ctx.supportsPlayback({ name, type: '' });
   const keep = name => isSubtitleName(name) || playable(name);
@@ -124,6 +142,9 @@ export function install(ctx) {
       items: items.map((item, index) => ({ index, name: item.name, path: item.path })),
       siblings: siblings.map(file => file.name),
       panelOpen,
+      lastFolder: lastFolder?.name ?? null,
+      hosted: !!hostStore(),
+      hostedFolder,
     };
   }
 
@@ -158,7 +179,7 @@ export function install(ctx) {
     ctx.Events.emit('queue:siblings', { videoName: item.name, files: [...siblings] });
     expected = item;
     try {
-      await ctx.openFile(item.handle || item.file);
+      await ctx.openFile(item.handle || item.file || await itemFile(item));
     } finally {
       if (expected === item) expected = null;
     }
@@ -216,7 +237,7 @@ export function install(ctx) {
   }
 
   /* records: [{ name, path, file? | handle? }] from a folder pick, a drop, NakliOS or the dev hook. */
-  async function loadRecords(records, { truncated = false } = {}) {
+  async function loadRecords(records, { truncated = false, folderName = null, start = null } = {}) {
     const { videos, subtitles: subs } = classify(records, record => ctx.supportsPlayback(record.file || { name: record.name, type: '' }));
     if (!videos.length) {
       // Subtitles alone, while a video plays: offer them to the subtitles module for that video.
@@ -231,7 +252,10 @@ export function install(ctx) {
     if (truncated) ctx.toast(t('queue.truncated', { count: MAX_ENTRIES }));
     items = videos;
     subtitles = subs;
-    order = createOrder(items.length, { repeat: order.repeat, shuffle: order.shuffle });
+    const startIndex = start ? Math.max(0, items.findIndex(item => item.path === start)) : 0;
+    order = createOrder(items.length, { current: startIndex, repeat: order.repeat, shuffle: order.shuffle });
+    if (!records.some(record => record.hosted)) hostedFolder = null;
+    setQueueSource({ items, folderName });
     await openIndex(currentIndex(order));
     return snapshot();
   }
@@ -253,14 +277,57 @@ export function install(ctx) {
     });
   }
 
+  /* ---------- O5: remember and reopen the last folder (Chromium) ---------- */
+
+  async function rememberFolder(handle) {
+    lastFolder = handle;
+    render();
+    try { await ctx.Storage.set(LAST_FOLDER_KEY, handle); } catch (error) { ctx.surface('storage', error); }
+  }
+
+  async function loadDirectory(handle) {
+    await rememberFolder(handle);
+    const records = await walkHandle(handle, keep);
+    return loadRecords(records, { truncated: records.length >= MAX_ENTRIES, folderName: handle.name });
+  }
+
+  /* Synchronous up to requestPermission, so the click's user activation reaches the prompt. */
+  function reopenFolder() {
+    const handle = lastFolder;
+    if (!handle) throw Object.assign(new Error(t('queue.reopen.none')), { code: 'ERR_QUEUE_NO_FOLDER' });
+    const asking = typeof handle.requestPermission === 'function'
+      ? handle.requestPermission({ mode: 'read' })
+      : Promise.resolve('granted');
+    return asking.then(state => {
+      if (state !== 'granted') {
+        throw Object.assign(new Error(t('queue.reopen.denied', { name: handle.name })), { code: 'ERR_QUEUE_PERMISSION' });
+      }
+      return loadDirectory(handle);
+    });
+  }
+
+  /* Hosted: walk a folder of Reel's NakliOS storage; items read through ranged readers. */
+  async function loadHostedFolder(store, path, start) {
+    const folder = String(path).replace(/^\/+|\/+$/g, '');
+    const { records, truncated } = await store.walk(folder);
+    hostedFolder = folder;
+    const folderName = folder ? folder.split('/').pop() : t('queue.hosted.top');
+    return loadRecords(records, { truncated, folderName, start: start ?? null });
+  }
+
   /* Synchronous up to the picker call, so the click's user activation reaches it. */
-  function openFolder() {
+  function openFolder({ path, start } = {}) {
+    const store = hostStore();
+    if (store) {
+      if (typeof path === 'string') return loadHostedFolder(store, path, start);
+      return Promise.resolve(registry.run('hosted.panel', { open: true })).then(() => snapshot());
+    }
+    if (path !== undefined || start !== undefined) {
+      throw Object.assign(new Error(t('queue.hosted.only')), { code: 'ERR_COMMAND_INPUT' });
+    }
     if (typeof globalThis.showDirectoryPicker === 'function') {
       return globalThis.showDirectoryPicker({ id: 'reel-folder', mode: 'read' }).then(
-        async handle => {
-          const records = await walkHandle(handle, keep);
-          return loadRecords(records, { truncated: records.length >= MAX_ENTRIES });
-        },
+        handle => loadDirectory(handle),
         error => { if (error?.name === 'AbortError') return snapshot(); throw error; },
       );
     }
@@ -287,8 +354,17 @@ export function install(ctx) {
     event.stopPropagation();
     event.target?.closest?.('.dropzone')?.classList.remove('dragover');
     const files = [...(transfer.files || [])]; // read now: the DataTransfer empties after this task
+    // One dropped folder on Chromium also yields a handle, which O5 remembers like a picked folder.
+    const handlePromise = entries.length === 1 && entries[0]?.isDirectory
+      && typeof fileItems[0].getAsFileSystemHandle === 'function' ? fileItems[0].getAsFileSystemHandle() : null;
+    if (handlePromise) {
+      handlePromise.then(handle => { if (handle?.kind === 'directory') return rememberFolder(handle); }).catch(() => {});
+    }
     collectDrop(entries, files)
-      .then(records => loadRecords(records, { truncated: records.length >= MAX_ENTRIES }))
+      .then(records => loadRecords(records, {
+        truncated: records.length >= MAX_ENTRIES,
+        folderName: entries.length === 1 && entries[0]?.isDirectory ? entries[0].name : null,
+      }))
       .catch(error => ctx.surface('file-open', error));
   }
 
@@ -362,6 +438,14 @@ export function install(ctx) {
   emptyButton.addEventListener('click', () => run('queue.open-folder'));
   ctx.mounts.emptyActions.append(emptyButton);
 
+  const reopenButton = document.createElement('button');
+  reopenButton.type = 'button';
+  reopenButton.hidden = true;
+  reopenButton.dataset.queue = 'reopen-folder';
+  reopenButton.dataset.command = 'queue.reopen-folder';
+  reopenButton.addEventListener('click', () => run('queue.reopen-folder'));
+  ctx.mounts.emptyActions.append(reopenButton);
+
   const controlButton = document.createElement('button');
   controlButton.type = 'button';
   controlButton.dataset.queue = 'toggle';
@@ -400,6 +484,9 @@ export function install(ctx) {
 
   function render() {
     emptyButton.textContent = t('queue.open-folder');
+    // Hosted, folders come from NakliOS storage; a remembered local folder handle does not apply.
+    reopenButton.hidden = !lastFolder || !!hostStore();
+    if (lastFolder) reopenButton.textContent = t('queue.reopen', { name: lastFolder.name });
     panelOpenButton.textContent = t('queue.open-folder');
     controlButton.setAttribute('aria-label', t('queue.button'));
     controlButton.title = t('queue.button');
@@ -462,6 +549,7 @@ export function install(ctx) {
     subtitles = [];
     siblings = [];
     order = createOrder(1, { repeat: order.repeat });
+    setQueueSource({ items, folderName: null });
     publish();
   });
 
@@ -471,7 +559,8 @@ export function install(ctx) {
 
   /* ---------- commands ---------- */
 
-  registry.handle('queue.open-folder', () => openFolder());
+  registry.handle('queue.open-folder', input => openFolder(input || {}));
+  registry.handle('queue.reopen-folder', () => reopenFolder());
   registry.handle('queue.play', async ({ index }) => {
     if (!Number.isInteger(index) || index < 0 || index >= items.length) {
       throw Object.assign(new RangeError(`queue.play needs an index from 0 to ${items.length - 1}.`), { code: 'ERR_COMMAND_INPUT' });
@@ -506,6 +595,7 @@ export function install(ctx) {
   screen.addEventListener('drop', onDrop, true);
 
   wireNakliOS();
+  onHostStore(() => render());
 
   // Debug hook for checks/queue.mjs: page.file() Files cannot pass through a JSON command input.
   if (new URLSearchParams(location.search).get('dev') === '1') {
@@ -519,7 +609,18 @@ export function install(ctx) {
         });
         return loadRecords(records);
       },
+      /* A directory handle (the checks use an OPFS folder), handled exactly as a picked folder. */
+      loadDirectory(handle) {
+        return loadDirectory(handle);
+      },
     });
+  }
+
+  // O5: offer the remembered folder. Only Chromium can hold a directory handle.
+  if (typeof globalThis.showDirectoryPicker === 'function') {
+    ctx.Storage.get(LAST_FOLDER_KEY).then(handle => {
+      if (handle?.kind === 'directory' && !lastFolder) { lastFolder = handle; render(); }
+    }).catch(error => ctx.surface('storage', error));
   }
 
   publish();

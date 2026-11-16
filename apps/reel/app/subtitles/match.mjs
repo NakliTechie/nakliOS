@@ -2,7 +2,7 @@
  * "Movie.mkv" matches "Movie.srt", "Movie.en.srt" and "Movie.eng.forced.srt" (case-insensitive);
  * it does not match "Movie 2.srt" or "Movie.extended.mkv". */
 
-export const SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass', '.ssa'];
+export const SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass', '.ssa', '.sup'];
 
 const FORCED_TAGS = new Set(['forced', 'foreign']);
 const OTHER_TAGS = new Set(['sdh', 'cc', 'default', 'full']);
