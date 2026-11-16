@@ -1,8 +1,15 @@
 import {validateCodemodeStore} from './codemode-runtime.mjs';
 import {contentHash,eventHash} from '../history/ledger.mjs';
-export function codemodeTool(){return {type:'function',function:{name:'codemode',description:'Run one bounded JavaScript async body in an isolated guest. Only tools.<name>(args), text(value), store(key,value), and load(key) exist. Await calls. Completed calls remain real after errors; unfinished calls are cancelled. Successful scripts commit small JSON store values to the run record. Guest code has no network, filesystem, timers or module imports. Tools use normal grants, permission rules, protected paths and hooks.',parameters:{type:'object',properties:{code:{type:'string',description:'JavaScript async function body, at most32KiB UTF-8.'}},required:['code']}}};}
-export function codemodeCatalog(tools,{enabled=false,mode='code',selectedRange=false}={}){
- return enabled===true&&mode==='code'&&!selectedRange?tools.concat(codemodeTool()):tools.slice();
+// Inside NakliOS a script also reaches other apps' commands (the common rail) through three JSON tools. The sentence
+// is added only when they are on, so the schema of an unhosted run stays byte-stable for recorded replays.
+const RAIL_NOTE=" Inside NakliOS, tools.rail_search({query}) lists other apps' commands, tools.rail_describe({name}) gives one command's input, and tools.rail_call({name,input}) runs one; each returns JSON. A call that needs the person's answer returns {ok:false,code:'ECONSENT'}: stop and use app_command outside the script.";
+export const CODEMODE_RAIL_TOOL_NAMES=Object.freeze(['rail_search','rail_describe','rail_call']);
+// The tools a script may call: the file tools in the run's toolset, plus the rail tools only when the caller says the
+// run is hosted inside NakliOS (rail:true). app_command alone is no evidence: every code-mode toolset carries it.
+export function codemodeScriptTools(toolsetNames,{rail=false}={}){const names=toolsetNames.filter(name=>CODEMODE_TOOL_NAMES.includes(name));return rail===true?names.concat(CODEMODE_RAIL_TOOL_NAMES):names;}
+export function codemodeTool({rail=false}={}){return {type:'function',function:{name:'codemode',description:'Run one bounded JavaScript async body in an isolated guest. Only tools.<name>(args), text(value), store(key,value), and load(key) exist. Await calls. Completed calls remain real after errors; unfinished calls are cancelled. Successful scripts commit small JSON store values to the run record. Guest code has no network, filesystem, timers or module imports. Tools use normal grants, permission rules, protected paths and hooks.'+(rail?RAIL_NOTE:''),parameters:{type:'object',properties:{code:{type:'string',description:'JavaScript async function body, at most32KiB UTF-8.'}},required:['code']}}};}
+export function codemodeCatalog(tools,{enabled=false,mode='code',selectedRange=false,rail=false}={}){
+ return enabled===true&&mode==='code'&&!selectedRange?tools.concat(codemodeTool({rail:rail===true})):tools.slice();
 }
 export const CODEMODE_TOOL_NAMES=Object.freeze(['read','read_lines','write','edit','edit_lines','apply_patch','shell']);
 // A proposal becomes store state only when its outer call returned successfully.

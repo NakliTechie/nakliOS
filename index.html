@@ -9421,8 +9421,9 @@ window.addEventListener('message', async e => {
     try {
       if (!appId) throw new Error('Unknown app');
       const search = msg.type === 'naklios:commands:search';
-      if (aiAppOwnsEgress(appId)) reply.result = search ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input);
-      else reply.result = search ? await appToAppSearch(appId, msg.query) : await appToAppCall(appId, source, msg.name, msg.input);
+      const options = { noAsk: msg.ask === false };
+      if (aiAppOwnsEgress(appId)) reply.result = search ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input, options);
+      else reply.result = search ? await appToAppSearch(appId, msg.query) : await appToAppCall(appId, source, msg.name, msg.input, options);
     } catch (error){ reply.error = String(error?.message || error); }
     try { source.postMessage(reply, replyTo); } catch(_){}
   } else if (msg.type === 'naklios:commands:result' && typeof msg.invokeId === 'string'){
@@ -14487,8 +14488,12 @@ function launchAppForCommand(appId){
 // What a system app sees of the catalog: app commands only, with the input each one takes.
 async function searchAppCommands(query){
   const [{ catalog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
-  return catalog.searchCommands(query).filter(c => c.annotations?.app).slice(0, 20)
-    .map(({ name, description, inputSchema, destructive, annotations }) => ({ name, description, input:inputSchema, destructive, app:annotations.app }));
+  // A query that is exactly a command name finds that command first, so a lookup by name (rail_describe) cannot fall
+  // off the 20-result list when many commands tie on the word match.
+  const exact = catalog.describeCommand(String(query || '').trim());
+  const ranked = catalog.searchCommands(query).filter(c => c.annotations?.app && c.name !== exact?.name);
+  return (exact?.annotations?.app ? [exact, ...ranked] : ranked).slice(0, 20)
+    .map(({ name, description, inputSchema, scope, destructive, annotations }) => ({ name, description, input:inputSchema, scope, destructive, app:annotations.app }));
 }
 // One path for every caller of app commands, on the caller's own face. A change asks the person once per caller, per
 // app, per visit; a destructive command asks every time, showing what it would do. A refusal is written to History.
@@ -14496,7 +14501,9 @@ const appCommandWriteConsent = new Set();
 const appCommandFaces = new Map();
 // The SDK's call waits 300 s and the app may take 50 s more to open and answer, so a later Allow must not run the call.
 const COMMAND_CONSENT_MS = 240000;
-async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => true){
+// `noAsk` (a script, which cannot wait for a dialog): any step that would ask the person returns ECONSENT instead, and
+// a destructive command is refused before it is staged, so no approval can land after the script has ended.
+async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => true, { noAsk = false } = {}){
   const [{ catalog, faceFor, opLog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
   const command = catalog.describeCommand(name);
   const target = command?.annotations?.app;
@@ -14509,6 +14516,12 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   // A late Allow, or one given after the caller's window closed, runs nothing.
   const answered = async question => { const asked = Date.now(); return (await question()) && Date.now() - asked < COMMAND_CONSENT_MS && stillWanted(); };
   const key = `${callerId}:${target}`;
+  if (noAsk && (command.destructive || (command.scope === 'app:write' && !appCommandWriteConsent.has(key)))){
+    await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ECONSENT' });
+    return { ok:false, code:'ECONSENT', target, destructive:!!command.destructive,
+      message: command.destructive ? `${name} is hard to undo, so the person must approve it outside a script`
+        : `the person has not yet allowed changes to ${label(target)} on this visit` };
+  }
   if (command.scope === 'app:write' && !command.destructive && !appCommandWriteConsent.has(key)){
     if (!(await answered(() => ask(target, label(target))))) return refused();
     appCommandWriteConsent.add(key);
@@ -14520,17 +14533,23 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   // forward once it succeeds; the host opened the window minimized to answer the call.
   if (!out?.staged && out?.ok !== false && command.annotations?.showsWindow && openWindows[target]) focusWindow(openWindows[target]);
   if (!out?.staged) return out;
+  // The early refusal reads the command before the call; an app that re-registered in between can still stage here.
+  if (noAsk){
+    face.reject(out.proposalId);
+    await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ECONSENT' });
+    return { ok:false, code:'ECONSENT', target, destructive:true, message:`${name} is hard to undo, so the person must approve it outside a script` };
+  }
   const detail = JSON.stringify(input ?? {}).slice(0, 300);
   if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true })))
     return face.accept(out.proposalId);
   face.reject(out.proposalId);
   return refused();
 }
-function callAppCommand(callerId, source, name, input){
+function callAppCommand(callerId, source, name, input, options){
   return runAppCommandFor(callerId, name, input, (appId, label) => {
     const caller = APPS.find(a => a.id === callerId)?.name || callerId;
     return nakliosConfirm(`Let ${caller} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
-  }, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source);
+  }, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source, options);
 }
 // App-to-app commands (common rail, "Grants on the rail", row "Another app"). The Grant is per caller and target, asked
 // once in a host dialog, revocable in Settings → AI; read commands run after it, a change asks once per visit and a
@@ -14548,16 +14567,16 @@ function appGrants(){
     },
     describe:name => catalog.describeCommand(name),
     searchAll:searchAppCommands,
-    run:(caller, name, input, stillWanted) => runAppCommandFor(caller, name, input, (appId, label) => {
+    run:(caller, name, input, stillWanted, { ask = true } = {}) => runAppCommandFor(caller, name, input, (appId, label) => {
       const who = APPS.find(a => a.id === caller)?.name || caller;
       return nakliosConfirm(`Let ${who} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
-    }, stillWanted),
+    }, stillWanted, { noAsk: !ask }),
     record:appCommandHistoryAppend,
   }));
 }
 async function appToAppSearch(callerId, query){ return (await appGrants()).search(callerId, query); }
-async function appToAppCall(callerId, source, name, input){
-  return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source);
+async function appToAppCall(callerId, source, name, input, { noAsk = false } = {}){
+  return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source, { ask: !noAsk });
 }
 // History: one hash-chained event (door 'call') per app-to-app call. It names the caller, the target, the command and
 // the outcome code; the arguments and the result are committed by hash only.

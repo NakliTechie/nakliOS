@@ -18,7 +18,7 @@ export const APP_GRANT_TOOL = 'app.commands';
  *   confirm: (caller: string, target: string) => Promise<boolean>,
  *   describe: (name: string) => any,
  *   searchAll: (query: string) => Promise<Array<{ name: string, app?: string }>>,
- *   run: (caller: string, name: string, input: any, stillWanted: () => boolean) => Promise<any>,
+ *   run: (caller: string, name: string, input: any, stillWanted: () => boolean, options: { ask: boolean }) => Promise<any>,
  *   record: (event: { caller: string, target: string, command: string, grantId: string | null, output: any }) => Promise<void> | void,
  *   now?: () => number,
  *   consentMs?: number,
@@ -80,11 +80,16 @@ export function createAppGrants({ storage, grantLib, rootKey, confirm, describe,
     return out;
   }
 
-  async function call(caller, name, input, stillWanted = () => true) {
+  // `ask: false` (a script, which cannot wait for a dialog): a caller without a Grant gets ECONSENT and no dialog.
+  async function call(caller, name, input, stillWanted = () => true, { ask = true } = {}) {
     const command = describe(name);
     const target = command?.annotations?.app;
     if (!target) return { ok: false, code: 'ENOENT', message: `no app command named ${name}` };
     let grantId = null;
+    if (target !== caller && !ask && !(await holds(caller, target))) {
+      await record({ caller, target, command: name, grantId, output: { ok: false, code: 'ECONSENT' } });
+      return { ok: false, code: 'ECONSENT', target, message: `the person has not yet allowed this app to use ${target}` };
+    }
     if (target !== caller) {
       const started = now();
       const auth = await authorize(caller, target);
@@ -101,7 +106,7 @@ export function createAppGrants({ storage, grantLib, rootKey, confirm, describe,
       }
     }
     let out;
-    try { out = await run(caller, name, input, stillWanted); }
+    try { out = await run(caller, name, input, stillWanted, { ask }); }
     catch (error) { out = { ok: false, code: 'EFAIL', message: String(error?.message || error) }; }
     await record({ caller, target, command: name, grantId, output: { ok: out?.ok !== false, code: out?.code || null } });
     return out;

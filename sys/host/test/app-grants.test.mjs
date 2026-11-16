@@ -18,17 +18,17 @@ function setup({ answers = [], clock = { t: 1000 }, consentMs } = {}) {
   const store = new Map();
   const storage = { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, v) };
   const root = grantLib.newRootKey();
-  const asked = []; const ran = []; const history = [];
+  const asked = []; const ran = []; const history = []; const runOptions = [];
   const grants = createAppGrants({
     storage, grantLib, rootKey: async () => root,
     confirm: async (caller, target) => { asked.push([caller, target]); const a = answers.shift(); if (typeof a === 'function') return a(); return a ?? false; },
     describe: name => COMMANDS[name],
     searchAll: async () => Object.entries(COMMANDS).map(([name, c]) => ({ name, app: c.annotations.app })),
-    run: async (caller, name, input) => { ran.push([caller, name, input]); return { ok: true, result: { name } }; },
+    run: async (caller, name, input, stillWanted, options) => { ran.push([caller, name, input]); runOptions.push(options); return { ok: true, result: { name } }; },
     record: event => { history.push(event); },
     now: () => clock.t, consentMs,
   });
-  return { grants, store, asked, ran, history, clock };
+  return { grants, store, asked, ran, history, clock, runOptions };
 }
 
 // Grant: asked once, then reads run without asking again; History holds every call with the Grant id.
@@ -133,6 +133,26 @@ function setup({ answers = [], clock = { t: 1000 }, consentMs } = {}) {
   const t = setup({ answers: [true] });
   await t.grants.call('lectella', 'books.tag', { tag: 'x' });
   assert.deepEqual(t.ran, [['lectella', 'books.tag', { tag: 'x' }]]);
+}
+
+// ask:false (a codemode script): no Grant yet → ECONSENT, no dialog, nothing runs, one History record. With a Grant the
+// call runs and the flag reaches the host's own checks, so they cannot ask either.
+{
+  const t = setup({ answers: [true] });
+  const out = await t.grants.call('lectella', 'books.passage', { id: 'b1' }, () => true, { ask: false });
+  assert.equal(out.code, 'ECONSENT');
+  assert.equal(out.target, 'books');
+  assert.deepEqual(t.asked, [], 'a script call opens no dialog');
+  assert.equal(t.ran.length, 0, 'and runs nothing');
+  assert.deepEqual(t.history.map(e => e.output.code), ['ECONSENT'], 'the refusal is in History');
+  assert.equal(await t.grants.holds('lectella', 'books'), false, 'and no Grant was issued');
+  await t.grants.call('lectella', 'books.passage', { id: 'b2' });
+  const after = await t.grants.call('lectella', 'books.tag', { id: 'b3' }, () => true, { ask: false });
+  assert.equal(after.ok, true, 'with a Grant held, a script call runs');
+  assert.deepEqual(t.runOptions.at(-1), { ask: false }, 'and the host checks get ask:false');
+  assert.deepEqual(t.runOptions[0], { ask: true }, 'an ordinary call passes ask:true');
+  const own = await t.grants.call('books', 'books.passage', {}, () => true, { ask: false });
+  assert.equal(own.ok, true, 'an app calling its own command needs no Grant');
 }
 
 console.log('app-grants: ok');

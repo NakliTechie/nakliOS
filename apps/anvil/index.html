@@ -497,7 +497,7 @@
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, HOOK_LIMITS, parseHooks } from '../../sys/ai/hooks.mjs';
-  import { runAppCommand } from '../../sys/ai/app-command-tool.mjs';
+  import { runAppCommand, runRailScriptTool } from '../../sys/ai/app-command-tool.mjs';
   import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, RUN_BUDGET, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses, guardCriticalShellInvocation } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
@@ -532,13 +532,15 @@
   import { createWorkspaceChecker } from '../../sys/assay/checker.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
   import {runCodemode} from '../../sys/ai/codemode-runtime.mjs';
-  import {codemodeTool,codemodeCatalog,CODEMODE_TOOL_NAMES,foldCodemodeStore,verifiedCodemodeStore} from '../../sys/ai/codemode-record.mjs';
+  import {codemodeTool,codemodeCatalog,codemodeScriptTools,foldCodemodeStore,verifiedCodemodeStore} from '../../sys/ai/codemode-record.mjs';
   import {eventHash} from '../../sys/history/ledger.mjs';
   import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldQuota, foldGoal, goalLine, foldEpisode } from '../../sys/history/run-record.mjs';
   import { FOREIGN_LIMITS, importForeignJsonl, detectForeignProvider, foreignSourceId, matchesForeignRow, foreignSourceLabel, foreignBloom, foreignBloomMayContain, foreignStoredBytes, redactForeignText } from '../../sys/history/foreign-transcripts.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
+  // The rail reaches other apps only when NakliOS hosts this window; standalone, scripts get no rail tools.
+  const railHosted = () => window.parent !== window && !!nak?.experimental_commands;
 
   // ── Rig workspace stack (lifted from Forge) — the agent's file substrate ──
   let backend, fs, git, registry, grant, opLog, face, shell, kilnRef=null;
@@ -3700,6 +3702,22 @@
       // names, so this is a pure reordering.
       const hookReply = preHookReply(hooksCfg, nm, ar);
       if(hookReply!=null) return hookReply;
+      const isRailTool = nm==='rail_search'||nm==='rail_describe'||nm==='rail_call';
+      // Rail tools answer to the owner's rules for app_command as well as their own names, and they never prompt: a
+      // deny is EDENIED and an ask is ECONSENT, because a dialog opened from a script outlives it. They skip the
+      // action gate's prompt for the same reason; the host checks each call (ask:false).
+      if(isRailTool){
+        if(!nestedOptions) return 'Error: '+nm+' exists only inside a codemode script; use app_command.';
+        // The owner's hooks for app_command, the door a rail tool stands for, apply too; the reply comes back as JSON.
+        const doorHook = preHookReply(hooksCfg, 'app_command', ar);
+        if(doorHook!=null) return {ok:false,code:'EHOOK',message:String(doorHook).slice(0,2000)};
+        for(const name of ['app_command',nm]){
+          let byRule; try{ byRule=decideByRules(state.permissionRules, name, ar); }catch(_){ return {ok:false,code:'EDENIED',message:'permission rules could not be evaluated'}; }
+          if(byRule.decision==='deny') return {ok:false,code:'EDENIED',message:byRule.why};
+          if(byRule.decision==='ask') return {ok:false,code:'ECONSENT',message:byRule.why+'; ask outside the script with app_command'};
+        }
+        return runRailScriptTool(nm, ar, nak && nak.experimental_commands);
+      }
       // AC-7: a typed verdict on THIS action, before it happens. Authorization is read only from
       // the owner's own turns — `[coordination]` messages are the loop talking to itself and can
       // never widen scope. This sits ABOVE the grant and can only ever ask for more: the grant is
@@ -3767,7 +3785,7 @@
         const ownContext=runCtx,ownRec=runCtx.rec,ownCapture=runCtx.captureExecute,invocation=String(callObj?.id||'');if(!invocation)return 'Error: script invocation lacks a recorded ID';
         try{
           const store=await loadCodemodeState(t,ownRec);
-          const allowed=runToolset(mode,{verify:!!verify,scopes:grant.scopes,simple:false}).map(tool=>tool.function.name).filter(name=>CODEMODE_TOOL_NAMES.includes(name));
+          const allowed=codemodeScriptTools(runToolset(mode,{verify:!!verify,scopes:grant.scopes,simple:false}).map(tool=>tool.function.name),{rail:railHosted()});
           await ownRec.codemodeStarted({invocation,code:ar?.code,tools:allowed,initialStore:store});
           let nestedQueue=Promise.resolve();
           const outcome=await runCodemode({code:ar?.code,tools:allowed,store,signal:callSignal,deadlineMs:Math.max(0,(ownContext.deadlineAt||Date.now()+10000)-Date.now()),
@@ -4198,7 +4216,7 @@
     hooksCfg = await loadHooks(fs, hooksCfg);
     const simpleAsk = isSimpleAsk(text); // the memory gate — decided once, from the owner's ask
     const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk });
-    tools.splice(0,tools.length,...codemodeCatalog(tools,{enabled:t.codemodeEnabled===true,mode,selectedRange:!!rangeRun}));
+    tools.splice(0,tools.length,...codemodeCatalog(tools,{enabled:t.codemodeEnabled===true,mode,selectedRange:!!rangeRun,rail:railHosted()}));
     if(rangeRun) tools.splice(0,tools.length,...tools.filter(tool=>RANGE_EDIT_TOOLS.has(tool.function?.name)));
     // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
     // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has

@@ -61,8 +61,12 @@ assert.ok(execIdx >= 0 && guardIdx > execIdx, 'the hook guard is inside executeT
 assert.ok(guardIdx < firstToolIdx,
   'the hook guard runs BEFORE skill/recall/remember/revise/synthesize can return');
 // Exactly one guard site — the old one was removed, not duplicated.
-assert.equal((anvil.match(/preHookReply\(hooksCfg/g) || []).length, 1,
+// (A rail tool also checks the app_command hooks once, by that literal name, inside its own branch; the per-tool
+// guard stays single.)
+assert.equal((anvil.match(/preHookReply\(hooksCfg, nm,/g) || []).length, 1,
   'the hook guard is not evaluated twice per call');
+assert.equal((anvil.match(/preHookReply\(hooksCfg/g) || []).length, 2,
+  'the only other hook call is the rail tools\' app_command check');
 // Write-capable tools are refused outright outside code mode.
 assert.match(anvil, /mode!=='code' && \(nm==='remember'\|\|nm==='revise'\|\|nm==='synthesize'\|\|nm==='skill_manage'\)/,
   'the write-capable tools are mode-gated defensively');

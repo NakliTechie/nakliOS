@@ -42,3 +42,40 @@ export async function runAppCommand(args, commands) {
     return 'Error: ' + String(error?.message || error);
   }
 }
+
+// The same rail for codemode scripts (sys/ai/codemode-record.mjs, CODEMODE_RAIL_TOOL_NAMES). A script gets JSON, not
+// rendered text, and its calls never open a dialog: `ask:false` makes the host return ECONSENT where it would ask,
+// because a script ends within 10 s and an answer given after that must not run anything.
+export const RAIL_SEARCH_MAX = 20; // the host's own cap for one search (index.html, searchAppCommands)
+const brief = c => ({ name: c.name, description: c.description, scope: c.scope ?? null, destructive: !!c.destructive, app: c.app ?? null });
+
+/** @param {'rail_search'|'rail_describe'|'rail_call'} tool @param {any} args @param {{ search: Function, call: Function }} commands */
+export async function runRailScriptTool(tool, args, commands) {
+  if (!commands || typeof commands.call !== 'function' || typeof commands.search !== 'function')
+    return { ok: false, code: 'ENOHOST', message: 'app commands need Anvil to run inside NakliOS' };
+  const a = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
+  try {
+    if (tool === 'rail_search') {
+      if (a.query !== undefined && typeof a.query !== 'string') return { ok: false, code: 'EINVAL', message: 'query must be a string' };
+      const found = await commands.search(a.query || '');
+      return { ok: true, results: (Array.isArray(found) ? found : []).slice(0, RAIL_SEARCH_MAX).map(brief) };
+    }
+    if (typeof a.name !== 'string' || !a.name) return { ok: false, code: 'EINVAL', message: 'name must be a command name from rail_search' };
+    if (tool === 'rail_describe') {
+      const found = await commands.search(a.name);
+      const hit = (Array.isArray(found) ? found : []).find(c => c.name === a.name);
+      return hit ? { ok: true, command: { ...brief(hit), input: hit.input ?? null } } : { ok: false, code: 'ENOENT', message: 'no app command named ' + a.name };
+    }
+    if (tool === 'rail_call') {
+      if (a.input !== undefined && (typeof a.input !== 'object' || a.input === null || Array.isArray(a.input))) return { ok: false, code: 'EINVAL', message: 'input must be an object' };
+      const out = await commands.call(a.name, a.input || {}, { ask: false });
+      // A host that predates `ask:false` may still stage; the script must not report a staged change as done.
+      if (out?.staged) return { ok: false, code: 'ESTAGED', message: 'staged for the person to review; it has not happened' };
+      if (!out || typeof out !== 'object') return { ok: false, code: 'EFAIL', message: a.name + ' did not answer' };
+      return out;
+    }
+    return { ok: false, code: 'EINVAL', message: 'unknown rail tool ' + String(tool) };
+  } catch (error) {
+    return { ok: false, code: 'EFAIL', message: String(error?.message || error).slice(0, 2000) };
+  }
+}

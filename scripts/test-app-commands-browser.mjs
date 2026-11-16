@@ -86,6 +86,21 @@ const SCRIPT = `(async () => {
   out.badDate = await face.invoke('calendar.events.create', { title: 'Bad', start: '2031-02-30' });
   out.list = await face.invoke('calendar.events.list', { date });
   out.denied = await faceFor('reader', ['app:read']).invoke('notes.note.create', { text: 'x' });
+  // Codemode rail bridge: a script's calls (ask:false) never open a dialog. A real QuickJS guest calls the real host.
+  const { runRailScriptTool } = await import('/sys/ai/app-command-tool.mjs');
+  const { runCodemode } = await import('/sys/ai/codemode-runtime.mjs');
+  out.scriptAsked = 0;
+  const rail = { search: q => searchAppCommands(q), call: (name, input, options) => runAppCommandFor('rail-test', name, input,
+    () => { out.scriptAsked++; return Promise.resolve(true); }, () => true, { noAsk: options?.ask === false }) };
+  out.scriptDescribe = await runRailScriptTool('rail_describe', { name: 'notes.list.read' }, rail);
+  out.exactFirst = (await searchAppCommands('notes.note.trash'))[0]?.name;
+  out.scriptWrite = await runRailScriptTool('rail_call', { name: 'notes.list.add', input: { list: 'shopping', things: 'jam' } }, rail);
+  out.scriptTrash = await runRailScriptTool('rail_call', { name: 'notes.note.trash', input: { title: 'The plumber comes on Tuesday' } }, rail);
+  out.dialogOpen = !!document.querySelector('dialog.nw-dlg');
+  appCommandWriteConsent.add('rail-test:notes');
+  out.scriptWriteAfter = await runRailScriptTool('rail_call', { name: 'notes.list.add', input: { list: 'shopping', things: 'jam' } }, rail);
+  out.guest = await runCodemode({ tools: ['rail_search', 'rail_describe', 'rail_call'], execute: (name, args) => runRailScriptTool(name, args, rail),
+    code: "const found=await tools.rail_search({query:'notes list'});const r=await tools.rail_call({name:'notes.list.read',input:{list:'shopping'}});return JSON.stringify({names:found.results.map(c=>c.name),items:r.result.items});" });
   return out;
 })()`;
 
@@ -141,6 +156,18 @@ try {
   assert.match(r.badDate.message, /not a real date/);
   assert.deepEqual(r.list.result.events.map(e => e.title).sort(), ['Dentist', 'Holiday']);
   assert.equal(r.denied.code, 'EGRANT', 'a read-only caller cannot write');
+  assert.deepEqual(r.scriptDescribe.command.input.required, ['list'], 'rail_describe returns the input schema');
+  assert.equal(r.exactFirst, 'notes.note.trash', 'a search for an exact command name returns it first');
+  assert.equal(r.scriptWrite.code, 'ECONSENT', 'a script write without consent gets ECONSENT');
+  assert.equal(r.scriptTrash.code, 'ECONSENT', 'a destructive script call is refused before staging');
+  assert.equal(r.scriptTrash.destructive, true);
+  assert.equal(r.scriptAsked, 0, 'no script call asked the person');
+  assert.equal(r.dialogOpen, false, 'and no dialog is open');
+  assert.equal(r.scriptWriteAfter.ok, true, JSON.stringify(r.scriptWriteAfter));
+  assert.equal(r.guest.ok, true, JSON.stringify(r.guest));
+  const guest = JSON.parse(r.guest.output);
+  assert.ok(guest.names.includes('notes.list.read'), 'the guest found the command through rail_search');
+  assert.deepEqual(guest.items, ['milk', 'eggs', 'bread', 'tea', 'jam'], 'the guest read real Notes data as JSON');
   console.log('common rail step 2 — Notes and Calendar commands from closed apps, in Chrome: PASS');
 } finally {
   try { ws?.close(); } catch {}

@@ -230,7 +230,7 @@ addEventListener('error', (e) => { if (/ResizeObserver loop/.test(e.message || '
 addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reason));
 </script>
 <script>
-/* naklios-sdk:begin ver=2 sha256=410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c */
+/* naklios-sdk:begin ver=2 sha256=26471735bc13cce39e60a0e665dfc492bd4d5ce6dfe9c9501911b23a9d6a30da */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1145,9 +1145,13 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
         if (!inNakliOS) return Promise.resolve([]);
         return rpc('naklios:commands:search', { query: String(query || '') });
       },
-      call: function (name, input) {
+      // options.ask === false: the host opens no dialog. A call that would need the person's answer returns
+      // { ok:false, code:'ECONSENT' } instead (scripts use this; hosts without it ignore the field and may ask).
+      call: function (name, input, options) {
         if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
-        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+        var payload = { name: String(name || ''), input: input || {} };
+        if (options && options.ask === false) payload.ask = false;
+        return rpc('naklios:commands:call', payload, COMMAND_CALL_TIMEOUT_MS);
       },
     },
     experimental_widgets: {
