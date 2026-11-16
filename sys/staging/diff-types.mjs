@@ -50,6 +50,40 @@ export function cellText(cell) {
   return '';
 }
 
+// "deleteRows" -> "Delete rows": an op name a person can read.
+export function plainWords(name) {
+  const words = String(name || '').replace(/[._-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim().toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'Change';
+}
+// A short readable value: scalars as text, arrays and objects as a count — never raw JSON.
+function plainValue(v) {
+  if (v === null || v === undefined) return 'none';
+  if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? '' : 's'}`;
+  if (typeof v === 'object') { const n = Object.keys(v).length; return `${n} entr${n === 1 ? 'y' : 'ies'}`; }
+  return String(v).slice(0, 120);
+}
+// A structural op the app sent without a plain line: name it in words and list its fields as
+// "field value" pairs, so the person still sees what it touches. An op that carries its own
+// `label` (or `text`) string is shown with that wording instead.
+function plainOpRow(op) {
+  const own = typeof op.label === 'string' && op.label.trim() ? op.label.trim()
+    : typeof op.text === 'string' && op.text.trim() ? op.text.trim() : '';
+  if (own) return { label: own.slice(0, 300), before: '', after: '', change: 'edit' };
+  const details = Object.entries(op).filter(([k]) => k !== 'op').slice(0, 8)
+    .map(([k, v]) => `${plainWords(k).toLowerCase()} ${plainValue(v)}`).join(', ');
+  return { label: op.op ? plainWords(op.op) : 'Unknown change', before: '', after: details, change: 'edit' };
+}
+// One app line "label: before -> after" (a "-" means empty) as a review row; any other line is
+// shown whole in the After column.
+function lineRow(line) {
+  const text = String(line).slice(0, 400);
+  const m = /^(.+?): (.*) -> (.*)$/.exec(text);
+  if (!m) return { label: 'Change', before: '', after: text, change: 'edit' };
+  const before = m[2] === '-' ? '' : m[2];
+  const after = m[3] === '-' ? '' : m[3];
+  return { label: m[1], before, after, change: classify(before, after) };
+}
+
 // A Reckon staged transaction -> review rows. The native diff is
 // { sheet, sheetName?, ops:[], inverse:[] } — `ops` carries the AFTER state and
 // `inverse` the BEFORE (Reckon precomputes it at stage time, so the reviewer
@@ -80,7 +114,7 @@ export function normalizeCellRange(diff) {
   for (const op of ops) {
     if (!op || typeof op !== 'object') continue;
     if (op.op !== 'setCells' || !op.cells) {
-      rows.push({ label: op.op ? `${op.op}` : '(unknown op)', before: '', after: JSON.stringify(op), change: 'edit' });
+      rows.push(plainOpRow(op));
       operationCount++;
       continue;
     }
@@ -101,12 +135,21 @@ export function normalizeCellRange(diff) {
     }
   }
 
+  // A diff with no ops may still carry the app's plain change lines ("B10: - -> 111").
+  if (!rows.length && Array.isArray(diff && diff.lines)) {
+    for (const line of diff.lines.slice(0, 500)) { if (typeof line === 'string' && line.trim()) rows.push(lineRow(line)); }
+  }
+
   const sheet = (diff && (diff.sheetName || diff.sheet)) || '';
   const cells = cellRows.size;
   const counts = [];
   if (cells) counts.push(`${cells} cell${cells === 1 ? '' : 's'}`);
   if (operationCount) counts.push(`${operationCount} operation${operationCount === 1 ? '' : 's'}`);
-  const summary = counts.join(', ') || '0 changes';
+  if (!cells && !operationCount && rows.length) counts.push(`${rows.length} change${rows.length === 1 ? '' : 's'}`);
+  // The app's own plain summary ("1 cell, 3 other changes") outranks the host's count: Reckon
+  // sends every change as a labelled setCells row, so the host would count a format row as a cell.
+  const own = typeof (diff && diff.summary) === 'string' && diff.summary.trim() ? diff.summary.trim().slice(0, 200) : '';
+  const summary = own || counts.join(', ') || '0 changes';
   return {
     kind: 'cells',
     summary: sheet ? `${sheet} — ${summary}` : summary,
@@ -192,6 +235,22 @@ export function normalizeAnvilSkill(diff) {
   for (const w of (Array.isArray(d.lint) ? d.lint : [])) rows.push({ label: 'lint', before: '', after: String(w), change: 'edit' });
   const status = d.status ? ` → ${d.status}` : '';
   return { kind: 'skill', summary: `${d.skill || '(skill)'} — ${d.op || 'write'} ${d.path || 'SKILL.md'}${status}`, rows };
+}
+
+// --------------------------------------------------------------- labels ----
+
+// What each staging tool proposes, in words a person reads on the card and in host messages.
+// Internal tool names (reckon.transaction, kanzen.agent) never reach the screen (Reckon review
+// B20, 2026-11-17); a tool with no entry gets a generic verb.
+const TOOL_VERBS = Object.freeze({
+  'reckon.transaction': 'wants to change the spreadsheet',
+  'draft.transaction': 'wants to edit the document',
+  'kanzen.card-move': 'wants to move a card',
+  'kanzen.agent': 'wants to change the board',
+  skill_manage: 'wants to save a skill',
+});
+export function toolVerb(tool) {
+  return TOOL_VERBS[tool] || 'wants to make a change';
 }
 
 // -------------------------------------------------------------- register ----

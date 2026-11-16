@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K6LMyqFvQ/2WebzBhGXcZQxw8Cd6hekC8lzzqlYp32o=' 'sha256-7CM4ETlw8thZ9Zq3Bx/5edWMaRdLI8JFZMR1nJigqVI=' 'sha256-msYN23W+12txPFEeJuauJ4MFxF0oeGHTead5eUdzFeo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K6LMyqFvQ/2WebzBhGXcZQxw8Cd6hekC8lzzqlYp32o=' 'sha256-UHZZwARY6gNgEeVZjWNSk0sCAkHqfNibPLUZazpIBkU=' 'sha256-msYN23W+12txPFEeJuauJ4MFxF0oeGHTead5eUdzFeo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Reckon</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -11921,7 +11921,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
      fresh by .github/workflows/vendor-sdk.yml. Never edit it here; a change
      the app needs goes into sdk/naklios.js in NakliTechie/nakliOS. -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed */
+/* naklios-sdk:begin ver=2 sha256=5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -12799,6 +12799,15 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
           tool: tool, diff: diff, expires: options.expires,
           reversible: options.reversible === true,
         });
+      },
+      // Take back a card this app staged, for example after the person's own edit made the
+      // proposal stale. The host removes it only for the frame that staged it. Standalone
+      // there is no card, so it resolves with a fallback marker.
+      withdraw: function (proposalId) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, withdrawn: false });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        if (typeof proposalId !== 'string' || !proposalId) return Promise.reject(new Error('naklios.review.withdraw needs a proposal id'));
+        return rpc('naklios:review:withdraw', { proposal_id: proposalId });
       },
       onDecision: function (cb) {
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
