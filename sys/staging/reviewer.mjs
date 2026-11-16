@@ -18,10 +18,12 @@
 // an invisible refusal teaches the person nothing.
 
 import { normalizeEnvelope, decideCommit, isExpired } from './envelope.mjs';
+import { toolVerb } from './diff-types.mjs';
 
 // Build the pure view model for one staged proposal.
-// `ctx` = { actor:'person'|'agent', grant?, reversible?, now? } — the same shape
-// decideCommit takes, plus `now` for expiry.
+// `ctx` = { actor:'person'|'agent', grant?, reversible?, now?, appName?, appOpen? } — the
+// shape decideCommit takes, plus `now` for expiry, the app's catalog name for the heading
+// (falls back to the app id), and whether the app's window is open (for the Show/Open control).
 export function buildReviewModel(envelope, ctx = {}) {
   const normalized = normalizeEnvelope(envelope); // throws if the app never registered — a proposal is never un-renderable
   const now = ctx.now ?? Date.now();
@@ -33,9 +35,14 @@ export function buildReviewModel(envelope, ctx = {}) {
   const committable = !expired && decision.allowed;
   const blockedReason = expired ? 'proposal expired — re-stage against current state' : (decision.allowed ? '' : decision.reason);
 
+  const appName = typeof ctx.appName === 'string' && ctx.appName.trim() ? ctx.appName.trim() : envelope.app;
   return {
     proposalId: envelope.proposal_id,
     app: envelope.app,
+    appName,
+    appOpen: ctx.appOpen !== false,
+    // The plain verb is what the person reads; the tool id stays in the model for History only.
+    verb: toolVerb(envelope.tool),
     tool: envelope.tool,
     renderer: envelope.preview_renderer,
     kind: normalized.kind,
@@ -62,7 +69,9 @@ function el(doc, tag, className, text) {
 
 // Render one proposal card. `onCommit(model)` / `onDiscard(model)` are optional;
 // with neither, the card is a read-only preview (what a History replay shows).
-export function renderReview(model, { doc, onCommit, onDiscard } = {}) {
+// `onShowApp(model)`, when given, adds a control that shows the app's window
+// ("Show Reckon") or, when the app is closed, opens it ("Open Reckon").
+export function renderReview(model, { doc, onCommit, onDiscard, onShowApp } = {}) {
   if (!doc) throw new Error('renderReview needs a document (inject it — the reviewer is realm-agnostic)');
 
   const card = el(doc, 'article', 'nk-rev');
@@ -70,11 +79,14 @@ export function renderReview(model, { doc, onCommit, onDiscard } = {}) {
   card.setAttribute('data-proposal', model.proposalId);
   // The card names itself for assistive tech; without this a queue of cards is
   // an undifferentiated list of "article".
-  card.setAttribute('aria-label', `${model.app} proposal ${model.proposalId}`);
+  // Plain words only: the app's name and a verb, never the internal tool id (Reckon review B20).
+  const appName = model.appName || model.app;
+  const verb = model.verb || 'wants to make a change';
+  card.setAttribute('aria-label', `${appName} ${verb}`);
 
   const head = el(doc, 'header', 'nk-rev-head');
-  head.appendChild(el(doc, 'span', 'nk-rev-app', model.app));
-  head.appendChild(el(doc, 'code', 'nk-rev-tool', model.tool));
+  head.appendChild(el(doc, 'span', 'nk-rev-app', appName));
+  head.appendChild(el(doc, 'span', 'nk-rev-verb', verb));
   head.appendChild(el(doc, 'span', 'nk-rev-summary', model.summary));
   if (model.expired) head.appendChild(el(doc, 'span', 'nk-rev-flag nk-rev-expired', 'expired'));
   card.appendChild(head);
@@ -82,7 +94,7 @@ export function renderReview(model, { doc, onCommit, onDiscard } = {}) {
   // The diff table. Tabular before/after IS a table — a11y gets scope'd headers
   // and a caption instead of a div grid.
   const table = el(doc, 'table', 'nk-rev-diff');
-  const caption = el(doc, 'caption', null, `${model.summary} (${model.renderer})`);
+  const caption = el(doc, 'caption', null, model.summary || `Changes from ${appName}`);
   table.appendChild(caption);
   const thead = el(doc, 'thead');
   const hrow = el(doc, 'tr');
@@ -135,6 +147,13 @@ export function renderReview(model, { doc, onCommit, onDiscard } = {}) {
   if (typeof onDiscard === 'function') discard.addEventListener?.('click', () => onDiscard(model));
   foot.appendChild(discard);
 
+  if (typeof onShowApp === 'function') {
+    const show = el(doc, 'button', 'nk-rev-show', `${model.appOpen === false ? 'Open' : 'Show'} ${appName}`);
+    show.setAttribute('type', 'button');
+    show.addEventListener?.('click', () => onShowApp(model));
+    foot.appendChild(show);
+  }
+
   card.appendChild(foot);
   return card;
 }
@@ -142,7 +161,7 @@ export function renderReview(model, { doc, onCommit, onDiscard } = {}) {
 // The one reviewer over many apps: N envelopes (any mix of apps) -> one element.
 // `ctx` may be a single context or a function (envelope) -> ctx, so a queue can
 // carry a different grant per proposal.
-export function renderReviewQueue(envelopes, ctx = {}, { doc, onCommit, onDiscard } = {}) {
+export function renderReviewQueue(envelopes, ctx = {}, { doc, onCommit, onDiscard, onShowApp } = {}) {
   if (!doc) throw new Error('renderReviewQueue needs a document');
   const list = el(doc, 'section', 'nk-rev-queue');
   list.setAttribute('aria-label', 'Staged proposals');
@@ -150,7 +169,7 @@ export function renderReviewQueue(envelopes, ctx = {}, { doc, onCommit, onDiscar
   for (const env of envelopes) {
     const model = buildReviewModel(env, typeof ctx === 'function' ? ctx(env) : ctx);
     models.push(model);
-    list.appendChild(renderReview(model, { doc, onCommit, onDiscard }));
+    list.appendChild(renderReview(model, { doc, onCommit, onDiscard, onShowApp }));
   }
   return { element: list, models };
 }
