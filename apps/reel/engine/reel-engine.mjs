@@ -1494,6 +1494,16 @@ const Demux = (() => {
     };
   }
 
+  /* Cues and chapters in the container's time, moved onto Reel's timeline (see startOffsetS). */
+  function shiftTimes(items, offsetS) {
+    if (!(offsetS > 0)) return items;
+    return items.map(item => ({
+      ...item,
+      startS: Math.max(0, item.startS - offsetS),
+      endS: Number.isFinite(item.endS) ? Math.max(0, item.endS - offsetS) : item.endS,
+    }));
+  }
+
   async function describeTrack(nativeTrack, sessionId) {
     const [
       codec,
@@ -1642,6 +1652,20 @@ const Demux = (() => {
     const container = CONTAINER_NAMES.get(format) || 'wav';
     if (container === 'ogg' && sourceInfo.file) await refuseOggVideo(sourceInfo.file);
     const nativeDescriptors = await Promise.all(nativeTracks.map(track => describeTrack(track, sessionId)));
+    // Position 0 is the first presented frame or sample of any track. MPEG-TS (and any
+    // container whose timestamps start late) carries a start offset, for example 1.4 s;
+    // packets, samples, cues, chapters and key frames are shifted by it at this boundary,
+    // and the duration becomes end minus start. A start at or below 0 (MP4 edit lists,
+    // AAC priming) keeps today's timeline, so the offset is never negative.
+    const starts = nativeDescriptors.map(track => track.startTimestamp).filter(Number.isFinite);
+    const startOffsetS = starts.length ? Math.max(0, Math.min(...starts)) : 0;
+    if (startOffsetS > 0) {
+      for (const track of nativeDescriptors) {
+        if (Number.isFinite(track.startTimestamp)) track.startTimestamp -= startOffsetS;
+        if (Number.isFinite(track.duration)) track.duration = Math.max(0, track.duration - startOffsetS);
+      }
+    }
+    const mediaDuration = Math.max(0, duration - startOffsetS);
     const nativeById = new Map(nativeDescriptors.map((track, index) => [track.id, nativeTracks[index]]));
     let textInspection = null;
     if (sourceInfo.file && ['mkv', 'webm'].includes(container)) {
@@ -1656,7 +1680,10 @@ const Demux = (() => {
       track.interlaced = !!interlace[index]?.interlaced;
       track.fieldOrder = interlace[index]?.fieldOrder || null;
     });
-    const tracks = nativeDescriptors.concat(textInspection?.descriptors || []);
+    const textDescriptors = (textInspection?.descriptors || []).map(track => (
+      startOffsetS > 0 ? { ...track, duration: mediaDuration } : track
+    ));
+    const tracks = nativeDescriptors.concat(textDescriptors);
     if (tracks.length > CONFIG.demux.maxTrackCount) {
       throw fail(
         'TrackLimitError',
@@ -1672,12 +1699,14 @@ const Demux = (() => {
         container,
         format: format.name,
         mimeType,
-        duration,
+        duration: mediaDuration,
         tracks,
-        chapters: textInspection?.chapters || [],
+        chapters: shiftTimes(textInspection?.chapters || [], startOffsetS),
       },
       nativeById,
       textInspection,
+      startOffsetS,
+      rawDuration: duration,
     };
   }
 
@@ -1698,7 +1727,9 @@ const Demux = (() => {
         textInspection: inspected.textInspection,
         sessionId,
         container: inspected.result.container,
-        duration: inspected.result.duration,
+        // The container's own end time: the text readers close open cues against it.
+        duration: inspected.rawDuration,
+        startOffsetS: inspected.startOffsetS,
         },
       };
       input = null;
@@ -1750,6 +1781,8 @@ const Demux = (() => {
       throw fail('UnsupportedTrackError', 'ERR_DEMUX_TRACK_TYPE', `Packets are unavailable for ${nativeTrack.type} tracks.`);
     }
 
+    const offsetS = active.startOffsetS || 0;
+    fromPts += offsetS;
     try {
       const sink = new EncodedPacketSink(nativeTrack);
       const packetTimeoutMs = CONFIG.demux.packetReadTimeoutMs ?? CONFIG.demux.probeTimeoutMs;
@@ -1777,10 +1810,11 @@ const Demux = (() => {
         while (true) {
           const step = await timedPacketRead(iterator.next(), `${track.type} packet read`);
           if (step.done) break;
-          const packet = step.value;
+          let packet = step.value;
           if (!Number.isFinite(packet.timestamp) || !Number.isFinite(packet.duration)) {
             throw fail('MalformedPacketError', 'ERR_DEMUX_PACKET_TIME', 'A packet has invalid timing metadata.');
           }
+          if (offsetS > 0) packet = packet.clone({ timestamp: packet.timestamp - offsetS });
           yield nativeTrack.isVideoTrack()
             ? packet.toEncodedVideoChunk()
             : packet.toEncodedAudioChunk();
@@ -1805,7 +1839,7 @@ const Demux = (() => {
       throw fail('UnknownTrackError', 'ERR_DEMUX_TRACK', 'The requested embedded text track was not found.');
     }
     try {
-      const cues = await active.textInspection.cues(textTrack, active.duration);
+      const cues = shiftTimes(await active.textInspection.cues(textTrack, active.duration), active.startOffsetS);
       for (const cue of cues) {
         if (cue.endS >= fromPts) yield { ...cue };
       }
@@ -1831,10 +1865,12 @@ const Demux = (() => {
     const timeoutMs = CONFIG.demux.packetReadTimeoutMs ?? CONFIG.demux.probeTimeoutMs;
     let iterator = null;
     try {
-      iterator = new AudioSampleSink(nativeTrack).samples(fromS)[Symbol.asyncIterator]();
+      const offsetS = active.startOffsetS || 0;
+      iterator = new AudioSampleSink(nativeTrack).samples(fromS + offsetS)[Symbol.asyncIterator]();
       while (true) {
         const step = await withTimeout(iterator.next(), 'Software audio decode', { timeoutMs });
         if (step.done) break;
+        if (offsetS > 0) step.value.setTimestamp(step.value.timestamp - offsetS);
         yield step.value;
       }
     } catch (error) {
@@ -1852,7 +1888,9 @@ const Demux = (() => {
   async function keyframes(track) {
     if (!active || !track || track.sessionId !== active.sessionId || track.type !== 'video') return [];
     if (active.textInspection?.keyframes && active.container !== 'mp4' && active.container !== 'mov') {
-      return active.textInspection.keyframes(track.number);
+      const offsetS = active.startOffsetS || 0;
+      const times = await active.textInspection.keyframes(track.number);
+      return offsetS > 0 ? times.map(time => Math.max(0, time - offsetS)) : times;
     }
     if (!['mp4', 'mov'].includes(active.container)) return [];
     const nativeTrack = active.nativeById.get(track.id);
@@ -1862,7 +1900,7 @@ const Demux = (() => {
     const times = [];
     let packet = await sink.getFirstKeyPacket({ metadataOnly: true });
     while (packet && times.length < 100_000 && performance.now() < deadline) {
-      times.push(packet.timestamp);
+      times.push(Math.max(0, packet.timestamp - (active.startOffsetS || 0)));
       packet = await sink.getNextKeyPacket(packet, { metadataOnly: true });
     }
     return times;
@@ -2088,14 +2126,7 @@ const Libav = (() => {
    */
   async function open(file, { sniff: checkSignature = true } = {}) {
     if (checkSignature && !await sniff(file)) return null;
-    if (file instanceof RangedFile) {
-      // libav.js reads through a worker that needs a real Blob; a ranged reader cannot cross it.
-      // Named here, before any rung download or consent prompt.
-      const error = new Error(`${file.name} needs the legacy-format decoder, which reads only local files, not ranged reads.`);
-      error.name = 'LibavRungError';
-      error.code = 'ERR_LIBAV_RANGED_READER';
-      throw error;
-    }
+    // A RangedFile passes through: the rung answers libav's block reads with its slices.
     const module = await loadModule();
     if (typeof module?.openLibavSource !== 'function') return null;
     const source = await module.openLibavSource(file, {
@@ -2806,6 +2837,11 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
   let route = null;
   let downmix = false;
   let drainedAt = null;
+  // PCM frames posted to the worklet in this prepare, counted on the main thread. The
+  // worklet's own `state` report can arrive after the decoder has finished (Firefox),
+  // so the prebuffer check reads this count instead. Port messages keep their order, so
+  // every posted frame is in the ring before the later `play` message.
+  let enqueuedFrames = 0;
   let stats = {
     bufferedFrames: 0,
     consumedFrames: 0,
@@ -2935,6 +2971,7 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     audioData.close();
     if (downmix && planes.length > 2) planes = stereoFold(planes);
     if (!planes.length || !planes[0].length) return true;
+    if (localNode === node) enqueuedFrames += planes[0].length;
     localNode.port.postMessage({ type: 'enqueue', planes }, planes.map(plane => plane.buffer));
     return true;
   }
@@ -2963,6 +3000,7 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     const leadFrames = fromS < 0 ? Math.round(-fromS * sourceRate) : 0;
     stateAtContextS = context.currentTime;
     stats = { bufferedFrames: 0, consumedFrames: 0, droppedFrames: 0, underrunFrames: 0 };
+    enqueuedFrames = 0;
     drainedAt = null;
     lastError = null;
     errorHandler = onError;
@@ -3020,7 +3058,9 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
 
     const prebufferFrames = Math.min(Math.ceil(sourceRate * 0.08), Math.ceil(sourceRate * CONFIG.sync.audioRingSeconds));
     const deadline = performance.now() + 5_000;
-    while (stats.bufferedFrames < prebufferFrames && decoderActive && !lastError && performance.now() < deadline) {
+    // Lead silence (a positive audio delay) counts as buffered, as the worklet reports it.
+    const bufferedFrames = () => enqueuedFrames + leadFrames;
+    while (bufferedFrames() < prebufferFrames && decoderActive && !lastError && performance.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 5));
     }
     if (lastError) {
@@ -3028,7 +3068,7 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
       stopNode();
       throw error;
     }
-    if (stats.bufferedFrames === 0) {
+    if (bufferedFrames() === 0) {
       stopNode();
       throw fail('AudioPrebufferError', 'ERR_AUDIO_PREBUFFER', 'The audio decoder produced no playable PCM data.');
     }
@@ -3655,6 +3695,13 @@ const Playback = (() => {
     publish();
     emit('playback:pause', { positionS: clock.current() });
   }
+  /* Pause and blank the picture: the renderer closes its queued frames, the frame on
+     screen, and the WebGPU renderer's snapshot clone, so no VideoFrame stays open while
+     the host shows its start screen. The file stays loaded; the next load replaces it. */
+  function clearPicture() {
+    pause();
+    renderer?.clear();
+  }
   async function seek(positionS) {
     if (!metadata) throw new Error('Load media before seeking.');
     if (!Number.isFinite(positionS)) throw new TypeError('Seek time must be finite.');
@@ -4094,6 +4141,7 @@ const Playback = (() => {
     attach,
     play,
     pause,
+    clearPicture,
     seek,
     setRate,
     setVolume,
@@ -4355,6 +4403,8 @@ const Engine = {
   attach(canvas) { return Playback.attach(canvas); },
   play() { return Playback.play(); },
   pause() { Playback.pause(); },
+  /** Pause and blank the picture, closing every VideoFrame the engine holds (call on "close file"). */
+  clearPicture() { Playback.clearPicture(); },
   seek(s) { return Playback.seek(s); },
   setRate(rate) { Playback.setRate(rate); },
   /** 0 to 2; above 1 the gain stage boosts (200% at 2). */

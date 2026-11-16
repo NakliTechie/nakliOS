@@ -282,7 +282,13 @@ export function install(ctx) {
   async function rememberFolder(handle) {
     lastFolder = handle;
     render();
-    try { await ctx.Storage.set(LAST_FOLDER_KEY, handle); } catch (error) { ctx.surface('storage', error); }
+    try {
+      await ctx.Storage.set(LAST_FOLDER_KEY, handle);
+    } catch (error) {
+      // WebKit cannot store a directory handle in IndexedDB (DataCloneError). Reopening is then not
+      // offered after a reload; nothing else is affected, so no error toast (release D6).
+      if (error?.name !== 'DataCloneError') ctx.surface('storage', error);
+    }
   }
 
   async function loadDirectory(handle) {
