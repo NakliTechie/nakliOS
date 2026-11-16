@@ -5258,6 +5258,34 @@
           "destination": "board.schema.json"
         }
       ]
+    },
+    {
+      "id": "pellucia",
+      "repo": "NakliTechie/pellucia",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "deck.schema.json",
+          "destination": "deck.schema.json"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
     }
   ]
 }

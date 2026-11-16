@@ -1,0 +1,452 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://naklios.dev/apps/pellucia/deck.schema.json",
+ "title": "Pellucia deck (deck.json inside a .pellucia file)",
+ "type": "object",
+ "required": [
+  "format",
+  "version",
+  "size",
+  "theme",
+  "slides",
+  "elements"
+ ],
+ "properties": {
+  "format": {
+   "const": "pellucia"
+  },
+  "version": {
+   "const": 1
+  },
+  "name": {
+   "type": "string"
+  },
+  "size": {
+   "type": "object",
+   "properties": {
+    "w": {
+     "type": "number"
+    },
+    "h": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "w",
+    "h"
+   ],
+   "description": "Stage size in px; 16:9 is 1920x1080, 4:3 is 1440x1080"
+  },
+  "theme": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "colors": {
+     "type": "object"
+    },
+    "fonts": {
+     "type": "object",
+     "properties": {
+      "heading": {
+       "type": "string"
+      },
+      "body": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "layouts": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "placeholders": {
+      "type": "array"
+     }
+    }
+   }
+  },
+  "footer": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string"
+    },
+    "date": {
+     "type": "string"
+    },
+    "showNumber": {
+     "type": "boolean"
+    },
+    "showDate": {
+     "type": "boolean"
+    },
+    "skipFirst": {
+     "type": "boolean"
+    }
+   }
+  },
+  "slides": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "id",
+     "order",
+     "layoutId"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "order": {
+      "type": "string",
+      "description": "Fractional sort key"
+     },
+     "layoutId": {
+      "type": "string"
+     },
+     "hidden": {
+      "type": "boolean"
+     },
+     "notes": {
+      "type": "object",
+      "description": "Rich text: paragraphs of runs.",
+      "properties": {
+       "paras": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "runs": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "t": {
+              "type": "string"
+             },
+             "b": {
+              "type": "boolean"
+             },
+             "i": {
+              "type": "boolean"
+             },
+             "u": {
+              "type": "boolean"
+             },
+             "s": {
+              "type": "boolean"
+             },
+             "color": {
+              "type": "string"
+             },
+             "size": {
+              "type": "number"
+             },
+             "font": {
+              "type": "string"
+             },
+             "hl": {
+              "type": "string"
+             },
+             "link": {
+              "type": "string"
+             }
+            },
+            "required": [
+             "t"
+            ]
+           }
+          },
+          "list": {
+           "enum": [
+            null,
+            "bullet",
+            "number"
+           ]
+          },
+          "level": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 4
+          },
+          "align": {
+           "enum": [
+            "left",
+            "center",
+            "right",
+            "justify"
+           ]
+          },
+          "lineHeight": {
+           "type": "number"
+          },
+          "spaceBefore": {
+           "type": "number"
+          },
+          "spaceAfter": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "runs"
+         ]
+        }
+       }
+      },
+      "required": [
+       "paras"
+      ]
+     },
+     "transition": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "enum": [
+         "none",
+         "fade",
+         "push"
+        ]
+       },
+       "duration": {
+        "type": "number"
+       }
+      }
+     },
+     "background": {
+      "type": [
+       "object",
+       "null"
+      ]
+     }
+    }
+   }
+  },
+  "elements": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "id",
+     "slideId",
+     "kind",
+     "x",
+     "y",
+     "w",
+     "h",
+     "z"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "slideId": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "text",
+       "rect",
+       "roundrect",
+       "ellipse",
+       "triangle",
+       "line",
+       "arrow",
+       "image",
+       "table"
+      ]
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
+     "w": {
+      "type": "number"
+     },
+     "h": {
+      "type": "number"
+     },
+     "rotation": {
+      "type": "number"
+     },
+     "z": {
+      "type": "string"
+     },
+     "version": {
+      "type": "integer"
+     },
+     "groupIds": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "locked": {
+      "type": "boolean"
+     },
+     "placeholderId": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "alt": {
+      "type": "string"
+     },
+     "text": {
+      "type": "object",
+      "description": "Rich text: paragraphs of runs.",
+      "properties": {
+       "paras": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "runs": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "t": {
+              "type": "string"
+             },
+             "b": {
+              "type": "boolean"
+             },
+             "i": {
+              "type": "boolean"
+             },
+             "u": {
+              "type": "boolean"
+             },
+             "s": {
+              "type": "boolean"
+             },
+             "color": {
+              "type": "string"
+             },
+             "size": {
+              "type": "number"
+             },
+             "font": {
+              "type": "string"
+             },
+             "hl": {
+              "type": "string"
+             },
+             "link": {
+              "type": "string"
+             }
+            },
+            "required": [
+             "t"
+            ]
+           }
+          },
+          "list": {
+           "enum": [
+            null,
+            "bullet",
+            "number"
+           ]
+          },
+          "level": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 4
+          },
+          "align": {
+           "enum": [
+            "left",
+            "center",
+            "right",
+            "justify"
+           ]
+          },
+          "lineHeight": {
+           "type": "number"
+          },
+          "spaceBefore": {
+           "type": "number"
+          },
+          "spaceAfter": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "runs"
+         ]
+        }
+       }
+      },
+      "required": [
+       "paras"
+      ]
+     },
+     "fill": {
+      "type": [
+       "string",
+       "object"
+      ],
+      "description": "#rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6), none, or { gradient }"
+     },
+     "stroke": {
+      "type": [
+       "string",
+       "object"
+      ],
+      "description": "#rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6), none, or { gradient }"
+     },
+     "mediaId": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "cells": {
+      "type": "array"
+     }
+    }
+   }
+  },
+  "media": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "mime": {
+      "type": "string"
+     },
+     "width": {
+      "type": "number"
+     },
+     "height": {
+      "type": "number"
+     },
+     "name": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ }
+}
