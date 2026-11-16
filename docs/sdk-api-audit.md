@@ -72,7 +72,7 @@ prefix today.
 | `onCapabilitiesChange` | function | stable | — | Subscribe to capability changes; replays the current set at registration. |
 | `requestCapabilities` | function | stable | — | Ask the host to re-broadcast capabilities. |
 | `review` | namespace | stable | — | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
-| `review.stage` | function | stable | — | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.stage` | function | stable | — | Send an agent-originated native diff for the person to review, without applying it. The app's own UI edits apply directly and are never staged. Returns a proposal ID; standalone returns a fallback marker. |
 | `review.onDecision` | function | stable | — | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 | `fs` | namespace | stable | — | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | stable | — | Read text. |

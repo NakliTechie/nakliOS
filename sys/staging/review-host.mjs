@@ -10,8 +10,9 @@ const POISON_KEY = 'naklios.review.poison.v1';
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const MAX_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_DIFF_CHARS = 256 * 1024;
-// Each app may stage only its own tools. KanZen stages the person's card moves and,
-// separately, proposals from agents that called its agent face (kanzen.agent).
+// Each app may stage only its own tools, and only for agent-originated changes: an app's own UI
+// edits apply directly (KanZen 4749a28 stopped staging the person's card moves; 'kanzen.card-move'
+// stays listed so a proposal already queued under it can still be decided).
 const APP_TO_TOOL = Object.freeze({
   reckon: ['reckon.transaction'],
   draft: ['draft.transaction'],

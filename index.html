@@ -4768,7 +4768,9 @@ function finalizeCloseWindow(win){
     fsHostUnsubscribeSource(iframe.contentWindow);
     releaseFileGrantsForSource(iframe.contentWindow);
     aiHostCancelSource(iframe.contentWindow);
-    if (reviewHostPromise) void reviewHostPromise.then(host => host.detach(iframe.contentWindow));
+    // Capture the frame now: after win.remove() below, iframe.contentWindow is null and detach would cancel nothing.
+    const reviewSource = iframe.contentWindow;
+    if (reviewHostPromise) void reviewHostPromise.then(host => host.detach(reviewSource));
     const closedSource = iframe.contentWindow;
     void hostAgentReady.then(host => host.catalog.unregister(id, closedSource)).catch(() => {});
     knownIframes.delete(iframe.contentWindow);

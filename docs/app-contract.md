@@ -841,7 +841,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `review` | namespace | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
-| `review.stage` | function | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.stage` | function | Send an agent-originated native diff for the person to review, without applying it. The app's own UI edits apply directly and are never staged. Returns a proposal ID; standalone returns a fallback marker. |
 | `review.onDecision` | function | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 
 ### `fs` (namespace)
