@@ -2074,7 +2074,7 @@ export function validateWorkbook(wb) {
   else {
     // accept every shipped schema version (back-compat, Batch K): an on-disk v1
     // workbook (no charts) still loads unchanged; migrate() upgrades it on open.
-    if (typeof meta.schema !== 'number' || !Number.isInteger(meta.schema) || meta.schema < 1 || meta.schema > SCHEMA_VERSION) err('$.reckon.schema', `schema must be 1..${SCHEMA_VERSION}`);
+    if (typeof meta.schema !== 'number' || !Number.isInteger(meta.schema) || meta.schema < 1 || meta.schema > SCHEMA_VERSION) err('$.reckon.schema', typeof meta.schema === 'number' && meta.schema > SCHEMA_VERSION ? `saved by a newer Reckon (schema ${meta.schema}); reload Reckon to update` : `schema must be 1..${SCHEMA_VERSION}`);
     for (const k of ['app', 'created', 'modified', 'locale']) {
       if (k in meta && typeof meta[k] !== 'string') err(`$.reckon.${k}`, 'must be a string');
     }
@@ -2342,6 +2342,9 @@ export function migrate(wb) {
   if (typeof wb !== 'object' || wb === null || typeof wb.reckon !== 'object' || wb.reckon === null) return wb;
   const from = wb.reckon.schema;
   if (from === SCHEMA_VERSION) return wb;
+  // a workbook from a NEWER Reckon passes through unchanged, so validation
+  // refuses it and the app never rewrites it as an older version (review C11)
+  if (typeof from === 'number' && from > SCHEMA_VERSION) return wb;
   return { ...wb, reckon: { ...wb.reckon, schema: SCHEMA_VERSION } };
 }
 
@@ -12137,7 +12140,7 @@ export function validateWorkbook(wb) {
   else {
     // accept every shipped schema version (back-compat, Batch K): an on-disk v1
     // workbook (no charts) still loads unchanged; migrate() upgrades it on open.
-    if (typeof meta.schema !== 'number' || !Number.isInteger(meta.schema) || meta.schema < 1 || meta.schema > SCHEMA_VERSION) err('$.reckon.schema', `schema must be 1..${SCHEMA_VERSION}`);
+    if (typeof meta.schema !== 'number' || !Number.isInteger(meta.schema) || meta.schema < 1 || meta.schema > SCHEMA_VERSION) err('$.reckon.schema', typeof meta.schema === 'number' && meta.schema > SCHEMA_VERSION ? `saved by a newer Reckon (schema ${meta.schema}); reload Reckon to update` : `schema must be 1..${SCHEMA_VERSION}`);
     for (const k of ['app', 'created', 'modified', 'locale']) {
       if (k in meta && typeof meta[k] !== 'string') err(`$.reckon.${k}`, 'must be a string');
     }
@@ -12405,6 +12408,9 @@ export function migrate(wb) {
   if (typeof wb !== 'object' || wb === null || typeof wb.reckon !== 'object' || wb.reckon === null) return wb;
   const from = wb.reckon.schema;
   if (from === SCHEMA_VERSION) return wb;
+  // a workbook from a NEWER Reckon passes through unchanged, so validation
+  // refuses it and the app never rewrites it as an older version (review C11)
+  if (typeof from === 'number' && from > SCHEMA_VERSION) return wb;
   return { ...wb, reckon: { ...wb.reckon, schema: SCHEMA_VERSION } };
 }
 
@@ -12768,15 +12774,25 @@ export function createAutosave({ session, facade, serialize, debounceMs = 500 } 
   let disposed = false;
   let saves = 0;
   let lastResult = null;
+  // dirty: a transaction happened since the last successful save. Leaving the
+  // page saves only when dirty, so a session that changed nothing never
+  // rewrites the stored workbook (review C1).
+  let dirty = false;
 
   const flush = async () => {
     if (timer !== null) { clearTimeout(timer); timer = null; }
+    const wasDirty = dirty;
+    dirty = false;
     const bytes = await ser(); // ser may be async (e.g. serialize over the worker RPC)
-    lastResult = await facade.save(bytes);
+    try { lastResult = await facade.save(bytes); }
+    catch (e) { dirty = dirty || wasDirty; throw e; }
+    if (lastResult && lastResult.ok === false) dirty = dirty || wasDirty;
     if (!lastResult.queued) saves += 1;
     return lastResult;
   };
+  const flushIfDirty = async () => (dirty || timer !== null ? flush() : null);
   const schedule = () => {
+    dirty = true;
     if (disposed) return;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => { timer = null; flush().catch(() => { /* surfaced via facade.status().lastError */ }); }, debounceMs);
@@ -12786,6 +12802,8 @@ export function createAutosave({ session, facade, serialize, debounceMs = 500 } 
   return {
     schedule,
     flush,
+    flushIfDirty,
+    dirty: () => dirty,
     pending: () => timer !== null,
     stats: () => ({ saves, lastResult }),
     dispose() { disposed = true; if (timer !== null) { clearTimeout(timer); timer = null; } },
@@ -18120,6 +18138,12 @@ const STR = {
   'store.fileInvalid': { en: '{file} failed validation: {msg}', hi: '{file} जाँच में विफल: {msg}' },
   'store.opened': { en: 'Opened {file}', hi: '{file} खोली गई' },
   'store.openFailed': { en: 'Could not open: {msg}', hi: 'खोला नहीं जा सका: {msg}' },
+  'store.notLoadedTitle': { en: 'The stored workbook did not open', hi: 'सहेजी गई वर्कबुक नहीं खुली' },
+  'store.notLoadedBody': { en: 'Reckon could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', hi: 'Reckon इस ब्राउज़र में सहेजी गई वर्कबुक ({from}) नहीं खोल सका: {problem}। उसे बदला नहीं गया है।' },
+  'store.keptAs': { en: 'A copy is kept as {name} in {where}. Reckon writes nothing until you edit the new, empty workbook.', hi: 'एक प्रति {name} नाम से {where} में रखी गई है। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, Reckon कुछ नहीं लिखता।' },
+  'store.notKept': { en: 'Reckon could not keep a copy, so download it now. Reckon writes nothing until you edit the new, empty workbook.', hi: 'Reckon प्रति नहीं रख सका, इसलिए उसे अभी डाउनलोड करें। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, Reckon कुछ नहीं लिखता।' },
+  'store.downloadStored': { en: 'Download the stored copy', hi: 'सहेजी गई प्रति डाउनलोड करें' },
+  'store.startEmpty': { en: 'Start empty', hi: 'खाली से शुरू करें' },
   'store.storedInvalid': { en: 'Stored workbook ({from}) failed validation — starting empty', hi: 'सहेजी गई वर्कबुक ({from}) जाँच में विफल रही — खाली से शुरू कर रहे हैं' },
   'store.storedUnreadable': { en: 'Stored workbook ({from}) is unreadable — starting empty', hi: 'सहेजी गई वर्कबुक ({from}) पढ़ी नहीं जा सकती — खाली से शुरू कर रहे हैं' },
   'table.badName': { en: 'Invalid table name "{name}": use letters, digits, _ and .', hi: 'अमान्य टेबल नाम "{name}": अक्षर, अंक, _ और . इस्तेमाल करें' },
@@ -22765,8 +22789,14 @@ function defineCommands(deps) {
           if (cells > SQL_CELL_CAP) fail('too-big', `the tables hold more than ${SQL_CELL_CAP} cells`);
           tables.push(R().sqlTableFromValues(name, await ctx.read.values(sheet, clipped)));
         }
+        const named = R().sqlReadOnlyError ? R().sqlReadOnlyError(sql, { tables: tables.map((t) => t.name) }) : null;
+        if (named) fail('invalid', named);
         const limit = optInt(input.limit, 'limit', 1, 2000, 200);
         const write = input.write;
+        if (ctx.dryRun) {
+          if (write !== undefined && write !== null) need(isObj(write), 'write must be {"sheet": "New sheet name"} or {"ref": "Sheet1!H1"}');
+          return { ops: [], result: { dryRun: true, tables: tables.map((t) => t.name), note: 'the query runs when you apply the plan' } };
+        }
         let res;
         try { res = await deps.sqlQuery(tables, sql, { limit: write !== undefined ? Infinity : limit }); }
         catch (e) { fail('invalid', `the query failed: ${String(e?.message ?? e)}`); }
@@ -22802,6 +22832,7 @@ function defineCommands(deps) {
         need(typeof input.to === 'number' && Number.isFinite(input.to), 'to must be a number');
         const maxIterations = optInt(input.maxIterations, 'maxIterations', 1, 1000, 100);
         const setA1 = a1Of(set.rect.sri, set.rect.sci); const chA1 = a1Of(ch.rect.sri, ch.rect.sci);
+        if (ctx.dryRun) return { ops: [], result: { dryRun: true, setCell: where(set.sheet, set.rect), changingCell: where(ch.sheet, ch.rect), to: input.to, note: 'the search runs when you apply the plan' } };
         let r;
         try { r = await deps.goalSeek({ sheet: set.sheet.name, setCell: setA1, to: input.to, changingCell: chA1, maxIterations }); }
         catch (e) { fail('invalid', String(e?.message ?? e)); }
@@ -23286,6 +23317,10 @@ export function createCommandHandlers(deps) {
     need(Array.isArray(steps) && steps.length >= 1, 'steps must list at least one step such as {"command":"range.write","input":{...}}');
     need(steps.length <= SCRIPT_MAX_STEPS, `a script may have at most ${SCRIPT_MAX_STEPS} steps`);
     const ctx = await makeCtx(true);
+    // a dry run (the Ask Reckon preview) plans and checks every step but runs
+    // nothing with an outside effect: sql.run and goal.seek do not execute
+    // before the person approves (review C6)
+    ctx.dryRun = dryRun;
     const results = []; const ops = []; const later = [];
     let enforce = false;
     for (let i = 0; i < steps.length; i += 1) {
@@ -30037,7 +30072,20 @@ const sqlStrip = (sql) => String(sql ?? '')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/'(?:[^']|'')*'/g, "''")
   .replace(/"(?:[^"]|"")*"/g, '""');
-export function sqlReadOnlyError(sql) {
+// Functions that read files, URLs, settings or the environment. A query may
+// read only the sheet ranges registered as tables (review C6).
+const SQL_BANNED_FUNCS = /^(read_\w*|glob|getenv|sniff_\w*|parquet_\w*|iceberg_\w*|delta_\w*|query|query_table|current_setting|duckdb_\w*|pragma_\w*|which_secret|load_aws_credentials|httpfs\w*|http_\w*|s3_\w*|scan_\w*|json_execute_serialized_sql|from_csv\w*|from_json\w*|sqlite_\w*|postgres_\w*|mysql_\w*)$/i;
+// strings blanked, comments dropped, double-quoted identifiers KEPT (DuckDB
+// treats FROM "data.csv" as a file read, so their text matters)
+const sqlStripKeepIdents = (sql) => String(sql ?? '')
+  .replace(/--[^\n]*/g, ' ')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/'(?:[^']|'')*'/g, "''");
+// opts.tables: the registered table names; when given, every FROM / JOIN
+// target must be one of them or a name the query defines in WITH
+export function sqlReadOnlyError(sql, { tables = null } = {}) {
+  const raw = String(sql ?? '');
+  if (/:\/\//.test(raw)) return 'a query may not name a URL';
   const bare = sqlStrip(sql).trim().replace(/;\s*$/, '');
   if (!bare) return 'the query is empty';
   if (bare.includes(';')) return 'run one statement at a time';
@@ -30045,6 +30093,20 @@ export function sqlReadOnlyError(sql) {
   if (!first || !SQL_READ_STARTS.includes(first.toUpperCase())) return 'only read-only queries (SELECT, WITH, VALUES, FROM, SUMMARIZE, DESCRIBE) can run';
   const w = SQL_WRITE_WORDS.exec(bare);
   if (w) return `"${w[1].toUpperCase()}" is not allowed in a read-only query (write a column with that name in double quotes)`;
+  if (/\b(SET|RESET|CALL|USE)\b/i.test(bare)) return 'settings and procedures cannot be used in a query';
+  for (const m of bare.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+    if (SQL_BANNED_FUNCS.test(m[1])) return `${m[1]}() reads outside the sheet; a query may read only the ranges given as tables`;
+  }
+  const kept = sqlStripKeepIdents(sql).trim().replace(/;\s*$/, '');
+  const ctes = new Set([...kept.matchAll(/(?:\bWITH\b|,)\s*(?:RECURSIVE\s+)?("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\)\s*)?AS\s*(?:NOT\s+)?(?:MATERIALIZED\s*)?\(/gi)].map((m) => m[1].replace(/^"|"$/g, '').replace(/""/g, '"').toLowerCase()));
+  const allowed = tables ? new Set(tables.map((t) => String(t).toLowerCase())) : null;
+  for (const m of kept.matchAll(/\b(?:FROM|JOIN)\s+(?!\()("(?:[^"]|"")*"|''|[^\s,()]+)/gi)) {
+    const tok = m[1];
+    if (tok === "''") return 'a query may read only the ranges given as tables, not a file';
+    const name = tok.startsWith('"') ? tok.slice(1, -1).replace(/""/g, '"') : tok;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return `"${name}" is not a table name; a query may read only the ranges given as tables`;
+    if (allowed && !allowed.has(name.toLowerCase()) && !ctes.has(name.toLowerCase())) return `"${name}" is not one of the tables (${[...allowed].join(', ')})`;
+  }
   return null;
 }
 // a table name a person can type unquoted
@@ -30107,6 +30169,31 @@ export function sqlResultOps(result, { sheetId = null, anchor = { r: 0, c: 0 }, 
 }
 
 // ---------- DuckDB loader (lazy, once per tab) ----------
+// CREATE TABLE + chunked INSERT statements for one sheet table. Column types:
+// DOUBLE when every non-empty value is a number, BOOLEAN when every one is a
+// boolean, else VARCHAR (values written as text). Pure, unit-tested.
+const sqlLit = (v, type) => {
+  if (v === null || v === undefined || v === '') return 'NULL';
+  if (type === 'DOUBLE') return Number.isFinite(v) ? String(v) : 'NULL';
+  if (type === 'BOOLEAN') return v ? 'TRUE' : 'FALSE';
+  return `'${String(v).replace(/'/g, "''")}'`;
+};
+export function sqlTableStatements(tb, { chunk = 500 } = {}) {
+  const cols = tb.columns.length ? tb.columns : ['col1'];
+  const types = cols.map((_, i) => {
+    const vals = tb.rows.map((r) => r[i]).filter((v) => v !== null && v !== undefined && v !== '');
+    if (vals.length && vals.every((v) => typeof v === 'number')) return 'DOUBLE';
+    if (vals.length && vals.every((v) => typeof v === 'boolean')) return 'BOOLEAN';
+    return 'VARCHAR';
+  });
+  const out = [`CREATE TABLE ${anQuote(tb.name)} (${cols.map((c, i) => `${anQuote(c)} ${types[i]}`).join(', ')})`];
+  for (let i = 0; i < tb.rows.length; i += chunk) {
+    const rows = tb.rows.slice(i, i + chunk).map((r) => `(${cols.map((_, j) => sqlLit(r[j], types[j])).join(', ')})`);
+    out.push(`INSERT INTO ${anQuote(tb.name)} VALUES ${rows.join(', ')}`);
+  }
+  return out;
+}
+
 let anDuck = null;
 const anLoadDuck = () => {
   if (anDuck) return anDuck;
@@ -30120,6 +30207,12 @@ const anLoadDuck = () => {
     const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
     URL.revokeObjectURL(boot);
+    // no files, no URLs, no extension installs, and no way to turn them back
+    // on from a query: tables arrive as INSERT statements (review C6)
+    const c = await db.connect();
+    try {
+      for (const q of ['SET autoinstall_known_extensions=false', 'SET autoload_known_extensions=false', 'SET enable_external_access=false', 'SET lock_configuration=true']) await c.query(q);
+    } finally { await c.close(); }
     return db;
   })();
   anDuck.catch(() => { anDuck = null; }); // a failed load (offline) can be retried
@@ -30130,20 +30223,14 @@ const anQuote = (id) => `"${String(id).replace(/"/g, '""')}"`;
 // run one read-only query over tables [{ name, columns, rows }] in a fresh
 // connection; -> { columns, rows, rowCount }
 export async function sqlRunDuck(tables, sql, { limit = SQL_PREVIEW_ROWS } = {}) {
-  const err = sqlReadOnlyError(sql);
+  const err = sqlReadOnlyError(sql, { tables: tables.map((t) => t.name) });
   if (err) throw new Error(err);
   const db = await anLoadDuck();
   const conn = await db.connect();
-  const files = [];
   try {
     for (const tb of tables) {
-      const file = `rk_${++anSeq}_${tb.name}.json`;
-      const objs = tb.rows.map((r) => Object.fromEntries(tb.columns.map((c, i) => [c, r[i] === undefined ? null : r[i]])));
-      await db.registerFileText(file, JSON.stringify(objs));
-      files.push(file);
       await conn.query(`DROP TABLE IF EXISTS ${anQuote(tb.name)}`);
-      if (objs.length) await conn.insertJSONFromPath(file, { name: tb.name });
-      else await conn.query(`CREATE TABLE ${anQuote(tb.name)} (${tb.columns.map((c) => `${anQuote(c)} VARCHAR`).join(', ') || '"col1" VARCHAR'})`);
+      for (const q of sqlTableStatements(tb)) await conn.query(q);
     }
     const res = await conn.query(sql.trim().replace(/;\s*$/, ''));
     const columns = res.schema.fields.map((f) => f.name);
@@ -30155,7 +30242,6 @@ export async function sqlRunDuck(tables, sql, { limit = SQL_PREVIEW_ROWS } = {})
     return { columns, rows, rowCount: all.length };
   } finally {
     for (const tb of tables) { try { await conn.query(`DROP TABLE IF EXISTS ${anQuote(tb.name)}`); } catch { /* best effort */ } }
-    for (const f of files) { try { await db.dropFile(f); } catch { /* older builds lack dropFile */ } }
     await conn.close();
   }
 }
@@ -30432,7 +30518,7 @@ export function createAnalysis({ client, txApply, showDialog, toast, activeSheet
 
 // single-file composition: register on the shared namespace
 const NSan = (globalThis.Reckon ||= {});
-Object.assign(NSan, { createAnalysis, goalSeekSolve, sqlReadOnlyError, sqlTableName, sqlTableFromValues, sqlCellValue, sqlResultOps, sqlRunDuck, AN_DUCKDB_VERSION, SQL_PREVIEW_ROWS, SQL_MAX_CELLS });
+Object.assign(NSan, { createAnalysis, goalSeekSolve, sqlReadOnlyError, sqlTableName, sqlTableFromValues, sqlCellValue, sqlResultOps, sqlRunDuck, sqlTableStatements, AN_DUCKDB_VERSION, SQL_PREVIEW_ROWS, SQL_MAX_CELLS });
 //__RK_INLINE_END ui/analysis.mjs
 //__RK_INLINE_BEGIN ui/palette.mjs
 // Reckon — command palette (parity v1.x, row K3). Ctrl/Cmd+K opens a list of
@@ -34107,17 +34193,67 @@ export function createApp({ client, params = new URLSearchParams() }) {
       RK.makeIdbBackend(),
     ] });
     const { bytes, from } = await facade.load();
+    let problem = null; // why the stored workbook did not load, if it did not
     if (bytes && bytes.length) {
       try {
         const wb = JSON.parse(dec(bytes));
         const res = await client.loadWorkbook(wb);
-        if (!res.ok) toast($t('store.storedInvalid', 'Stored workbook ({from}) failed validation — starting empty', { from }), { kind: 'error', ms: 8000 });
-      } catch {
-        toast($t('store.storedUnreadable', 'Stored workbook ({from}) is unreadable — starting empty', { from }), { kind: 'error', ms: 8000 });
+        if (!res.ok) problem = res.errors?.[0] ? `${res.errors[0].path}: ${res.errors[0].msg}` : 'failed validation';
+      } catch (e) {
+        problem = `unreadable (${e?.message ?? e})`;
       }
     }
-    buildAutosave();
+    if (problem) await protectUnloadedStore(bytes, from, problem);
+    else buildAutosave();
     wireFacade();
+  };
+
+  // ---------- a stored workbook that does not load (review C1) ----------
+  // Reckon never writes over a stored workbook it failed to load. The raw bytes
+  // are copied aside under a recovery name in every store that will take them,
+  // the person is told and can download the stored copy, and autosave stays
+  // off until they make a real edit in the new, empty workbook (by then the
+  // copy is safe). Leaving the page without an edit writes nothing.
+  let unloadedStore = null; // { bytes, name, from, problem } while autosave is held back
+  const protectUnloadedStore = async (bytes, from, problem) => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `workbook.unreadable-${stamp}.reckon.json`;
+    const kept = [];
+    try { await RK.makeOpfsBackend(name).write(bytes); kept.push('browser files (OPFS)'); } catch { /* OPFS unavailable */ }
+    try { await RK.makeIdbBackend({ key: name }).write(bytes); kept.push('browser database (IndexedDB)'); } catch { /* IDB unavailable */ }
+    if (fsaState.dir) {
+      try {
+        const fh = await fsaState.dir.getFileHandle(name, { create: true });
+        const w = await fh.createWritable(); await w.write(bytes); await w.close();
+        kept.push('your folder');
+      } catch { /* folder write refused */ }
+    }
+    unloadedStore = { bytes, name, from, problem };
+    console.warn(`[reckon] stored workbook (${from}) did not load: ${problem}; kept as ${name}`);
+    // autosave starts with the person's first real edit, not before
+    const arm = () => {
+      if (!unloadedStore || autosave) return;
+      unloadedStore = null;
+      buildAutosave();
+      autosave.schedule();
+    };
+    client.on('transaction', arm);
+    const body = document.createElement('div');
+    const p1 = document.createElement('p');
+    p1.textContent = $t('store.notLoadedBody', 'Reckon could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', { from, problem });
+    const p2 = document.createElement('p');
+    p2.textContent = kept.length
+      ? $t('store.keptAs', 'A copy is kept as {name} in {where}. Reckon writes nothing until you edit the new, empty workbook.', { name, where: kept.join(', ') })
+      : $t('store.notKept', 'Reckon could not keep a copy, so download it now. Reckon writes nothing until you edit the new, empty workbook.');
+    body.append(p1, p2);
+    showDialog({
+      title: $t('store.notLoadedTitle', 'The stored workbook did not open'),
+      body,
+      buttons: [
+        { label: $t('store.downloadStored', 'Download the stored copy'), primary: true, onClick: () => downloadBytes(bytes, name, 'application/json') },
+        { label: $t('store.startEmpty', 'Start empty'), onClick: (api) => api.close() },
+      ],
+    });
   };
 
   // ---------- fixture loading (e2e / screens; http only) ----------
@@ -35773,7 +35909,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     // since the user's last pause. visibilitychange->hidden fires early enough
     // for the async serialize+write to usually complete; pagehide is the backstop.
     // (NakliOS beforeClose below covers the hosted-close path.)
-    const flushOnExit = () => { autosave?.flush().catch(() => {}); };
+    const flushOnExit = () => { autosave?.flushIfDirty().catch(() => {}); }; // nothing changed -> nothing written (review C1)
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnExit(); });
     window.addEventListener('pagehide', flushOnExit);
 
@@ -35795,7 +35931,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
             if (th && th.mood) document.documentElement.setAttribute('data-nakli-mood', th.mood);
           } catch { /* ignore a malformed theme */ }
         });
-        nak.beforeClose(() => autosave?.flush().catch(() => {}));
+        nak.beforeClose(() => autosave?.flushIfDirty().catch(() => {}));
         nak.ready();
         updateHostTitle();
       } catch { /* standalone / older host — stay inert */ }
