@@ -1,0 +1,1994 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Pellucia",
+      "extensions": [
+        ".pellucia",
+        ".json",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif",
+        ".svg"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "tool.select",
+      "label": "Select",
+      "description": "Pick the select tool: click to select, drag to move, drag on empty space for a marquee.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "V",
+        "Escape"
+      ]
+    },
+    {
+      "name": "tool.text",
+      "label": "Text box",
+      "description": "Pick the text box tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "T"
+    },
+    {
+      "name": "tool.rect",
+      "label": "Rectangle",
+      "description": "Pick the rectangle tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "R"
+    },
+    {
+      "name": "tool.roundrect",
+      "label": "Rounded rectangle",
+      "description": "Pick the rounded rectangle tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+R"
+    },
+    {
+      "name": "tool.ellipse",
+      "label": "Ellipse",
+      "description": "Pick the ellipse tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "O"
+    },
+    {
+      "name": "tool.triangle",
+      "label": "Triangle",
+      "description": "Pick the triangle tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+3"
+    },
+    {
+      "name": "tool.line",
+      "label": "Line",
+      "description": "Pick the line tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "L"
+    },
+    {
+      "name": "tool.arrow",
+      "label": "Arrow",
+      "description": "Pick the arrow tool: drag on the slide to place one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "A"
+    },
+    {
+      "name": "tool.table",
+      "label": "Table",
+      "description": "Pick the table tool: click for a 3 by 3 table, or drag to size one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+T"
+    },
+    {
+      "name": "deck.read",
+      "label": "Read deck",
+      "description": "Read the deck as a compact list: each slide's id, number, layout, notes and elements (id, kind, box, placeholder type, text, table cells, image alt). Optional slides narrows it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these slides"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "slide.snapshot",
+      "label": "Snapshot slide",
+      "description": "A PNG of one slide, for an agent to look at. maxSize caps the long edge in px (default 960). Returns { dataUrl, width, height }.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id (default: the current slide)"
+          },
+          "maxSize": {
+            "type": "number",
+            "description": "Longest edge in px (default 960)",
+            "minimum": 32,
+            "maximum": 3840
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "layout.list",
+      "label": "List layouts",
+      "description": "The slide layouts this deck offers: id, name and placeholders (id, type title|subtitle|body|picture).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "theme.list",
+      "label": "List themes",
+      "description": "The built-in themes (id, name, colours, fonts) and the deck's current theme.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "deck.find",
+      "label": "Find text",
+      "description": "Find slides and elements whose text or notes contain `query` (case-insensitive). Returns [{ slide, element?, inNotes?, text }].",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Text to find"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "deck.new",
+      "label": "New deck",
+      "description": "Start a new deck (the current one stays in its file and in the recovery copy). size is 16:9 or 4:3; theme is a theme id.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "string",
+            "description": "16:9 or 4:3",
+            "enum": [
+              "16:9",
+              "4:3"
+            ]
+          },
+          "theme": {
+            "type": "string",
+            "description": "Theme id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Deck name"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Alt+N"
+    },
+    {
+      "name": "deck.open",
+      "label": "Open…",
+      "description": "Open a deck (.pellucia or deck .json) from NakliOS storage or this computer. Replaces the deck on screen.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "deck.save",
+      "label": "Save",
+      "description": "Save the deck as a .pellucia file: into NakliOS storage when hosted, else to a file the person picks (an agent call downloads it instead).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "File name (default: the deck name)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "deck.export",
+      "label": "Export…",
+      "description": "Export the deck: format pdf (the browser print dialog, one slide per page; needs a person), png (one slide, or every slide as a ZIP), pptx (PowerPoint) or pellucia. slides limits it to some slides. scale is 1 to 3 for png. Returns where it went.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "pdf, png, pptx or pellucia",
+            "enum": [
+              "pdf",
+              "png",
+              "pptx",
+              "pellucia"
+            ]
+          },
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these slides (default: all, hidden ones skipped for pdf and png)"
+          },
+          "scale": {
+            "type": "number",
+            "description": "PNG scale, 1 to 3 (default 1)",
+            "minimum": 1,
+            "maximum": 3
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "shortcut": "Mod+Shift+E"
+    },
+    {
+      "name": "deck.set",
+      "label": "Deck settings",
+      "description": "Set the deck name and footer: footer { text, date, showNumber, showDate, skipFirst (no footer on the first slide) }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Deck name"
+          },
+          "footer": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Footer text"
+              },
+              "date": {
+                "type": "string",
+                "description": "Date text (empty: today)"
+              },
+              "showNumber": {
+                "type": "boolean",
+                "description": "Show slide numbers"
+              },
+              "showDate": {
+                "type": "boolean",
+                "description": "Show the date"
+              },
+              "skipFirst": {
+                "type": "boolean",
+                "description": "Hide the footer on the first slide"
+              }
+            },
+            "required": []
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "deck.resize",
+      "label": "Slide size",
+      "description": "Change the slide size: 16:9 (1920x1080) or 4:3 (1440x1080). Elements scale with the stage.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "string",
+            "description": "16:9 or 4:3",
+            "enum": [
+              "16:9",
+              "4:3"
+            ]
+          }
+        },
+        "required": [
+          "size"
+        ]
+      }
+    },
+    {
+      "name": "theme.apply",
+      "label": "Apply theme",
+      "description": "Apply a theme to the whole deck: a built-in theme id (theme.list), or { colors: { bg, text, heading, muted, accent1..accent6 as #rrggbb }, fonts: { heading, body } } to change parts. Elements that use theme colours and fonts change with it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "description": "Theme id"
+          },
+          "colors": {
+            "type": "object",
+            "description": "Colour overrides by token"
+          },
+          "fonts": {
+            "type": "object",
+            "properties": {
+              "heading": {
+                "type": "string",
+                "description": "sans, serif, mono or a font family"
+              },
+              "body": {
+                "type": "string",
+                "description": "sans, serif, mono or a font family"
+              }
+            },
+            "required": []
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "slide.add",
+      "label": "New slide",
+      "description": "Add a slide after `after` (default: the current slide) with a layout (layout.list; default title-content). Optional title and body fill its title and body placeholders (body: one bullet per line). Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "layout": {
+            "type": "string",
+            "description": "Layout id"
+          },
+          "after": {
+            "type": "string",
+            "description": "Slide id to add after"
+          },
+          "index": {
+            "type": "integer",
+            "description": "Position from 0 (instead of after)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title text"
+          },
+          "body": {
+            "description": "Plain text (one paragraph per line; \"- \" starts a bullet, \"1. \" a numbered item) or a rich Text { paras: [{ runs: [{ t, b, i, u, s, color, size, font, hl, link }], list, level, align }] }",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+M"
+    },
+    {
+      "name": "slide.delete",
+      "label": "Delete slide",
+      "description": "Delete slides and everything on them (undo brings them back). A deck keeps at least one slide.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "slide.move",
+      "label": "Move slide",
+      "description": "Move slides to position `index` (0 is first), counted among the slides that are not moving.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "index": {
+            "type": "integer",
+            "description": "New position from 0"
+          }
+        },
+        "required": [
+          "index"
+        ]
+      }
+    },
+    {
+      "name": "slide.duplicate",
+      "label": "Duplicate slide",
+      "description": "Duplicate slides; each copy lands after the last of them. Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+D"
+    },
+    {
+      "name": "slide.hide",
+      "label": "Hide slide",
+      "description": "Hide or show slides: a hidden slide stays in the deck but present mode skips it. hidden defaults to toggling.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "true hides, false shows (default: toggle)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "slide.layout",
+      "label": "Layout",
+      "description": "Apply a layout (layout.list) to slides. Placeholder content moves into the new layout's placeholders of the same type; content with no place stays where it is.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "layout": {
+            "type": "string",
+            "description": "Layout id"
+          }
+        },
+        "required": [
+          "layout"
+        ]
+      }
+    },
+    {
+      "name": "slide.notes",
+      "label": "Speaker notes",
+      "description": "Set a slide's speaker notes (plain text or rich Text). They show in the presenter view and in deck.read.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id (default: the current slide)"
+          },
+          "notes": {
+            "description": "Plain text (one paragraph per line; \"- \" starts a bullet, \"1. \" a numbered item) or a rich Text { paras: [{ runs: [{ t, b, i, u, s, color, size, font, hl, link }], list, level, align }] }",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "notes"
+        ]
+      }
+    },
+    {
+      "name": "slide.transition",
+      "label": "Transition",
+      "description": "Set the transition into slides: type none, fade or push, duration in ms (0–5000, default 400). all: true applies it to every slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "Apply to every slide"
+          },
+          "type": {
+            "type": "string",
+            "description": "none, fade or push",
+            "enum": [
+              "none",
+              "fade",
+              "push"
+            ]
+          },
+          "duration": {
+            "type": "number",
+            "description": "Milliseconds",
+            "minimum": 0,
+            "maximum": 5000
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    },
+    {
+      "name": "slide.background",
+      "label": "Background",
+      "description": "Set slide backgrounds: { color } (#rrggbb or a theme colour), { gradient: { type linear|radial, angle, stops: [{ at 0–1, color }] } }, { mediaId } for an image, or null for the theme background. all: true applies it to every slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "Apply to every slide"
+          },
+          "background": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "{ color } | { gradient } | { mediaId } | null"
+          }
+        },
+        "required": [
+          "background"
+        ]
+      }
+    },
+    {
+      "name": "slide.go",
+      "label": "Go to slide",
+      "description": "Show a slide in the editor: by id, or by number n (1 is first).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          },
+          "n": {
+            "type": "integer",
+            "description": "Slide number from 1"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "slide.next",
+      "label": "Next slide",
+      "description": "Show the next slide in the editor.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "PageDown"
+    },
+    {
+      "name": "slide.prev",
+      "label": "Previous slide",
+      "description": "Show the previous slide in the editor.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "PageUp"
+    },
+    {
+      "name": "element.add",
+      "label": "Add element",
+      "description": "Add an element to a slide (default: the current slide). kind is text, rect, roundrect, ellipse, triangle, line, arrow, image, table (rows, cols). Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize. text may be plain text. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Kind",
+            "enum": [
+              "text",
+              "rect",
+              "roundrect",
+              "ellipse",
+              "triangle",
+              "line",
+              "arrow",
+              "image",
+              "table"
+            ]
+          },
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Table rows (default 3)"
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Table columns (default 3)"
+          },
+          "props": {
+            "type": "object",
+            "description": "Fields (see the description)"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "element.update",
+      "label": "Change elements",
+      "description": "Change fields of elements (default: the selection). Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "props": {
+            "type": "object",
+            "description": "Fields to set"
+          }
+        },
+        "required": [
+          "props"
+        ]
+      }
+    },
+    {
+      "name": "element.move",
+      "label": "Move",
+      "description": "Move elements by dx, dy (stage px), or the first element to x, y (the rest keep their offsets). Grouped elements move together.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "dx": {
+            "type": "number",
+            "description": "Horizontal offset"
+          },
+          "dy": {
+            "type": "number",
+            "description": "Vertical offset"
+          },
+          "x": {
+            "type": "number",
+            "description": "New left of the first element"
+          },
+          "y": {
+            "type": "number",
+            "description": "New top of the first element"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.resize",
+      "label": "Resize",
+      "description": "Give one element a new box (x, y, w, h; omitted values stay), or scale several from their joint box to `box`.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          },
+          "w": {
+            "type": "number",
+            "description": "Width"
+          },
+          "h": {
+            "type": "number",
+            "description": "Height"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.rotate",
+      "label": "Rotate",
+      "description": "Rotate elements by `by` degrees, or to an absolute angle `to`.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Degrees to add"
+          },
+          "to": {
+            "type": "number",
+            "description": "Absolute degrees"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.delete",
+      "label": "Delete",
+      "description": "Delete elements (default: the selection); grouped elements go together. Undo brings them back.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "Backspace",
+        "Delete"
+      ]
+    },
+    {
+      "name": "element.duplicate",
+      "label": "Duplicate",
+      "description": "Duplicate elements, offset by dx, dy (default 24). Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "dx": {
+            "type": "number",
+            "description": "Offset x"
+          },
+          "dy": {
+            "type": "number",
+            "description": "Offset y"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+D"
+    },
+    {
+      "name": "element.group",
+      "label": "Group",
+      "description": "Group two or more elements on one slide, so they select and move together. Returns { group }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+G"
+    },
+    {
+      "name": "element.ungroup",
+      "label": "Ungroup",
+      "description": "Ungroup the innermost group of each element.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+G"
+    },
+    {
+      "name": "element.order.front",
+      "label": "Bring to front",
+      "description": "Bring to front: change the drawing order of elements on their slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+]"
+    },
+    {
+      "name": "element.order.forward",
+      "label": "Bring forward",
+      "description": "Bring forward: change the drawing order of elements on their slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+]"
+    },
+    {
+      "name": "element.order.backward",
+      "label": "Send backward",
+      "description": "Send backward: change the drawing order of elements on their slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+["
+    },
+    {
+      "name": "element.order.back",
+      "label": "Send to back",
+      "description": "Send to back: change the drawing order of elements on their slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+["
+    },
+    {
+      "name": "element.align.left",
+      "label": "Align left",
+      "description": "Align left: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.align.center",
+      "label": "Align centres",
+      "description": "Align centres: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.align.right",
+      "label": "Align right",
+      "description": "Align right: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.align.top",
+      "label": "Align top",
+      "description": "Align top: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.align.middle",
+      "label": "Align middles",
+      "description": "Align middles: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.align.bottom",
+      "label": "Align bottom",
+      "description": "Align bottom: align elements to each other, or one element to the slide (toSlide forces the slide).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "toSlide": {
+            "type": "boolean",
+            "description": "Align to the slide instead of the selection"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.distribute",
+      "label": "Distribute",
+      "description": "Space three or more elements evenly along axis x or y.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "axis": {
+            "type": "string",
+            "description": "x or y",
+            "enum": [
+              "x",
+              "y"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "element.nudge.left",
+      "label": "Nudge left",
+      "description": "Move the selection left by `by` px (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in stage px (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowLeft",
+        "Shift+ArrowLeft"
+      ]
+    },
+    {
+      "name": "element.nudge.right",
+      "label": "Nudge right",
+      "description": "Move the selection right by `by` px (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in stage px (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowRight",
+        "Shift+ArrowRight"
+      ]
+    },
+    {
+      "name": "element.nudge.up",
+      "label": "Nudge up",
+      "description": "Move the selection up by `by` px (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in stage px (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowUp",
+        "Shift+ArrowUp"
+      ]
+    },
+    {
+      "name": "element.nudge.down",
+      "label": "Nudge down",
+      "description": "Move the selection down by `by` px (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in stage px (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowDown",
+        "Shift+ArrowDown"
+      ]
+    },
+    {
+      "name": "text.set",
+      "label": "Set text",
+      "description": "Replace the text of a text box or shape: plain text (one paragraph per line; \"- \" starts a bullet, \"1. \" a numbered item, two leading spaces per level) or a rich Text { paras: [{ runs: [{ t, b, i, u, s, color, size (px), font (heading|body|sans|serif|mono), hl, link }], list (bullet|number|null), level 0–4, align }] }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Element id (default: the selected element)"
+          },
+          "text": {
+            "description": "Plain text (one paragraph per line; \"- \" starts a bullet, \"1. \" a numbered item) or a rich Text { paras: [{ runs: [{ t, b, i, u, s, color, size, font, hl, link }], list, level, align }] }",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "text.format",
+      "label": "Format text",
+      "description": "Format all the text of elements: marks (b, i, u, s, color, size, font, hl, link; b/i/u/s true or false, size in px, color a colour, font heading|body|sans|serif|mono or a family, link a URL; null clears) and paragraph fields (list bullet|number|null, level 0–4, align left|center|right|justify, lineHeight, spaceBefore, spaceAfter). The editor formats a text selection itself.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          },
+          "marks": {
+            "type": "object",
+            "description": "Run marks to set"
+          },
+          "para": {
+            "type": "object",
+            "description": "Paragraph fields to set"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "text.replace",
+      "label": "Replace text",
+      "description": "Replace every occurrence of `find` with `replace` in text boxes, shapes, tables and (with notes: true) speaker notes. Case-sensitive. Returns { count }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "find": {
+            "type": "string",
+            "description": "Text to find"
+          },
+          "replace": {
+            "type": "string",
+            "description": "Replacement"
+          },
+          "notes": {
+            "type": "boolean",
+            "description": "Also replace in speaker notes"
+          }
+        },
+        "required": [
+          "find",
+          "replace"
+        ]
+      }
+    },
+    {
+      "name": "image.insert",
+      "label": "Picture…",
+      "description": "Insert a picture on a slide: dataUrl (data:image/png;base64,…) or url of a same-origin image. With no source, the person picks a file (needs a click). into fills a picture placeholder element. The image is downscaled to 2048 px and stored once. Returns { id, mediaId }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "A data: URL"
+          },
+          "url": {
+            "type": "string",
+            "description": "A same-origin URL"
+          },
+          "slide": {
+            "type": "string",
+            "description": "Slide id"
+          },
+          "into": {
+            "type": "string",
+            "description": "Picture placeholder element id"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          },
+          "w": {
+            "type": "number",
+            "description": "Width"
+          },
+          "h": {
+            "type": "number",
+            "description": "Height"
+          },
+          "alt": {
+            "type": "string",
+            "description": "Alt text"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Shift+I"
+    },
+    {
+      "name": "table.cell",
+      "label": "Set cell",
+      "description": "Set one table cell: text (plain or rich) and/or fill (a colour, or null for none). row and col count from 0.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "row": {
+            "type": "integer",
+            "description": "Row from 0"
+          },
+          "col": {
+            "type": "integer",
+            "description": "Column from 0"
+          },
+          "text": {
+            "description": "Plain text (one paragraph per line; \"- \" starts a bullet, \"1. \" a numbered item) or a rich Text { paras: [{ runs: [{ t, b, i, u, s, color, size, font, hl, link }], list, level, align }] }",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "fill": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cell fill"
+          }
+        },
+        "required": [
+          "id",
+          "row",
+          "col"
+        ]
+      }
+    },
+    {
+      "name": "table.row_add",
+      "label": "Add row",
+      "description": "Insert a table row at `at` (default: at the end).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Row index from 0"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "table.row_delete",
+      "label": "Delete row",
+      "description": "Delete the table row at `at`.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Row index from 0"
+          }
+        },
+        "required": [
+          "id",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "table.col_add",
+      "label": "Add column",
+      "description": "Insert a table column at `at` (default: at the end).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Column index from 0"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "table.col_delete",
+      "label": "Delete column",
+      "description": "Delete the table column at `at`.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table element id"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Column index from 0"
+          }
+        },
+        "required": [
+          "id",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "edit.copy",
+      "label": "Copy",
+      "description": "Copy elements to the clipboard.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+C"
+    },
+    {
+      "name": "edit.cut",
+      "label": "Cut",
+      "description": "Cut elements to the clipboard.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+X"
+    },
+    {
+      "name": "edit.paste",
+      "label": "Paste",
+      "description": "Paste elements, text or a picture onto the current slide.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+V"
+    },
+    {
+      "name": "edit.undo",
+      "label": "Undo",
+      "description": "Undo the newest edit made by the caller (an agent undoes its own edits; the person's Undo skips agent edits). A change that was since overwritten is skipped, and the result says so.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Z"
+    },
+    {
+      "name": "edit.redo",
+      "label": "Redo",
+      "description": "Redo the caller's newest undone edit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+Shift+Z",
+        "Mod+Y"
+      ]
+    },
+    {
+      "name": "edit.select",
+      "label": "Select",
+      "description": "Select elements by id on the current slide (an empty list clears the selection).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Element ids"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "edit.select_all",
+      "label": "Select all",
+      "description": "Select every element on the current slide.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+A"
+    },
+    {
+      "name": "view.zoom_fit",
+      "label": "Fit slide",
+      "description": "Zoom the editor so the slide fits.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+1"
+    },
+    {
+      "name": "view.zoom_100",
+      "label": "Actual size",
+      "description": "Zoom the editor to 100%.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+0"
+    },
+    {
+      "name": "view.zoom_in",
+      "label": "Zoom in",
+      "description": "Zoom the editor in.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+=",
+        "Mod+Shift+="
+      ]
+    },
+    {
+      "name": "view.zoom_out",
+      "label": "Zoom out",
+      "description": "Zoom the editor out.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+-"
+    },
+    {
+      "name": "view.sorter",
+      "label": "Slide sorter",
+      "description": "Show or hide the slide sorter: a grid of every slide to reorder and select.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "view.notes",
+      "label": "Notes pane",
+      "description": "Show or hide the speaker notes pane under the slide.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Shift+N"
+    },
+    {
+      "name": "present.start",
+      "label": "Present from start",
+      "description": "Present from start: present full screen from the first slide. Fullscreen needs a click or key press from a person; without one the slide fills the window.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+Enter",
+        "F5"
+      ]
+    },
+    {
+      "name": "present.current",
+      "label": "Present from current slide",
+      "description": "Present from current slide: present full screen from the current slide. Fullscreen needs a click or key press from a person; without one the slide fills the window.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+Shift+Enter",
+        "Shift+F5"
+      ]
+    },
+    {
+      "name": "present.presenter",
+      "label": "Presenter view",
+      "description": "Present with the presenter view in a second window (current and next slide, notes, timer, clock). Needs a click from a person; pop-ups must be allowed.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Alt+F5"
+    },
+    {
+      "name": "present.stop",
+      "label": "Stop presenting",
+      "description": "Leave present mode.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "ai.outline",
+      "label": "Draft a deck…",
+      "description": "Draft slides from a topic or pasted notes with the NakliOS model: the model returns a plan of slides (layout, title, bullets, notes), shown for review, then added after the current slide as one undo step. count is the number of slides (default 6, at most 20). apply: true skips the review.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Topic, outline or notes"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Slides wanted",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Add without the review step"
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "ai.rewrite",
+      "label": "Rewrite…",
+      "description": "Rewrite the text of an element with the NakliOS model: how is shorter, clearer, formal, casual, or any instruction. Shown for review unless apply is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Element id (default: the selected element)"
+          },
+          "how": {
+            "type": "string",
+            "description": "shorter, clearer, formal, casual, or an instruction"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Apply without the review step"
+          }
+        },
+        "required": [
+          "how"
+        ]
+      }
+    },
+    {
+      "name": "ai.notes",
+      "label": "Draft notes",
+      "description": "Draft speaker notes for slides from their content with the NakliOS model. Shown for review unless apply is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Slide ids (default: the current slide)"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Apply without the review step"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "script.run",
+      "label": "Run script",
+      "description": "Run a list of commands as one undo step: steps [{ command, input }]. A string \"$N.key\" in an input is step N's result field (1-based), e.g. \"$1.id\". If a step fails nothing changes. At most 200 steps.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Command name"
+                },
+                "input": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Undo label"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
+    },
+    {
+      "name": "help.show",
+      "label": "Keyboard shortcuts",
+      "description": "Show every command and its keys.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "?",
+        "Shift+/"
+      ]
+    }
+  ],
+  "errorCodes": [
+    {
+      "code": "not-found",
+      "meaning": "The slide, element, layout, theme, media or command named does not exist."
+    },
+    {
+      "code": "locked",
+      "meaning": "The element is locked; unlock it first."
+    },
+    {
+      "code": "empty",
+      "meaning": "There is nothing to act on."
+    },
+    {
+      "code": "needs-setup",
+      "meaning": "Something must be selected or made first."
+    },
+    {
+      "code": "wrong-kind",
+      "meaning": "The operation does not apply to this kind of element."
+    },
+    {
+      "code": "bad-file",
+      "meaning": "The file is not a deck Pellucia can read."
+    },
+    {
+      "code": "unsupported",
+      "meaning": "This browser or this page cannot do it (an API or the host is missing)."
+    },
+    {
+      "code": "bad-colour",
+      "meaning": "A colour is not one Pellucia accepts (#rrggbb, #rgb, #rrggbbaa, a theme colour or none)."
+    },
+    {
+      "code": "out-of-range",
+      "meaning": "A number is outside its allowed range."
+    },
+    {
+      "code": "bad-value",
+      "meaning": "A value is not one of the allowed choices or has the wrong form."
+    },
+    {
+      "code": "refused",
+      "meaning": "Any other refusal."
+    }
+  ]
+}

@@ -7818,6 +7818,46 @@
           "bytes": 14845
         }
       ]
+    },
+    {
+      "id": "pellucia",
+      "repo": "NakliTechie/pellucia",
+      "requestedRef": "main",
+      "resolvedCommit": "9383e581654ea7cf8d149e7e127cccc823a39c20",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "2428614d2515a1a590192000ed5a085ae27f413e58545db90a73c425e6da7dd7",
+          "bytes": 1242484,
+          "originalSourceSha256": "35bfa6c6c2fe842748952c615414d57a307d5466bc855b03a9e067249b482ebd",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "63732b8335cda7a338592370495a3b4d53d9f20a4e084099ef48ba5455aa3dcd",
+          "bytes": 56824
+        },
+        {
+          "source": "deck.schema.json",
+          "destination": "deck.schema.json",
+          "sha256": "d529ed0e2d3b4fce0e2dd64047cc18237bd3918c61b0ea44d584d47845ad9c92",
+          "bytes": 8169
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "95d34457f13403506023aec3a15eb6caade325bafba4f22f0215204a016940ba",
+          "bytes": 1396
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        }
+      ]
     }
   ]
 }
