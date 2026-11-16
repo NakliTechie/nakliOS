@@ -699,6 +699,10 @@ jobs:
         run: node sys/host/test/widgets.test.mjs
       - name: App-to-app command Grants
         run: node sys/host/test/app-grants.test.mjs
+      - name: Outside door (pairing, tokens, calls, connection)
+        run: node sys/host/test/door.test.mjs
+      - name: Outside door relay (origins, Host header, forwarding, timeouts)
+        run: node scripts/test-naklios-door-go.mjs
       - name: Anvil app command tool
         run: node sys/ai/test/app-command-tool.test.mjs
 

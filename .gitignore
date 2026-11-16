@@ -26,6 +26,10 @@ plan/
 !extension/**
 !worker/
 !worker/*
+!tools/
+!tools/naklios-door/
+!tools/naklios-door/*
+tools/naklios-door/naklios-door
 !scripts/
 !scripts/*
 !scripts/dish/

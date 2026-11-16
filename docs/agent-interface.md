@@ -42,6 +42,20 @@ Before approval, only content-free ready and capability-request messages can lea
 Other startup messages wait in a bounded queue until the parent is verified; RPC overflow reports an error instead of silently losing writes.
 Standalone pages cannot acquire filesystem or AI capabilities through injected messages.
 
+## Outside door
+
+Programs on this computer reach the app commands through `tools/naklios-door`, a loopback relay on `127.0.0.1:7461`.
+The door is off until the person turns it on in Settings → AI; until then the desktop never connects to `127.0.0.1`.
+The desktop dials out to the relay and decides every request in `sys/host/door.mjs`: the person pairs each program
+once: an ECDH P-256 exchange gives both sides the same key and the same code, the host dialog shows that code, and the
+program asks the person to confirm it in the terminal. The key never crosses the relay; the desktop keeps it as a
+non-extractable CryptoKey in IndexedDB. Every request and answer is signed with HMAC-SHA256 (30-second window,
+single-use nonce kept across tabs). Calls run
+as caller `door:<name>` on the same path as Anvil (reads run; a change needs this visit's consent or returns
+`ECONSENT`; a destructive command always returns `ECONSENT`). The first desktop tab keeps the relay. Each pairing and call is one event in `naklios/history/apps.ndjson`. The relay refuses program requests
+that carry an `Origin` header or a foreign `Host` header, and accepts the desktop side only from `https://naklios.dev`
+(loopback origins with `--dev`).
+
 ## Campaign checks
 
 The campaign harness enforces role grants on role actions and workspace reads.
