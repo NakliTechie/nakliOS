@@ -2943,27 +2943,27 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "23cc18205e753c4eab17679f26d573112607d6b1",
+      "resolvedCommit": "3028b9eaf4fc1e1b89e2ee2334e6e94caf271066",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "aefe91ce9f074afc1b36799cf56a4c2a4dcb23efdfd15da0a1e5c394fe981416",
-          "bytes": 2181109,
-          "originalSourceSha256": "5889ceb4319c942b6c89b0b751c695582e07490cf52bcff091a017163920390d",
+          "sha256": "63d53d117cdde753bb2c38c118b0bb3aa3023874d5e7af088ff8bbda623454e2",
+          "bytes": 2402325,
+          "originalSourceSha256": "b9ffb28345a12f00da064329c220c8c8c7718283ce37ffdcf237fa3dc3040121",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "2192466069d9146e8994c372020e836d9841a66e9cb6d93f4ab85f23906c0b37",
-          "bytes": 67749
+          "sha256": "8f3ad92ed16ee9770188ccdb0db2a8711b08c1ea20857ef10ac395447bf9a0f6",
+          "bytes": 69685
         },
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "2ca434a4f5eff36152ae7ce46088bb52f47d0381c97ac94134fdb8ce0e85aaf5",
-          "bytes": 4665
+          "sha256": "ba3dc5c520402df027057ada0911f5b582c8953d09e18afcc94edd4b832c79bc",
+          "bytes": 7612
         }
       ]
     },
