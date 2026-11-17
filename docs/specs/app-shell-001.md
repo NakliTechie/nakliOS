@@ -507,3 +507,9 @@ Per app, a battery of at least 8 real tasks, run through the Ask box and through
 Chrome over the CDP daemon, inside a local NakliOS that serves the local builds. Cross-app tasks move data between
 apps (Reckon numbers into a Pellucia chart). Each task records pass or fail with the reason, judged from
 `doc.describe` and `view.snapshot`, not from the model's own summary. Results go to the hand-over note.
+
+Planned test (not yet built or run; Chirag, 2026-11-17: "we should also test inter app messaging in the app
+assistant piece"): a battery of assistant jobs that move data or requests between apps over the rail. Examples: a
+Reckon range into a Pellucia chart, a Draft document into Pellucia slides, `files.sendTo` and `openWith` hand-offs
+of a file from one app to another, and `range.subscribe` live links that update the receiving app when the sheet
+changes. Each task is judged in the receiving app, through both the Ask box and the voice hand-off.
