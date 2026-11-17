@@ -199,21 +199,21 @@
       "id": "draft",
       "repo": "NakliTechie/draft",
       "requestedRef": "main",
-      "resolvedCommit": "f373e635136c25465172577c03ce93f503527239",
+      "resolvedCommit": "e13452cf5be21d29788938995837593f9cbf47b5",
       "files": [
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "7b7e9dc3c0e02bd35a0eba33e7d6438f3cc89a8f9ae43197a9a169216ebfb139",
-          "bytes": 1608798,
-          "originalSourceSha256": "3d96258771a2b4163e73dc4c002bc6d35b35e27c9d166ec74d5bb97eee487892",
+          "sha256": "737269879b93543596bd75d094c0fdb6b71f15d768d8990162fc10316b2292f7",
+          "bytes": 1757903,
+          "originalSourceSha256": "a05b3cfc961939464574681a75e3b300ec8ff1c02aa6dd456c376da5e277f422",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "31bf334593668a983cf0343ef9483dbdd465b72f17cbf844644cbad52226edbb",
-          "bytes": 44298
+          "sha256": "e07d95b509726c3252fee7651c4a04deb5ab956e8e5a0d67e2af633861c7e84b",
+          "bytes": 52209
         }
       ]
     },
@@ -221,14 +221,14 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "4749a28b7d429e990a192513deda72b8a69ab6c8",
+      "resolvedCommit": "2a4b798fc4d56f9a7a9835ca7c2e673fe78436b4",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "8432369a8a02f2534e297c6829b0a23f3739ce66a7d594d7efb20b4d551c6a74",
-          "bytes": 921283,
-          "originalSourceSha256": "d5a4c0af08b6f2a9612df5ecffbd95392e46bd41b606e6083b95d54288a2dab4",
+          "sha256": "69d0b2211fc12f3c88b2c79ca4ed1292ecc541bcf4ba3c2c69cf02f4dccfce74",
+          "bytes": 926368,
+          "originalSourceSha256": "f6f2f41a2a8f0ce35294c21912d0a1443228c4086ef52c16ef4a3afddbc503b1",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
@@ -2955,21 +2955,21 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "41c6372addde31254a86eb5e4746f1a1d8783c3a",
+      "resolvedCommit": "53fb84098bf73b71f6eae410ea1786977a7dbaab",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "41b0f48bf1521ff1710074381c06e50415414f51a2aa76e6b7019b5ff6357d7c",
-          "bytes": 2451324,
-          "originalSourceSha256": "ead4d318642f847c219683ba524fa1ec38cad56e5b388406815ca5a33a7be1bd",
+          "sha256": "191368a4712d153fd89006ec9fb23aac87b856480e0db5c659e31179a58b83d9",
+          "bytes": 2593702,
+          "originalSourceSha256": "bf25085fa127351ba4cbc56ac1865604eed6cc3ecc952a8aa038480fbaed1403",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "8f3ad92ed16ee9770188ccdb0db2a8711b08c1ea20857ef10ac395447bf9a0f6",
-          "bytes": 69685
+          "sha256": "2f51ba7f5acaa897269dbfc44327568218611b287ece10e84c98cc6928a766bb",
+          "bytes": 78540
         },
         {
           "source": "sw.js",
@@ -5619,21 +5619,21 @@
       "id": "sonella",
       "repo": "NakliTechie/sonella",
       "requestedRef": "main",
-      "resolvedCommit": "2d25c2b0be841075b6bfa2be8f824ec228d9f8f5",
+      "resolvedCommit": "872ef283a59c6950d1cac011587c05009a931f59",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2d341528a0888bcda60196e9ddde22dfd5a89afe54b348b7147261e463064bdf",
-          "bytes": 2945430,
-          "originalSourceSha256": "8f1b3f452e176c255d7c27662a6fe8c5035de52c00cf4bd9f96168f6722ec888",
+          "sha256": "628f3877d64286ef5ef742c0c2fe0c486918179bf9c08d7d318269048e0dc671",
+          "bytes": 3083802,
+          "originalSourceSha256": "2ced422130f5ee469ee30c946a965ce3e61c8f801a92637bef5aa6553f8977f2",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "e77794a040afe2000270e78bdbd0e8c442e359236bdfa8406553c01c83ba4a96",
-          "bytes": 23193
+          "sha256": "36a54ab08c84305276efaefa02b9ce92cf20431457e39131242098d828089da9",
+          "bytes": 30028
         },
         {
           "source": "sw.js",
@@ -8623,21 +8623,21 @@
       "id": "montella",
       "repo": "NakliTechie/montella",
       "requestedRef": "main",
-      "resolvedCommit": "cd73b126023dc1eb65ab0061eb7fedfebe1b3ca4",
+      "resolvedCommit": "7f28293875ad6da255fa857aa2d339e16ed8e909",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3b20b66d91b6f077402d66e4e9f50684202fccd28a90a2f10c962fef75b220a2",
-          "bytes": 989052,
-          "originalSourceSha256": "f970391661d39db02bc541562043716ab21964c4a6cf1c2b9849a6c18fa4a60b",
+          "sha256": "44f2b9e80e0a17da38ea7658ee4bdc0a23e928975641b55f84b835b73d0b968c",
+          "bytes": 1098496,
+          "originalSourceSha256": "08dc77fc5d614e1198611d05f4de5798b5a9ba7dc4dbda97d5e2f54ee551b134",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "26cadf9af5e8b21340788d630c7f7fef38a684dd8b0cad78c172d587589b3ab7",
-          "bytes": 42995
+          "sha256": "58f9f0fc77307654803d82a7ac11ed5707501af14691c5f4fd82de3652a25855",
+          "bytes": 49485
         },
         {
           "source": "LICENSE",
@@ -8663,21 +8663,21 @@
       "id": "chartella",
       "repo": "NakliTechie/chartella",
       "requestedRef": "main",
-      "resolvedCommit": "784d7786eab21406b5ce9df4087af2c6cae5490f",
+      "resolvedCommit": "a8a624104ac8f8ba789601a0bd09ba6b6baf735b",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "71a81691d740d79dda17982aefae55da2cbf646d09df6730a63d93dd7a061ad4",
-          "bytes": 919702,
-          "originalSourceSha256": "fa692210250bde74911f0857765d6910e224ac43bd8879cc68e6c210f148b173",
+          "sha256": "a3f80c8de4dafad3cddeb213ee1074a05c0fda42da0999bb6081e28f1a55483b",
+          "bytes": 1029307,
+          "originalSourceSha256": "b37e07813e48760a75f58740491cebae70577ff51149e312228e3f6e0d21ae86",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "cfc9d7f038c08b631c99ee2735c9dd92e1966b98c79924e9512fa443ebc8ba2d",
-          "bytes": 74135
+          "sha256": "986b7fd9b1760e6212356025c4bf40e75344c038da2110260cdfa2ee70d5301b",
+          "bytes": 81231
         },
         {
           "source": "LICENSE",
@@ -8703,21 +8703,21 @@
       "id": "pellucia",
       "repo": "NakliTechie/pellucia",
       "requestedRef": "main",
-      "resolvedCommit": "066119d119a45702a38409bbd4db9629b8c156cb",
+      "resolvedCommit": "49716d084f14c220e3de2cc6ebd47b3d6bba3c62",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3229caf52528792520f04422dd4024d17c53e7e7247a7894219c7653eaeeca96",
-          "bytes": 2363883,
-          "originalSourceSha256": "b92177b00118f0000000d08b60f0254dad03d3460666ae676da9b50660bdb954",
+          "sha256": "28ac9f4acc7c6ff1bca31b5f4c9c7b49d9d15777fb245a6a65e822435f7600b7",
+          "bytes": 2478716,
+          "originalSourceSha256": "0d112c7581ead5fcd8673b85670f3799b85d58490c1c4dd22aad8fa5d52b81ef",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "b5d40814b0ad7913b68c544060696d7c530d4cf0ba9efd441431599ee104b42d",
-          "bytes": 86080
+          "sha256": "9d355156382eafe1688020383d440ee296a0814aee67d0eee97e3661e54cee6a",
+          "bytes": 94184
         },
         {
           "source": "deck.schema.json",

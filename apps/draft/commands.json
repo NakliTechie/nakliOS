@@ -30,6 +30,113 @@
       }
     },
     {
+      "name": "file.save",
+      "description": "Save the document where it lives (NakliOS storage when hosted). A new document is saved under its name in NakliOS storage, or in this browser when not hosted. In the Draft editor, e.g. \"save my document\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "file.save_as",
+      "description": "Save under a new name; the copy becomes the document you are editing. kind is naklios (hosted) or browser (standalone: this browser's Draft documents), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as). In the Draft editor, e.g. \"save this as quarterly report\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The new name, without an extension"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "naklios",
+              "browser"
+            ],
+            "description": "Where to save the copy"
+          },
+          "replace": {
+            "type": "boolean",
+            "description": "Overwrite a document of that name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "file.export",
+      "description": "Export a copy in another format; the document stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads. In the Draft editor, e.g. \"export this as a Word file\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "docx",
+              "pdf",
+              "md",
+              "html",
+              "json"
+            ],
+            "description": "docx, pdf (opens the print dialog), md, html or json (.draft.json without saved versions)"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      }
+    },
+    {
+      "name": "file.open",
+      "description": "Show the Open page: Recent, then the documents in storage, then Browse this computer. In the Draft editor, e.g. \"show me my files\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shows": true,
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "file.new",
+      "description": "Show the New page (blank or a template) in the Draft editor, e.g. \"show the new document page\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shows": true,
+      "shortcut": "Mod+Alt+N"
+    },
+    {
+      "name": "file.info",
+      "description": "The current document's name, where it is saved, and whether it has unsaved changes, in the Draft editor, e.g. \"is my document saved\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.print",
+      "description": "Print the document, or save it as PDF, from the Draft editor, e.g. \"print this\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shows": true,
+      "shortcut": "Mod+P"
+    },
+    {
       "name": "document.open",
       "description": "Open a document in the Draft editor by name, e.g. \"open my budget document\".",
       "scope": "write",
@@ -129,7 +236,7 @@
     },
     {
       "name": "text.insert",
-      "description": "Insert text into the open document in the Draft editor, e.g. \"add a sentence at the end\".",
+      "description": "Insert text into the open document in the Draft editor; with markdown: true the text is Markdown and becomes headings, paragraphs, lists and tables, e.g. \"add a sentence at the end\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -141,6 +248,10 @@
           "at": {
             "type": "integer",
             "description": "Where to insert. Leave out to add at the end"
+          },
+          "markdown": {
+            "type": "boolean",
+            "description": "true: text is Markdown (# headings, blank-line paragraphs, - lists, pipe tables) and becomes real blocks; at then defaults to after the last block"
           }
         },
         "required": [
@@ -462,7 +573,8 @@
       "input": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "shortcut": "Mod+Z"
     },
     {
       "name": "history.redo",
@@ -471,7 +583,8 @@
       "input": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "shortcut": "Mod+Y"
     },
     {
       "name": "comments.list",
@@ -705,17 +818,18 @@
     },
     {
       "name": "document.print",
-      "description": "Print the open document, or save it as PDF, from the Draft editor, e.g. \"print this\".",
+      "description": "Print the open document, or save it as PDF, from the Draft editor (alias of file.print), e.g. \"print the document\".",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {}
       },
-      "shows": true
+      "shows": true,
+      "shortcut": "Mod+P"
     },
     {
       "name": "document.export",
-      "description": "Export the open document from the Draft editor as Markdown, HTML, Draft JSON or Word, e.g. \"give me this as markdown\".",
+      "description": "Export the open document from the Draft editor and return it to the caller (file.export saves the copy as a file instead) as Markdown, HTML, Draft JSON or Word, e.g. \"give me this as markdown\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -742,7 +856,7 @@
     },
     {
       "name": "document.new",
-      "description": "Start a new document in the Draft editor, blank or from a template, e.g. \"start a new letter\".",
+      "description": "Start a new document in the Draft editor, blank or from a template, through the shell's New without showing the New page (alias of file.new), e.g. \"start a new letter\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1563,6 +1677,125 @@
           "remove": {
             "type": "boolean",
             "description": "True to delete the rule file at path"
+          }
+        }
+      }
+    },
+    {
+      "name": "doc.describe",
+      "description": "Describe the whole open document for planning: name, word count, outline, and every block with its type, from and to positions and the start of its text; long documents continue with fromBlock, e.g. \"what is in this document\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "fromBlock": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The block to start from (the nextBlock of a cut description)"
+          }
+        }
+      }
+    },
+    {
+      "name": "view.snapshot",
+      "description": "A picture of the page the person sees (a PNG data URL, at most 1,024 px wide) with a summary listing the headings and the word count, e.g. \"show me the page\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "maxWidth": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 1024,
+            "description": "Picture width in pixels (default 1024)"
+          }
+        }
+      }
+    },
+    {
+      "name": "script.run",
+      "description": "Run several Draft commands in order and return each step's result; a failed step stops the script and earlier steps stay applied. Nested scripts, hard-to-undo commands and document switches are refused, e.g. \"add a heading and a paragraph and make the heading bold\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "The steps, in order",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "A Draft command name, e.g. text.insert"
+                },
+                "input": {
+                  "type": "object",
+                  "description": "That command's input"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
+    },
+    {
+      "name": "assistant.ask",
+      "description": "Ask Draft's assistant to do a job in the open document (write, rewrite, summarise, proofread or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status, e.g. \"ask Draft to write a one-page project brief\".",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What to do, in plain words"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "rewrite",
+              "summarise",
+              "proofread"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      }
+    },
+    {
+      "name": "assistant.status",
+      "description": "The state of Draft's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"how is Draft getting on\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "description": "Stop Draft's running assistant job, e.g. \"stop the Draft assistant\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
           }
         }
       }
