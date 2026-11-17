@@ -2007,6 +2007,10 @@
       "ref": "main",
       "files": [
         {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
           "source": "app/ai/asr-worker.js",
           "destination": "app/ai/asr-worker.js"
         },

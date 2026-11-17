@@ -2983,8 +2983,14 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "5fa84cc08eb8c136112714f9730b1c64ab523c66",
+      "resolvedCommit": "1496ba67fb1a33892dc5845322c9b56b75f8bfce",
       "files": [
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "2a207501f6a7346fd6d37bbd2394079ac2034c73354fe3ce17e7636826276591",
+          "bytes": 1085
+        },
         {
           "source": "app/ai/asr-worker.js",
           "destination": "app/ai/asr-worker.js",
@@ -3242,13 +3248,13 @@
         {
           "source": "licences.html",
           "destination": "licences.html",
-          "sha256": "8e4571e0424b184ef8c56f66b2b1789b5fe26f75ead73284fac9db80bf401367",
-          "bytes": 5781
+          "sha256": "bea31dbea9b45951f1bf1cc5ab0250f68b2bdef10d4b35de2d537e675d9b00e4",
+          "bytes": 5936
         },
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "9f18152d25750477c7a50022cbff31f79fac3cb9ab9fa55a7453fb6b8054ed50",
+          "sha256": "83ef1c869fdf5398a687211234899fc0b6edb638ecda2b7428a8c46523a95840",
           "bytes": 7651
         },
         {
