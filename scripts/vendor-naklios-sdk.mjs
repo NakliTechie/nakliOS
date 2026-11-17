@@ -27,20 +27,27 @@
 //                                       [--canonical <url-or-path>]
 //                                       [--check]   # verify only, exit 1 on drift
 //                                       [--adopt]   # one-time: insert the markers
+//                                       [--name app-shell]  # another shared block (default: sdk)
+//
+// --name app-shell vendors sdk/app-shell.js (the app shell, docs/specs/app-shell-001.md)
+// between /* naklios-app-shell:begin … */ and /* naklios-app-shell:end */. With --adopt and
+// no markers yet, the block goes right after the SDK's end marker, in the same <script>.
 //
 // Dependency-free (Node built-ins only).
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const CANONICAL_DEFAULT = 'https://naklios.dev/sdk/naklios.js';
-const BEGIN_RE = /\/\*\s*naklios-sdk:begin\b[^*]*\*\//;
-const END_RE = /\/\*\s*naklios-sdk:end\s*\*\//;
-
 function arg(name, fallback) {
   const i = process.argv.indexOf(name);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
+const NAME = arg('--name', 'sdk');
+if (!/^[a-z][a-z0-9-]*$/.test(NAME)) throw new Error(`--name must be lower-case letters, digits and dashes: ${NAME}`);
+const TAG = `naklios-${NAME}`;
+const CANONICAL_DEFAULT = NAME === 'sdk' ? 'https://naklios.dev/sdk/naklios.js' : `https://naklios.dev/sdk/${NAME}.js`;
+const BEGIN_RE = new RegExp(`/\\*\\s*${TAG}:begin\\b[^*]*\\*/`);
+const END_RE = new RegExp(`/\\*\\s*${TAG}:end\\s*\\*/`);
 const FILE = arg('--file', 'index.html');
 const CANONICAL = arg('--canonical', CANONICAL_DEFAULT);
 const CHECK_ONLY = process.argv.includes('--check');
@@ -63,14 +70,15 @@ function inlineBody(canonical) {
 }
 function sha256(s) { return createHash('sha256').update(s, 'utf8').digest('hex'); }
 function canonicalVersion(canonical) {
-  const m = canonical.match(/@naklios-sdk-version\s+(\d+)/);
+  const m = canonical.match(new RegExp(`@${TAG}-version\\s+(\\d+)`));
   return m ? m[1] : '0';
 }
 function beginMarker(ver, hash) {
-  return `/* naklios-sdk:begin ver=${ver} sha256=${hash} — ` +
-    'DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */';
+  const cmd = NAME === 'sdk' ? 'node scripts/vendor-naklios-sdk.mjs' : `node scripts/vendor-naklios-sdk.mjs --name ${NAME}`;
+  return `/* ${TAG}:begin ver=${ver} sha256=${hash} — ` +
+    'DO NOT EDIT until :end; run `' + cmd + '` */';
 }
-const END_MARKER = '/* naklios-sdk:end */';
+const END_MARKER = `/* ${TAG}:end */`;
 
 // Match the } that closes the { at openBraceIdx, skipping strings and comments.
 // Safe over SDK content: no regex literals; backticks appear only in // comments.
@@ -139,6 +147,12 @@ function findSdkSpan(src) {
 }
 
 function insertMarkers(src) {
+  if (NAME !== 'sdk') {
+    const sdkEnd = src.match(/\/\*\s*naklios-sdk:end\s*\*\//);
+    if (!sdkEnd) throw new Error(`--adopt --name ${NAME} places the block after the SDK; vendor the SDK first`);
+    const at = sdkEnd.index + sdkEnd[0].length;
+    return src.slice(0, at) + `\n/* ${TAG}:begin ver=0 sha256=0 */\n/* ${TAG}:end */` + src.slice(at);
+  }
   const { start, end } = findSdkSpan(src);
   return src.slice(0, start) +
     '/* naklios-sdk:begin ver=0 sha256=0 */\n' +
@@ -158,7 +172,7 @@ if (!beginM || !endM || beginM.index >= endM.index) {
     console.log(`[vendor-sdk] adopted: wrapped ${FILE}'s inlined SDK in markers.`);
   } else {
     console.error(
-      `[vendor-sdk] ${FILE}: no naklios-sdk:begin/end markers found.\n` +
+      `[vendor-sdk] ${FILE}: no ${TAG}:begin/end markers found.\n` +
       '  Run once with --adopt to place them around the inlined SDK\n' +
       '  (see docs/app-contract.md "Vendoring the SDK"), then re-run.',
     );
