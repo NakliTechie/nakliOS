@@ -524,6 +524,26 @@ await test('other apps come through two fixed tools, so the tool list does not g
   assert.deepEqual(calls, [['kanzen.card.add', { title: 'x' }]]);
 });
 
+await test('ask_app hands a whole job to an app assistant (app-shell layer 4)', async () => {
+  const calls = [];
+  const tools = [
+    { name: 'pellucia.assistant.ask', description: "Ask Pellucia's assistant to do a job in the open deck", inputSchema: { type: 'object', properties: {} } },
+    { name: 'pellucia.assistant.status', description: 'The state of the job', inputSchema: { type: 'object', properties: {} } },
+    { name: 'reckon.assistant.ask', description: "Ask Reckon's assistant to do a job in the open workbook", inputSchema: { type: 'object', properties: {} } },
+    { name: 'reckon.assistant.status', description: 'The state of the job', inputSchema: { type: 'object', properties: {} } },
+  ];
+  const apps = { tools, async invoke(name, args) { calls.push([name, args]); return { ok: true, result: name.endsWith('.ask') ? { job: 'j1', started: true } : { state: 'done', summary: 'Made 5 slides.' } }; } };
+  const reg = createToolRegistry(moreTools({ ...standIns().deps, apps }));
+  const tool = reg.list().find((t) => t.name === 'ask_app');
+  assert.ok(tool && /pellucia, reckon/.test(tool.description));
+  const out = (await reg.run('ask_app', { app: 'Pellucia', request: 'make a five-slide deck about solar power' })).result;
+  assert.equal(out.job, 'j1'); assert.equal(out.app, 'pellucia'); assert.match(out.say, /working on it/);
+  assert.equal((await reg.run('app_job_status', { app: 'reckon' })).result.state, 'done');
+  assert.match((await reg.run('ask_app', { app: 'paint', request: 'x' })).error, /no app assistant/);
+  assert.deepEqual(calls.map((c) => c[0]), ['pellucia.assistant.ask', 'reckon.assistant.status']);
+  assert.deepEqual(calls[0][1], { request: 'make a five-slide deck about solar power' });
+});
+
 await test('web search needs a provider; page, Python and skill tools reach their stand-ins', async () => {
   const st = standIns(); let on = true;
   const reg = createToolRegistry(moreTools({ ...st.deps, webOn: () => on }));

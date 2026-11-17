@@ -1,0 +1,71 @@
+<!doctype html><meta charset="utf-8"><title>App shell assistant harness</title>
+<!-- Layer 4 loop checks (docs/specs/app-shell-001.md section 10). Serve the repo (scripts/serve-coi.mjs), open
+     /test/app-shell-assistant-harness.html in Chrome, read window.__result: every check true means pass. -->
+<body><main id="doc"><button id="b1" data-command="item.add">Add</button><button id="b2">Orphan</button></main>
+<script src="/sdk/app-shell.js"></script>
+<script>
+const items = [];
+const commands = [
+  { name: 'item.add', description: 'Add an item with text.', scope: 'write', input: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }, handler: (a) => { items.push(a.text); shell.changed(); return { id: items.length }; } },
+  { name: 'doc.describe', description: 'All items.', scope: 'read', input: { type: 'object', properties: {} }, handler: () => ({ items }) },
+  { name: 'view.snapshot', description: 'Picture.', scope: 'read', input: { type: 'object', properties: {} }, handler: () => { const c = document.createElement('canvas'); c.width = 20; c.height = 20; return { dataUrl: c.toDataURL(), width: 20, height: 20, summary: items.length + ' items' }; } },
+  { name: 'script.run', description: 'Run steps.', scope: 'write', input: { type: 'object', properties: { steps: { type: 'array' } }, required: ['steps'] }, handler: async (a) => { const r = []; for (const s of a.steps) r.push(await commands.find(c => c.name === s.command).handler(s.input)); return { results: r }; } },
+  { name: 'item.clear', description: 'Remove every item.', scope: 'destructive', input: { type: 'object', properties: {} }, handler: () => { items.length = 0; return { ok: true }; } },
+];
+// Scripted model: plan turn, then script.run, find_command, snapshot, finish.
+let turn = 0; window.bodies = [];
+const script = [
+  { content: '1. Add two items\n2. Check' },
+  { tool_calls: [{ id: 'c1', type: 'function', function: { name: 'script__run', arguments: JSON.stringify({ steps: [{ command: 'item.add', input: { text: 'a' } }, { command: 'item.add', input: { text: 'b' } }] }) } }] },
+  { tool_calls: [{ id: 'c2', type: 'function', function: { name: 'find_command', arguments: '{"query":"remove items"}' } }, { id: 'c3', type: 'function', function: { name: 'view__snapshot', arguments: '{}' } }] },
+  { tool_calls: [{ id: 'c4', type: 'function', function: { name: 'finish', arguments: '{"summary":"Added two items."}' } }] },
+];
+const shell = naklishell.mount({
+  app: { id: 'test', name: 'Tester', ext: '.test', docNoun: 'list' },
+  doc: { blank() { items.length = 0; }, serialize() { return JSON.stringify(items); }, load() {} },
+  agent: { mode: 'long', commands: () => commands, prompt: 'A list of items.', core: ['item.add'], skills: [{ id: 'tidy', label: 'Tidy', prompt: 'Sort items.' }],
+    call: async (body) => { window.bodies.push(JSON.parse(JSON.stringify({ ...body, signal: undefined }))); const m = script[turn++] || { content: 'done' }; return { choices: [{ message: { role: 'assistant', content: m.content || '', tool_calls: m.tool_calls } }] }; } },
+});
+</script>
+
+<script>
+window.__result = (async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const s = naklishell.current; s.assistant.open();
+  const box = document.querySelector('.nsh-pane textarea'); box.value = 'add a and b'; box.closest('form').requestSubmit();
+  for (let i = 0; i < 100 && s.assistant.status().state === 'running'; i++) await wait(20);
+  const main = s.assistant.status(), mainItems = items.join();
+  const rest = JSON.parse(await ((async()=>{
+ const wait=ms=>new Promise(r=>setTimeout(r,ms)); const out={};
+ // A: destructive via run_command, person clicks Allow once
+ let n=0; const seqA=[{tool_calls:[{id:'a',type:'function',function:{name:'item__add',arguments:'{"text":"x"}'}}]},{tool_calls:[{id:'b',type:'function',function:{name:'run_command',arguments:'{"name":"item.clear","input":{}}'}}]},{content:'cleared'}];
+ const mk=(seq,extra)=>{const d=document.createElement('div');document.body.append(d);let i=0;return naklishell.mount(Object.assign({mount:d,app:{id:'t'+Math.random(),name:'T',ext:'.t'},doc:{blank(){},serialize(){return ''},load(){}},agent:{mode:'short',commands:()=>commands,call:async(b)=>{const m=seq[i++]; if(m instanceof Error) throw m; return {choices:[{message:{content:m.content||'',tool_calls:m.tool_calls}}]}}}},extra||{}));};
+ items.length=0; const sA=mk(seqA); const jA=await sA.assistant.ask('add then clear');
+ for(let i=0;i<40&&!document.querySelector('dialog.nsh-dlg');i++) await wait(50);
+ const dlg=document.querySelector('dialog.nsh-dlg'); out.dialog=dlg&&dlg.querySelector('h2').textContent; dlg.querySelector('.nsh-primary').click();
+ await jA.done; out.A={st:sA.assistant.status().state, items:items.slice(), steps:sA.assistant.status().lastSteps};
+ // B: plan mode when the model cannot call tools
+ items.length=0; const seqB=[new Error('LFM cannot call tools. Choose ...'),{content:'Sure: {"reply":"Added y","steps":[{"command":"item.add","input":{"text":"y"}}]}'}];
+ const sB=mk(seqB); const jB=await sB.assistant.ask('add y'); await jB.done; out.B={st:sB.assistant.status(), items:items.slice()};
+ // C: stop while the model is thinking
+ const sC=(()=>{const d=document.createElement('div');document.body.append(d);return naklishell.mount({mount:d,app:{id:'tc',name:'T',ext:'.t'},doc:{blank(){},serialize(){return ''},load(){}},agent:{mode:'short',commands:()=>commands,call:(b)=>new Promise((res,rej)=>{b.signal.addEventListener('abort',()=>rej(new Error('aborted')))})}})})();
+ const jC=await sC.assistant.ask('slow'); await wait(100); sC.assistant.stop(); await jC.done; out.C=sC.assistant.status().state;
+ // D: three failures in a row stop the run
+ const bad={tool_calls:[{id:'z',type:'function',function:{name:'item__nope',arguments:'{}'}}]};
+ const sD=mk([bad,bad,bad,bad]); const jD=await sD.assistant.ask('fail'); await jD.done; out.D=sD.assistant.status();
+ return JSON.stringify(out);
+})()));
+  const checks = {
+    planTurnHasNoTools: !window.bodies[0].tools,
+    toolsDotted: window.bodies[1].tools.some(t => t.function.name === 'item__add'),
+    mainDone: main.state === 'done' && mainItems === 'a,b',
+    snapshotSentAsImage: window.bodies[3].messages.some(m => Array.isArray(m.content)),
+    destructiveAsks: rest.dialog === 'This change is hard to undo' && rest.A.items.length === 0,
+    planModeFallback: rest.B.st.mode === 'plan' && rest.B.items.join() === 'y',
+    stopWorks: rest.C === 'stopped',
+    threeFailuresStop: rest.D.state === 'failed',
+    parityFindsOrphan: s.parity().missing.some(m => m.label === 'Orphan'),
+  };
+  return { pass: Object.values(checks).every(Boolean), checks };
+})();
+</script>

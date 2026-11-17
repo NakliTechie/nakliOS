@@ -65,8 +65,38 @@ function appTools(apps) {
     run: (args) => runAppCommand(apps, command.name, args),
   }));
   const others = commands.filter((command) => !APP_TOOL_NAMES[command.name]);
-  if (!others.length) return tuned;
-  return [...tuned, {
+  // App-shell layer 4 (docs/specs/app-shell-001.md section 10.7): an app with its own assistant takes a whole job.
+  // The small voice model only routes it; the app's loop does the work on the model in Settings → AI.
+  const askers = commands.filter((command) => /^[a-z0-9-]+\.assistant\.ask$/.test(command.name));
+  const appOf = (command) => command.name.split('.')[0];
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const pick = (app, suffix) => {
+    const want = norm(app);
+    const hit = askers.find((c) => norm(appOf(c)) === want) || askers.find((c) => norm(c.description).includes(want))
+      || askers.find((c) => want && norm(appOf(c)).startsWith(want));
+    if (!hit) throw new Error(`no app assistant for "${app}"; apps with one: ${askers.map(appOf).join(', ')}`);
+    return `${appOf(hit)}.assistant.${suffix}`;
+  };
+  const handOff = askers.length ? [{
+    name: 'ask_app',
+    description: `Hand a whole job to an app's own assistant, which opens the app and does the work there, for example "make a five-slide deck about solar power" in pellucia. Apps: ${askers.map((c) => appOf(c)).join(', ')} (pellucia slides, reckon spreadsheets, draft documents, chartella whiteboards and diagrams, sonella audio, montella video). Pass the person's request in their words.`,
+    parameters: { type: 'object', properties: {
+      app: { type: 'string', description: 'App id, e.g. pellucia' },
+      request: { type: 'string', description: 'What to do, in the person\'s words' },
+    }, required: ['app', 'request'] },
+    async run({ app, request }) {
+      const name = pick(app, 'ask');
+      const out = await runAppCommand(apps, name, { request: String(request || '') });
+      return { ...(out && typeof out === 'object' ? out : {}), app: name.split('.')[0], say: `${name.split('.')[0]} is working on it` };
+    },
+  }, {
+    name: 'app_job_status',
+    description: 'How a job handed to an app with ask_app is going: running, done or failed, with its summary.',
+    parameters: { type: 'object', properties: { app: { type: 'string', description: 'App id, e.g. pellucia' } }, required: ['app'] },
+    run({ app }) { return runAppCommand(apps, pick(app, 'status'), {}); },
+  }] : [];
+  if (!others.length) return [...tuned, ...handOff];
+  return [...tuned, ...handOff, {
     name: 'find_app_action',
     description: 'Find what another app can do, such as Reckon sheets, Draft documents, KanZen boards or Sheaf PDFs. Call this first, then run_app_action.',
     parameters: { type: 'object', properties: { about: { type: 'string', description: 'The app or the task, e.g. "kanzen card"' } }, required: ['about'] },

@@ -274,6 +274,8 @@ Each layer ships on its own and leaves every app working.
    Format panel stays for shape and slide properties.
 3. **Remaining tabs.** Each app's other controls move into its Office tabs (3.1); the old rail, menu bar and
    toolbar go; the check script (6.3) joins each app's CI.
+4. **Assistant.** One agent loop in the module, an Ask box in the title row, and a hand-off from the voice
+   assistant (section 10). It needs layer 1 only, so it ships before layers 2 and 3.
 
 Checks per layer: each app's own test suite, `check-app-shell.mjs` from layer 3, and a live check in Chrome over
 the CDP daemon in NakliOS and standalone: Save, Save as, Open from Recent, a reload with unsaved changes, and every
@@ -353,3 +355,153 @@ Sources: three read-only surveys of the source trees. Line references are in eac
 | `Mod+L/E/R/J` | none | `Mod+E` flash fill | `Mod+Shift+…` variants |
 | `Mod+Shift+P` | none | none | palette |
 | `Mod+Z`, `Mod+Y`, `Mod+Shift+Z`, `Mod+X/C/V`, `Mod+F` | yes | yes | yes |
+
+## 10. Layer 4: the assistant
+
+Status: DRAFT, 2026-11-17, built for review with six first adopters: Pellucia, Reckon, Draft, Chartella, Sonella
+(audio) and Montella (video). Chirag chose option B: one thin assistant layer in the shared module that uses the
+AI rail, instead of wiring each app's assistant into the voice assistant (A) or keeping separate assistants (C).
+
+The goal: a person, the voice assistant or Anvil can ask any NakliOS app to do real work in it, such as "make a
+five-slide deck about solar power with icons" in Pellucia or "build a budget with a chart" in Reckon. The app does
+the work through its own commands, shows each step, and checks the result with a picture of what it drew.
+
+### 10.1 Entry points
+
+- **Ask box.** The title row gets an **Ask** button between the document name and the app slot. It opens the Ask
+  pane: a right task pane (section 2), 360 px wide, with a text box, the conversation, the plan, each step's state
+  and a **Stop** button. `Mod+Shift+Y` opens it and focuses the box; `Esc` returns focus to the document.
+  `Alt+Q` (search commands) also lists "Ask". `Mod+J` is not used, because section 5.2 gives it to Justify.
+- The button shows only when the app runs inside NakliOS with AI allowed (`naklios.capabilities.ai`). Standalone,
+  the app has no model, so the button is hidden.
+- **Voice and Anvil.** Every adopting app publishes `assistant.ask`, `assistant.status` and `assistant.stop` on
+  the rail (10.7). The voice assistant hands "do X in Pellucia" to the app this way.
+
+### 10.2 One loop in the module
+
+`naklishell.mount({ …, agent })` adds the loop. The app gives:
+
+```js
+agent: {
+  commands: () => list,      // the app's registered commands: { name, description, input, scope, handler }
+  prompt: '…',               // what the document is and how the commands fit together (one paragraph)
+  skills: [{ id, label, when, prompt }],   // optional task recipes (10.6)
+  core: ['slide.add', …],    // optional: the commands sent as tools first (10.3)
+  context: () => ({ … }),    // optional: a short state summary sent with each request (selection, sizes)
+  group: (fn) => …,          // optional: run the whole job as one undo step
+  example: '…',              // placeholder text for the Ask box
+}
+published: () => names,      // mount option: every command the app publishes, for the live parity check (10.8)
+```
+
+The mounted api gains `assistant` (`ask`, `status`, `stop`, `open(skill)`, `close`, `available`, `command(name,
+input)`) and `parity()`; `naklishell.current` is the mounted api, for harnesses.
+
+Each turn calls `naklios.ai.chat.completions.create({ agent: true, tools, messages })`. The tools are:
+
+1. the app's own commands, called in-process through their handlers, so no rail round trip and no host prompt;
+2. `find_command` and `run_command` for app commands beyond the tool cap (10.3);
+3. `other_apps_search` and `other_apps_call`, which reach other apps' commands through
+   `naklios.experimental_commands.search` and `call`; the host's app grant, consent and History apply;
+4. `finish` with a short summary for the person, which ends the run.
+
+Tool names replace `.` with `__` (`slide.add` becomes `slide__add`), because providers accept only
+`[A-Za-z0-9_-]`. A command's result goes back to the model cut to 6,000 characters, with a note when cut.
+
+### 10.3 Tool cap and model choice
+
+- The host takes at most 64 tools per request. An app with more commands sends its `core` list (or its first
+  commands in `commands.json` order), up to 56, plus the fixed tools; the rest stay reachable through
+  `find_command` and `run_command`.
+- The loop runs on the model the person selected in Settings → AI, which the host already uses for every
+  agent request. The module reads `naklios.capabilities.aiProvider`:
+  - `endpoint` (an OpenAI- or Anthropic-compatible endpoint): **long-job mode**. Up to 80 model turns and 400
+    command calls per run; the plan may run to many steps.
+  - anything else (an in-browser model such as LFM3 1.7B): **short-job mode**. Up to 10 model turns, tools limited
+    to `core` (at most 16) plus the fixed tools, and no planning turn. The pane says that long jobs (a whole deck,
+    a full sheet) need an endpoint in Settings → AI.
+- The host reports the selected agent model to each adopting app (it adds the six apps to its agent-app list), so
+  `aiProvider` names the model that will answer, not the general-purpose model.
+- Context stays inside the host's limits: the loop keeps the request, the plan, the last 12 tool exchanges in full
+  and older ones as one line each.
+
+### 10.4 Plan, then batch
+
+1. **Plan.** In long-job mode the first turn asks for a numbered plan in plain words, without tool calls. The pane
+   shows it and runs it at once; the person can press Stop at any time.
+2. **Batch.** Every adopting app publishes `script.run` (`{ steps: [{ command, input }] }`), which runs its own
+   commands in order as one undo step and returns each step's result. Pellucia, Reckon, Chartella and Montella have
+   it already; Draft and Sonella add it. The prompt asks the model to send a slide's or a sheet's worth of steps in
+   one `script.run` call.
+3. **Check.** Every adopting app publishes `view.snapshot`, which returns what the person sees: a PNG of the
+   current slide, sheet range, page, board, waveform or frame (at most 1,024 px wide) plus a text summary. The loop
+   sends the summary to every model and the image only when the provider reads images (endpoint models). The
+   prompt asks the model to check its work with one snapshot before `finish`.
+4. **Stop.** The run ends on `finish`, Stop, the turn or call cap, three failed calls in a row, or a model error.
+   The pane says which.
+
+### 10.5 Progress, consent and review
+
+- **Progress.** The pane lists each step (the command's description and a short result), the plan step it belongs
+  to, and the model turn count. The title row shows "Working… step N" and a Stop button while a run is live.
+- **One undo per run.** The module wraps the run in the app's undo group when the app gives `agent.group(fn)`;
+  otherwise each batch is one undo step.
+- **Consent unchanged.** A request typed in the Ask box is the person's own action in their own app, so in-app
+  write commands run without a host prompt, as a click would. Calls to other apps go through the host, which asks
+  once per visit for changes and every time for hard-to-undo commands. A run started by the voice assistant or
+  Anvil (10.7) has already passed the host's consent for `assistant.ask`, which is a write command.
+- **Review unchanged.** Commands the app stages for NakliOS review when an agent runs them (Reckon, Draft and
+  KanZen stage hard-to-undo writes) are staged the same way when the loop runs them: the module calls handlers
+  with `{ agent: true }` in the context, which those apps already read.
+- The loop never deletes a document or saves under a new name unless the request says so; `file.save` runs as
+  usual through AutoSave.
+
+### 10.6 The apps' own assistants become skills
+
+| App | Today | Under the shared loop |
+|---|---|---|
+| Reckon | Ask: plans command steps from a sheet question (`ui/assist.mjs`) | Its planner prompt and examples become `agent.prompt` and the skill "sheet"; the Ask entry in its menu opens the shared pane. |
+| Draft | Assistant panel: rewrite, summarise, proofread a selection | Each action becomes a skill ("rewrite", "summarise", "proofread") with its prompt; the panel's buttons open the shared pane with the skill chosen. |
+| Pellucia | AI chat that edits the deck | Its system prompt becomes `agent.prompt` and the skill "deck"; the chat button opens the shared pane. |
+| Chartella | Chat with plan mode | Its prompt becomes `agent.prompt` and the skill "board". |
+| Sonella, Montella | none | New prompts for audio and video editing. |
+
+A skill is a prompt fragment and a label, picked by the person in the pane or by the model through its `when` text.
+The old panels stay one release as entry points to the shared pane, then go.
+
+### 10.7 Hand-off from the voice assistant
+
+- The module registers three rail commands for every adopting app:
+  - `assistant.ask` `{ request, skill? }`, scope write, `shows: true`: opens the Ask pane, starts the run and
+    returns at once with `{ job, started: true }`, because a long job outlives the rail's call time-out.
+  - `assistant.status` `{ job? }`, scope read: the run's state, step count, last steps and, when done, the summary.
+  - `assistant.stop` `{ job? }`, scope write: stops the run.
+- The voice assistant gets one tool, `ask_app` `{ app, request }`: it finds `<app>.assistant.ask` in the rail
+  catalog, calls it (the host opens the app and brings its window forward), and says "Pellucia is working on it".
+  A follow-up "how is it going" calls `assistant.status`. The small on-device voice model only routes the request;
+  the app's loop does the work on the model in Settings → AI.
+
+### 10.8 Agent-surface parity
+
+Every adopting app publishes, besides `file.*` (6.3) and `assistant.*` (10.7):
+
+- `script.run` and `view.snapshot` (10.4); `view.snapshot` is an alias where the app already has a snapshot
+  (`slide.snapshot`, `board.snapshot`, `frame.snapshot`);
+- `doc.describe`, scope read: a compact description of the whole document (slides and their elements, sheets and
+  used ranges, sections, board items, tracks and clips), so a model can plan without many reads.
+
+The parity check has two parts:
+
+- **Static**, `scripts/check-agent-surface.mjs` in nakliOS: each adopting app's `commands.json` has the commands
+  above, and every command has a description and an input schema.
+- **Live**, `naklishell.parity()` in the module, run by the same script with `--live` in Chrome over the CDP
+  daemon: every visible button, menu item, input and select in the app carries `data-command` naming a published
+  command, or `data-parity="view"` (it changes only the view) or `data-parity="person: <reason>"`. The check fails
+  when a control has neither or names a command the app does not publish.
+
+### 10.9 Tests
+
+Per app, a battery of at least 8 real tasks, run through the Ask box and through the voice hand-off, in Chirag's
+Chrome over the CDP daemon, inside a local NakliOS that serves the local builds. Cross-app tasks move data between
+apps (Reckon numbers into a Pellucia chart). Each task records pass or fail with the reason, judged from
+`doc.describe` and `view.snapshot`, not from the model's own summary. Results go to the hand-over note.

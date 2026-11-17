@@ -6300,7 +6300,10 @@ const AI_LOCAL_TOOL_MODELS = new Set(['lfm3-1.7b', 'lfm25-24b-pi']);
 // Apps that consume the HOST agent tier (tool-calling coding). They report their
 // configured model and their agent requests never touch Nano. Apps with their
 // own agent stacks are migrated onto this split one at a time.
-const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge', 'dish', 'pi', 'gupshup']);
+const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge', 'dish', 'pi', 'gupshup',
+  // App-shell layer 4 (docs/specs/app-shell-001.md section 10.3): apps whose Ask pane runs the shared agent loop. The
+  // loop reads aiProvider to choose long-job or short-job mode, so it must name the agent model, not the GP one.
+  'pellucia', 'reckon', 'draft', 'chartella', 'sonella', 'montella']);
 function aiOnDeviceApi(){
   return (typeof self !== 'undefined' && 'LanguageModel' in self) ? self.LanguageModel : null;
 }
