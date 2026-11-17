@@ -533,6 +533,58 @@
       }
     },
     {
+      "name": "cols.width",
+      "label": "Column width",
+      "description": "Set the width of one or more columns in pixels as one undo step, e.g. \"make columns A to C 140 pixels wide\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name; the active sheet when left out"
+          },
+          "cols": {
+            "description": "Column letters: one column such as \"B\", a span such as \"A:C\", a list such as \"A,C,E\", or a list of those such as [\"A\", \"C:D\"]"
+          },
+          "width": {
+            "description": "Width in pixels, 5 to 2000 (the default width is 100); null resets to the default width"
+          }
+        },
+        "required": [
+          "cols",
+          "width"
+        ]
+      }
+    },
+    {
+      "name": "rows.height",
+      "label": "Row height",
+      "description": "Set the height of one or more rows in pixels as one undo step, e.g. \"make row 1 40 pixels tall\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name; the active sheet when left out"
+          },
+          "rows": {
+            "description": "Row numbers from 1: one row such as 3, a span such as \"2:5\", a list such as \"2,4\", or a list of those such as [1, \"6:8\"]"
+          },
+          "height": {
+            "description": "Height in pixels, 2 to 1000 (the default height is 22); null resets to the default height"
+          }
+        },
+        "required": [
+          "rows",
+          "height"
+        ]
+      }
+    },
+    {
       "name": "range.merge",
       "label": "Merge cells",
       "description": "Merge a range into one cell, keeping only the top-left value, e.g. \"merge A1 to D1 for a title\".",
@@ -2094,6 +2146,213 @@
         "required": [
           "proposal_id"
         ]
+      }
+    },
+    {
+      "name": "doc.describe",
+      "description": "Describe the whole Reckon workbook in one compact answer for planning: each sheet with its used range, data blocks with their header row and first rows, charts, tables, pivot tables, rules, named ranges and the selection, e.g. \"what is in this workbook\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "maxChars": {
+            "type": "integer",
+            "minimum": 2000,
+            "maximum": 40000,
+            "description": "Longest answer in characters, 2000 to 40000 (default 12000); first rows, then blocks, then sheets are left out to fit"
+          }
+        }
+      }
+    },
+    {
+      "name": "view.snapshot",
+      "description": "Take a picture of what the person sees on a sheet as a PNG at most 1024 pixels wide, with the cells as displayed (number formats, fills, bold, borders, column widths), the charts on the sheet and a text summary, e.g. \"show me how the Budget sheet looks\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name; the active sheet when left out"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range to show instead of the used range, e.g. \"Budget!A1:F30\"; at most 40 rows and 15 columns are drawn"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.ask",
+      "description": "Ask Reckon's assistant to do a job in the open workbook, such as building a budget sheet with totals and a chart; it opens the Ask pane, starts at once and returns a job id to check on later, e.g. \"ask Reckon to build a monthly budget\".",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What to do, in plain words"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "sheet",
+              "explain"
+            ],
+            "description": "A task recipe: sheet (build, fill or format a sheet) or explain (describe the workbook without changing it)"
+          }
+        },
+        "required": [
+          "request"
+        ]
+      }
+    },
+    {
+      "name": "assistant.status",
+      "description": "The state of Reckon's assistant job (the latest when job is left out): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"is Reckon done with the budget\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Job id from assistant.ask"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "description": "Stop Reckon's running assistant job, e.g. \"stop what Reckon is doing\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Job id from assistant.ask; the running job when left out"
+          }
+        }
+      }
+    },
+    {
+      "name": "file.new",
+      "label": "New workbook",
+      "description": "Show the New page, where the person starts a blank workbook after saving or discarding the open one, e.g. \"start a new spreadsheet\".",
+      "scope": "write",
+      "shortcut": [
+        "Mod+Alt+N",
+        "Mod+N"
+      ],
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.open",
+      "label": "Open",
+      "description": "Show the Open page with recent workbooks, the workbooks in storage and a button to browse this computer, e.g. \"open another spreadsheet\".",
+      "scope": "read",
+      "shortcut": "Mod+O",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.save",
+      "label": "Save",
+      "description": "Save the workbook where it lives (NakliOS storage when hosted, this browser when not), giving a new workbook its name there, e.g. \"save my spreadsheet\".",
+      "scope": "write",
+      "shortcut": "Mod+S",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.save_as",
+      "label": "Save as",
+      "description": "Save the workbook under a new name, in NakliOS storage when hosted or this browser when not, and keep editing the copy, failing on a taken name unless replace is true, e.g. \"save this as Budget 2027\".",
+      "scope": "write",
+      "shortcut": "Mod+Shift+S",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New name, without .reckon.json"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "naklios",
+              "browser"
+            ],
+            "description": "naklios (NakliOS storage, hosted) or browser (this browser, standalone); where the workbook is now when left out; saving to this computer needs the person (File, Save as)"
+          },
+          "replace": {
+            "type": "boolean",
+            "description": "Overwrite a workbook that already has this name (default false)"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "file.export",
+      "label": "Export a copy",
+      "description": "Export a copy of the workbook as csv (the active sheet), xlsx, ods, reckon json or pdf (opens print) while the workbook stays where it is, saved to exports/ in NakliOS storage when hosted or downloaded when not, e.g. \"export this as an Excel file\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx",
+              "ods",
+              "json",
+              "pdf"
+            ],
+            "description": "File type"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      }
+    },
+    {
+      "name": "file.print",
+      "label": "Print",
+      "description": "Open the print setup for the workbook, from which the person prints or saves a PDF, e.g. \"print this sheet\".",
+      "scope": "read",
+      "shortcut": "Mod+P",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.info",
+      "label": "Where is this workbook saved",
+      "description": "Report the workbook name, where its file is saved and whether it has unsaved changes, e.g. \"is my spreadsheet saved\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
       }
     }
   ]

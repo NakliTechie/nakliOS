@@ -13399,7 +13399,7 @@ function kzManifest(){
       channel: KZ_AGENT.channel ? `BroadcastChannel("${KZ_CHANNEL_NAME}")` : 'closed; the person can open it in Preferences',
       ...(KZ_AGENT.commandNames.length ? { commands: 'registered with NakliOS' } : {}),
     },
-    approval: 'read tools answer at once; session tools change only what this tab shows; write and destructive tools return {status:"pending_approval", proposal_id} and apply only after the person approves the proposal, in KanZen or, when KanZen runs inside NakliOS, in NakliOS review. Poll get_proposal for the outcome.',
+    approval: 'read tools answer at once; session tools change only what this tab shows; write and destructive tools return {status:"pending_approval", proposal_id} and apply only after the person approves the proposal in KanZen. Inside NakliOS, writes that only create or edit apply at once and return {status:"applied", ...result}; deletions, cleared fields, undo and redo wait in NakliOS review. Poll get_proposal for the outcome.',
     tools: KZ_TOOLS.filter(t => t.kind !== 'person').map(t => ({
       name: t.name, title: t.title, kind: t.kind, staged: kzStaged(t), batchable: !!t.batch,
       description: t.description, input_schema: t.inputSchema,
@@ -13455,6 +13455,12 @@ async function kzAgentCall(name, input, door, caller, prepare){
       if(tool.kind === 'session') kzEmit('change', { tool: tool.name, actor:'agent', door, board_id: S.currentBoardId });
       entry.outcome = 'ok';
       return result;
+    }
+    if(kzHostReviewAvailable() && !kzHostNeedsReview(tool, clean)){
+      const result = kzPlain(await kzApplyAtOnce(tool, clean, ctx));
+      entry.outcome = 'ok';
+      entry.detail = tool.summary ? tool.summary(clean, S.boards[S.currentBoardId] || null) : tool.title;
+      return result && typeof result === 'object' && !Array.isArray(result) ? { status: 'applied', ...result } : { status: 'applied', result };
     }
     const proposal = await kzStage(tool, clean, ctx);
     entry.outcome = 'staged';
@@ -13517,6 +13523,83 @@ async function kzStage(tool, input, ctx){
 const KZ_HOST_TOOL = 'kanzen.agent';
 function kzHostReviewAvailable(){
   return naklios.capabilities.review === true && !KZ_AGENT.hostUnsupported && typeof naklios.review?.stage === 'function';
+}
+/* Inside NakliOS, an agent write waits for review only when it deletes something: a destructive
+   tool (delete or remove a board, column, card, checklist item, comment, attachment, label, member
+   or snapshot; restore or replace boards), a write that clears a field holding a value (a card's
+   description, due date, labels, members or checklist items; a task's dates, times, repeat,
+   reminders, parent or estimate; a habit's reminders; a habit check-in cleared or taken back),
+   undo and redo (either can remove what the last change added), or a batch holding any of these.
+   Creates and edits apply at once, with normal undo, even while a card waits in review, because
+   staging every write stalled agents (NakliOS holds one card per app; the rest queued behind it).
+   This matches NakliOS: app:write asks once per visit, only destructive commands ask every time.
+   Returns a short reason when the write must wait, else null. */
+const KZ_TASK_FIELD_PROPS = { start_date:'startDate', start_time:'startTime', due_time:'dueTime', repeat:'repeat', parent_id:'parentId', estimate_min:'estimateMin' };
+function kzHostNeedsReview(tool, input){
+  if(tool.kind === 'destructive') return 'deletes';
+  const empty = v => v == null || v === '' || (Array.isArray(v) && !v.length);
+  const boardOf = i => S.boards[i.board_id && Object.hasOwn(S.boards, i.board_id) ? i.board_id : S.currentBoardId] || null;
+  const cardOf = i => { const b = boardOf(i); return b && Object.hasOwn(b.cards, i.card_id) ? b.cards[i.card_id] : null; };
+  const drops = (before, after) => (before || []).some(id => !(after || []).includes(id));
+  switch(tool.name){
+    case 'undo': case 'redo': return 'may remove content';
+    case 'update_card': {
+      const card = cardOf(input);
+      if(!card) return null;
+      if('description' in input && empty(input.description) && !empty(card.description)) return 'clears the description';
+      if('due_date' in input && empty(input.due_date) && card.dueDate) return 'clears the due date';
+      if('label_ids' in input && drops(card.labelIds, input.label_ids)) return 'removes labels';
+      if('member_ids' in input && drops(card.memberIds, input.member_ids)) return 'removes members';
+      if('checklist' in input && drops((card.checklist || []).map(x => x.id), input.checklist.map(x => x.id))) return 'removes checklist items';
+      return null;
+    }
+    case 'set_task_fields': {
+      const card = cardOf(input);
+      if(!card) return null;
+      for(const [key, prop] of Object.entries(KZ_TASK_FIELD_PROPS)){
+        if(key in input && empty(input[key]) && !empty(card[prop])) return `clears ${key.replace('_', ' ')}`;
+      }
+      if('reminders' in input && drops((card.reminders || []).map(r => r.id), input.reminders.map(r => r.id))) return 'removes reminders';
+      return null;
+    }
+    case 'update_habit': {
+      const habit = (S.habits?.habits || []).find(h => h.id === input.habit_id);
+      if(habit && 'reminders' in input && (habit.reminders || []).length > input.reminders.length) return 'removes reminders';
+      return null;
+    }
+    case 'checkin_habit': return input.op === 'clear' ? 'clears a check-in' : null;
+    case 'undo_checkin': return 'takes back a check-in';
+    case 'apply_changes': {
+      for(const op of input.operations || []){
+        const t = KZ_TOOL_MAP.get(op.tool);
+        const reason = t && kzHostNeedsReview(t, { board_id: input.board_id, ...op.input });
+        if(reason) return reason;
+      }
+      return null;
+    }
+    default: return null;
+  }
+}
+// Applies an agent write at once, in turn with any approved proposals still applying.
+function kzApplyAtOnce(tool, input, ctx){
+  const run = KZ_AGENT.applying.then(async () => {
+    const staged = { ...input };
+    if(tool.scope === 'board'){
+      if(!staged.board_id){
+        if(!S.currentBoardId) throw kzError('not_found', 'No board is open');
+        staged.board_id = S.currentBoardId;
+      }
+      if(!Object.hasOwn(S.boards, staged.board_id)) throw kzError('not_found', `Board ${staged.board_id} not found`);
+      if(staged.board_id !== S.currentBoardId){ await kzActivateBoard(staged.board_id); renderAll(); }
+      kzCheckRefs(staged, S.boards[staged.board_id]);
+    }
+    if(tool.check) await tool.check(staged, staged.board_id ? S.boards[staged.board_id] : null);
+    const result = await tool.run(staged, ctx);
+    kzEmit('change', { tool: tool.name, actor:'agent', door: ctx.door, board_id: S.currentBoardId });
+    return result;
+  });
+  KZ_AGENT.applying = run.catch(() => {});
+  return run;
 }
 async function kzPumpHostReview(){
   if(KZ_AGENT.hostActive || KZ_AGENT.hostStaging) return;

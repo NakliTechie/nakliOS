@@ -335,6 +335,76 @@
       }
     },
     {
+      "name": "view.snapshot",
+      "label": "Snapshot of the view",
+      "description": "A PNG of what the person sees: the part of the page on screen (the whole page when nothing on it is in view), at most 1024 px on the long edge, plus a text summary (page, shape counts, selection). ids or region pick another part, as board.snapshot does. Returns { dataUrl, width, height, region, summary }.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Frame these shapes"
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          },
+          "maxSize": {
+            "type": "number",
+            "description": "Longest edge in px (default 1024)",
+            "minimum": 32,
+            "maximum": 1024
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "doc.describe",
+      "label": "Describe board",
+      "description": "The whole board in one read, for planning: its name, theme, and every page with its shapes (id, kind, bounds, text cut to 200 characters, frame, group, and for arrows the ids they join). Capped at `limit` shapes (default 300); board.read with a page, ids or region gives the rest.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "At most this many shapes (default 300)",
+            "minimum": 1,
+            "maximum": 2000
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "shape.add",
       "label": "Add shape",
       "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page) and link (null or a frame id to jump to). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId and crop; stamp emoji; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
@@ -1516,13 +1586,14 @@
       },
       "shortcut": [
         "?",
-        "Shift+/"
+        "Shift+/",
+        "F1"
       ]
     },
     {
       "name": "board.new",
       "label": "New board",
-      "description": "Start a new empty board (the current one stays in its file and its recovery copy).",
+      "description": "Start a new empty board now; the current board is saved first when it has a home, else you are asked (alias of file.new, which shows the New page).",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -1538,26 +1609,24 @@
     {
       "name": "board.open",
       "label": "Open",
-      "description": "Open a board: .chartella.json, .excalidraw, or a PNG or SVG with a board inside.",
-      "scope": "destructive",
+      "description": "Show the Open page: Recent, then the boards in storage, then Browse this computer. It opens .chartella.json, .excalidraw, .tldr, Mermaid, and PNG or SVG with a board inside (alias of file.open).",
+      "scope": "read",
       "input": {
         "type": "object",
         "properties": {},
         "required": []
-      },
-      "shortcut": "Mod+O"
+      }
     },
     {
       "name": "board.save",
       "label": "Save",
-      "description": "Save the board as a .chartella.json file (NakliOS storage when hosted, else a file you pick).",
+      "description": "Save the board where it lives: NakliOS storage when hosted, this browser standalone, or the file on this computer it came from (alias of file.save).",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {},
         "required": []
-      },
-      "shortcut": "Mod+S"
+      }
     },
     {
       "name": "board.export",
@@ -1984,7 +2053,10 @@
         "properties": {},
         "required": []
       },
-      "shortcut": "Mod+K"
+      "shortcut": [
+        "Shift+Mod+P",
+        "Alt+Q"
+      ]
     },
     {
       "name": "mindmap.create",
@@ -2658,6 +2730,177 @@
         "required": [
           "steps"
         ]
+      }
+    },
+    {
+      "name": "file.save",
+      "label": "Save",
+      "description": "Save the board where it lives (NakliOS storage when hosted). A new board is saved under its name in NakliOS storage, or in this browser when not hosted.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "file.save_as",
+      "label": "Save as",
+      "description": "Save under a new name; the copy becomes the board you are editing. kind is naklios (hosted) or browser (standalone), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "naklios",
+              "browser"
+            ]
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "file.open",
+      "label": "Open",
+      "description": "Show the Open page: Recent, then the boards in storage, then Browse this computer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "file.new",
+      "label": "New",
+      "description": "Show the New page (blank or a template).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Alt+N"
+    },
+    {
+      "name": "file.info",
+      "label": "File info",
+      "description": "The current board's name, where it is saved, and whether it has unsaved changes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "file.export",
+      "label": "Export",
+      "description": "Export a copy in another format; the board stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "svg",
+              "excalidraw",
+              "pdf",
+              "options"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      }
+    },
+    {
+      "name": "file.print",
+      "label": "Print",
+      "description": "Print the board.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+P"
+    },
+    {
+      "name": "assistant.ask",
+      "label": "Ask",
+      "description": "Ask Chartella's assistant to do a job in the open board (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "description": "What to do, in plain words",
+            "minLength": 1
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "board",
+              "diagram",
+              "wireframe"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "shortcut": "Mod+Shift+Y",
+      "shows": true
+    },
+    {
+      "name": "assistant.status",
+      "label": "Assistant status",
+      "description": "The state of Chartella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "label": "Stop the assistant",
+      "description": "Stop Chartella's running assistant job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        },
+        "required": []
       }
     }
   ],

@@ -355,17 +355,19 @@
         "type": "object",
         "properties": {},
         "required": []
-      }
+      },
+      "shortcut": "Mod+Z"
     },
     {
       "name": "edit.redo",
-      "description": "Redo the last undone edit.",
+      "description": "Redo the last undone edit (also Mod+Shift+Z).",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {},
         "required": []
-      }
+      },
+      "shortcut": "Mod+Y"
     },
     {
       "name": "assist.silences",
@@ -1140,6 +1142,65 @@
       }
     },
     {
+      "name": "view.snapshot",
+      "description": "What the person sees: the frame at the playhead (or at `at`) as a JPEG data URL, at most 1024 px wide (default 960), plus a text summary of the tracks, clips, duration, the clips under that time and the selection. The same picture as frame.snapshot.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "number",
+            "description": "Timeline time, seconds (default: the playhead)"
+          },
+          "width": {
+            "type": "number",
+            "description": "Width in pixels, up to 1024 (default 960)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "doc.describe",
+      "description": "A compact description of the whole project for planning: size, aspect, fps, duration, marks, the media (ids, kinds, lengths, transcripts) and each track with its clips [id, start, end, what it shows]. Capped at about 6,000 characters; project.read has every field.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "track.set",
+      "description": "Show, hide, mute, lock or rename a track: hidden, muted and locked are true or false.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "Track id"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string",
+            "description": "Track name"
+          }
+        },
+        "required": [
+          "trackId"
+        ]
+      }
+    },
+    {
       "name": "media.import",
       "description": "Import a media file from Montella's NakliOS storage (for example \"media/clip.mp4\"); in quick mode it also goes on the main track. Returns the media id.",
       "scope": "write",
@@ -1417,6 +1478,161 @@
           "loudness": {
             "type": "number",
             "description": "Normalise the sound to this many LUFS (for example -14), true peak under -1 dBTP"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "file.save",
+      "description": "Save the project where it lives (NakliOS storage when hosted). A new project is saved under its name in NakliOS storage, or in this browser when not hosted. Media stays where it is; the project file holds the edit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "file.save_as",
+      "description": "Save under a new name; the copy becomes the project you are editing. kind is naklios (hosted) or browser (standalone), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New name",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "description": "naklios (hosted) or browser (standalone)",
+            "enum": [
+              "naklios",
+              "browser"
+            ]
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "file.open",
+      "description": "Show the Open page: Recent, then the projects in storage, then Browse this computer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "file.new",
+      "description": "Show the New page (blank project).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Alt+N"
+    },
+    {
+      "name": "file.info",
+      "description": "The current project's name, where it is saved, and whether it has unsaved changes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "file.export",
+      "description": "Export a copy in another format; the project stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "video opens the export dialog (a person picks the preset; agents use export.video); srt and vtt are the captions; png is the frame at the playhead",
+            "enum": [
+              "video",
+              "srt",
+              "vtt",
+              "png"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      }
+    },
+    {
+      "name": "assistant.ask",
+      "description": "Ask Montella's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "description": "What to do, in plain words",
+            "minLength": 1
+          },
+          "skill": {
+            "type": "string",
+            "description": "A task recipe",
+            "enum": [
+              "tighten",
+              "captions",
+              "social",
+              "titles"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "shows": true
+    },
+    {
+      "name": "assistant.status",
+      "description": "The state of Montella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Job id"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "description": "Stop Montella's running assistant job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Job id"
           }
         },
         "required": []

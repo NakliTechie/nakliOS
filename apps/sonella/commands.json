@@ -22,7 +22,7 @@
   "commands": [
     {
       "name": "file.destructive",
-      "description": "Sonella file (destructive). Pass command and params; commands: file.open-path (Open audio by path), file.load-bytes (Load audio from base64), file.new (New project). Call help.read for a command's parameters.",
+      "description": "Sonella file (destructive). Pass command and params; commands: file.open-path (Open audio by path), file.load-bytes (Load audio from base64). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -31,8 +31,7 @@
             "type": "string",
             "enum": [
               "file.open-path",
-              "file.load-bytes",
-              "file.new"
+              "file.load-bytes"
             ],
             "description": "Which Sonella command to run"
           },
@@ -48,7 +47,7 @@
     },
     {
       "name": "file.write",
-      "description": "Sonella file (write). Pass command and params; commands: file.save (Save project), file.save-project (Save project to a path), file.export (Export audio), file.export-audio (Export audio), file.metadata (Edit metadata), file.export-lossless (Export selection without re-encoding (MP3, AAC)), file.export-loudness (Export to loudness targets), label.import (Import labels (Audacity text)), label.export (Export labels (Audacity text)), file.export-multiple (Export multiple). Call help.read for a command's parameters.",
+      "description": "Sonella file (write). Pass command and params; commands: file.save-project (Save project to a path), file.export-audio (Export audio), file.metadata (Edit metadata), file.export-lossless (Export selection without re-encoding (MP3, AAC)), file.export-loudness (Export to loudness targets), label.import (Import labels (Audacity text)), label.export (Export labels (Audacity text)), file.export-multiple (Export multiple). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -56,9 +55,7 @@
           "command": {
             "type": "string",
             "enum": [
-              "file.save",
               "file.save-project",
-              "file.export",
               "file.export-audio",
               "file.metadata",
               "file.export-lossless",
@@ -405,7 +402,7 @@
     },
     {
       "name": "generate.write",
-      "description": "Sonella generate (write). Pass command and params; commands: generate.silence (Silence). Call help.read for a command's parameters.",
+      "description": "Sonella generate (write). Pass command and params; commands: generate.silence (Silence), generate.tone (Tone, chirp or noise). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -413,7 +410,8 @@
           "command": {
             "type": "string",
             "enum": [
-              "generate.silence"
+              "generate.silence",
+              "generate.tone"
             ],
             "description": "Which Sonella command to run"
           },
@@ -620,6 +618,225 @@
             "description": "A Sonella command id; omit to list all"
           }
         }
+      }
+    },
+    {
+      "name": "file.save",
+      "description": "Save the project where it lives (NakliOS storage when hosted). A new project is saved under its name in NakliOS storage, or in this browser when not hosted.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "file.save_as",
+      "description": "Save under a new name; the copy becomes the project you are editing. kind is naklios (hosted) or browser (standalone), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "naklios",
+              "browser"
+            ]
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "file.open",
+      "description": "Show the Open page: Recent, then the projects in storage, then Browse this computer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "file.new",
+      "description": "Show the New page (blank or a template).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shortcut": "Mod+Alt+N"
+    },
+    {
+      "name": "file.info",
+      "description": "The current project's name, where it is saved, and whether it has unsaved changes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "assistant.ask",
+      "description": "Ask Sonella's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What to do, in plain words"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "voice-cleanup",
+              "podcast-intro",
+              "trim-silence",
+              "podcast-loudness"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "shortcut": "Mod+Shift+Y",
+      "shows": true
+    },
+    {
+      "name": "assistant.status",
+      "description": "The state of Sonella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "description": "Stop Sonella's running assistant job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "script.run",
+      "description": "Run Sonella commands in order as one undo step: steps [{ command, input }], command a dotted id such as select.set or effect.fade-in. A string \"$N.key\" in an input is step N's result field (1-based), e.g. \"$1.track\". Returns each step's result. If a step fails, nothing changes. Hard-to-undo, person-only and file commands run on their own, not in a script. At most 200 steps.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "description": "[{ command: \"effect.fade-in\", input: { start: 0, end: 2 } }, …]",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "input": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Undo label (default \"Script (N steps)\")"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
+    },
+    {
+      "name": "view.snapshot",
+      "description": "A PNG picture of the project as the person sees it: a time ruler, each track's waveform with clip boundaries, labels and the selection, plus a text summary of tracks, clips, length and selection. Returns { dataUrl, width, height, summary }. Check your work with it before you finish.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "description": "Picture width in pixels, 320 to 1024 (default 1024)",
+            "minimum": 320,
+            "maximum": 1024
+          },
+          "start": {
+            "type": "number",
+            "description": "First second shown (default 0)",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "end": {
+            "type": "number",
+            "description": "Last second shown (default the project end)",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "doc.describe",
+      "description": "A compact description of the whole project for planning: length, sample rate, selection, every track with its clips (seconds), labels, and how many transcript words and cut-list entries there are. Long lists are cut, with a count of what was left out.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "file.export",
+      "description": "Export a copy of the whole mix; the project stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads. From a menu or key it shows the File page at Export. file.export-audio takes bit depth, bitrate, chapters and selection only.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Format (default wav)",
+            "enum": [
+              "wav",
+              "mp3",
+              "flac",
+              "m4a",
+              "opus",
+              "vorbis"
+            ]
+          }
+        },
+        "required": []
       }
     }
   ]

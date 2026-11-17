@@ -177,6 +177,71 @@
       }
     },
     {
+      "name": "view.snapshot",
+      "label": "Snapshot view",
+      "description": "What the person sees: a PNG of the current slide (or the slide given), at most 1024 px wide, with a text summary of its elements, to check work before finishing. Returns { dataUrl, width, height, summary }. Same picture as slide.snapshot.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string",
+            "description": "Slide id (default: the current slide)"
+          },
+          "maxSize": {
+            "type": "number",
+            "description": "Longest edge in px (default and most 1024)",
+            "minimum": 32,
+            "maximum": 1024
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "doc.describe",
+      "label": "Describe deck",
+      "description": "The whole deck in one compact read, for planning: name, size, theme, layouts, then every slide with its id, number, layout, notes and elements (id, kind, box, placeholder type, text). Cut to about 12000 characters on a large deck (truncated: true); then read the rest with deck.read and slides.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these slides (default: all)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "icon.search",
+      "label": "Find icons",
+      "description": "Find icons by word (\"sun\", \"chart\", \"user\"): returns { icons: [{ name, label }] }, best matches first. Use a name with element.add kind icon, props.icon.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Words to look for"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Most results (default 20)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
       "name": "layout.list",
       "label": "List layouts",
       "description": "The slide layouts this deck offers, in menu order: id, name and placeholders (id, type title|subtitle|body|content|picture|date|footer|slideNumber). content takes text or, through placeholder.fill, a table or picture.",
@@ -217,9 +282,130 @@
       }
     },
     {
+      "name": "file.new",
+      "label": "New",
+      "description": "Show the New page (blank or a template).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+Alt+N",
+        "Mod+N"
+      ]
+    },
+    {
+      "name": "file.open",
+      "label": "Open",
+      "description": "Show the Open page: Recent, then the decks in storage, then Browse this computer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "file.save",
+      "label": "Save",
+      "description": "Save the deck where it lives (NakliOS storage when hosted). A new deck is saved under its name in NakliOS storage, or in this browser when not hosted. Never opens a picker.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "file.save_as",
+      "label": "Save As",
+      "description": "Save under a new name; the copy becomes the deck you are editing. kind is naklios (hosted) or browser (standalone), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File, Save As…). From the menu or palette with no name, it opens the Save as dialog.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "File name, without .pellucia",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "description": "naklios or browser",
+            "enum": [
+              "naklios",
+              "browser"
+            ]
+          },
+          "replace": {
+            "type": "boolean",
+            "description": "Overwrite a deck with this name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "shortcut": "Mod+Shift+S"
+    },
+    {
+      "name": "file.export",
+      "label": "Export",
+      "description": "Export a copy in another format; the deck stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads. pdf, notes and handouts open the print dialog and need a person.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "pptx, png, html, markdown, pdf, notes or handouts",
+            "enum": [
+              "pptx",
+              "png",
+              "html",
+              "markdown",
+              "pdf",
+              "notes",
+              "handouts"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      }
+    },
+    {
+      "name": "file.info",
+      "label": "File info",
+      "description": "The current deck's name, where it is saved, and whether it has unsaved changes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "file.print",
+      "label": "Print",
+      "description": "Print the deck: one slide per page in the browser print dialog (choose \"Save as PDF\" for a PDF). Needs a person.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+P"
+    },
+    {
       "name": "deck.new",
       "label": "New deck",
-      "description": "Start a new deck (the current one stays in its file and in the recovery copy). size is 16:9 or 4:3; theme is a theme id.",
+      "description": "Start a new deck (alias of file.new: with no input a person gets the New page). With size (16:9 or 4:3), theme (a theme id) or name, or from an agent, it starts the deck at once; the current one stays in its file and in the recovery copy.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -245,42 +431,39 @@
           }
         },
         "required": []
-      },
-      "shortcut": "Mod+Alt+N"
+      }
     },
     {
       "name": "deck.open",
       "label": "Open…",
-      "description": "Open a deck (.pellucia or deck .json) from NakliOS storage or this computer. Replaces the deck on screen.",
-      "scope": "destructive",
+      "description": "Show the Open page (alias of file.open): .pellucia decks, deck .json, PowerPoint and Markdown files from NakliOS storage or this computer.",
+      "scope": "read",
       "input": {
         "type": "object",
         "properties": {},
         "required": []
-      },
-      "shortcut": "Mod+O"
+      }
     },
     {
       "name": "deck.save",
       "label": "Save",
-      "description": "Save the deck as a .pellucia file: into NakliOS storage when hosted, else to a file the person picks (an agent call downloads it instead).",
+      "description": "Save the deck where it lives (alias of file.save). name renames the deck's file first. Never opens a picker.",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "File name (default: the deck name)"
+            "description": "New file name (default: keep the current one)"
           }
         },
         "required": []
-      },
-      "shortcut": "Mod+S"
+      }
     },
     {
       "name": "deck.export",
       "label": "Export…",
-      "description": "Export the deck: format pdf (the browser print dialog, one slide per page; needs a person), notes or handouts (print dialog too), png (one slide, or every slide as a ZIP), pptx (PowerPoint), markdown (Marp, text only), html (one file that presents without Pellucia) or pellucia. slides limits it to some slides. scale is 1 to 3 for png. Returns where it went.",
+      "description": "Export a copy of the deck (the deck stays where it lives): format pdf (the browser print dialog, one slide per page; needs a person), notes or handouts (print dialog too), png (one slide, or every slide as a ZIP), pptx (PowerPoint), markdown (Marp, text only), html (one file that presents without Pellucia) or pellucia (a copy of the deck file). slides limits it to some slides. scale is 1 to 3 for png. Returns where it went.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -728,7 +911,7 @@
     {
       "name": "element.add",
       "label": "Add element",
-      "description": "Add an element to a slide (default: the current slide). kind is text, rect, roundrect, ellipse, triangle, line, arrow, image, table (rows, cols). Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize. text may be plain text. Returns { id }.",
+      "description": "Add an element to a slide (default: the current slide). kind is text, rect, roundrect, ellipse, triangle, line, arrow, image, table (rows, cols), icon. Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize. icon: props.icon is an icon name from icon.search (\"lucide:sun\", or a bare \"sun\", which tries Lucide then Tabler); Pellucia fills in its drawing and alt text. stroke (colour), strokeWidth, fill. text may be plain text. Returns { id }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -776,7 +959,7 @@
     {
       "name": "element.update",
       "label": "Change elements",
-      "description": "Change fields of elements (default: the selection). Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize.",
+      "description": "Change fields of elements (default: the selection). Element fields: x, y, w, h (stage px; the stage is deck.size, 1920x1080 for 16:9), rotation (degrees), opacity (0–1), locked, alt (alt text). Colours are #rrggbb, a theme colour (bg, text, heading, muted, accent1, accent2, accent3, accent4, accent5, accent6) or none. text, rect, roundrect, ellipse, triangle: text (see text.set), fill (colour or { gradient: { angle, stops: [{ at, color }] } }), stroke, strokeWidth (0–64), dash (solid|dashed|dotted), valign (top|middle|bottom), fit (none|shrink), padding; roundrect radius. line, arrow: stroke, strokeWidth, dash, flipH, flipV (the line runs from the box's top-left to its bottom-right unless flipped), startHead/endHead (none|arrow|triangle|dot). image: mediaId, crop { l, t, r, b } (fractions cut from each side), fit (cover|contain|fill). table: cells (rows of plain strings or { text, fill }), colWidths, rowHeights (fractions), headerRow, headerFill, fill, stroke, strokeWidth, fontSize. icon: props.icon is an icon name from icon.search (\"lucide:sun\", or a bare \"sun\", which tries Lucide then Tabler); Pellucia fills in its drawing and alt text. stroke (colour), strokeWidth, fill.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1752,8 +1935,8 @@
         "required": []
       },
       "shortcut": [
-        "Mod+=",
-        "Mod+Shift+="
+        "Mod+Alt+=",
+        "Mod+Alt+Shift+="
       ]
     },
     {
@@ -1766,7 +1949,7 @@
         "properties": {},
         "required": []
       },
-      "shortcut": "Mod+-"
+      "shortcut": "Mod+Alt+-"
     },
     {
       "name": "view.sorter",
@@ -1778,7 +1961,7 @@
         "properties": {},
         "required": []
       },
-      "shortcut": "Mod+Shift+S"
+      "shortcut": "Mod+Alt+S"
     },
     {
       "name": "view.notes",
@@ -2561,7 +2744,10 @@
         "properties": {},
         "required": []
       },
-      "shortcut": "Mod+K"
+      "shortcut": [
+        "Mod+Shift+P",
+        "Alt+Q"
+      ]
     },
     {
       "name": "view.animations",
@@ -2927,6 +3113,70 @@
         "required": [
           "steps"
         ]
+      }
+    },
+    {
+      "name": "assistant.ask",
+      "label": "Ask…",
+      "description": "Ask Pellucia's assistant to do a job in the open deck (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string",
+            "description": "What to do, in plain words",
+            "minLength": 1
+          },
+          "skill": {
+            "type": "string",
+            "description": "A recipe",
+            "enum": [
+              "deck",
+              "outline",
+              "rewrite",
+              "notes",
+              "design"
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "shortcut": "Mod+Shift+Y",
+      "shows": true
+    },
+    {
+      "name": "assistant.status",
+      "label": "Assistant status",
+      "description": "The state of Pellucia's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Job id"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "assistant.stop",
+      "label": "Stop assistant",
+      "description": "Stop Pellucia's running assistant job.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Job id"
+          }
+        },
+        "required": []
       }
     },
     {
