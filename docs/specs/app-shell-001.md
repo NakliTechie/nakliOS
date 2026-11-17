@@ -358,8 +358,10 @@ Sources: three read-only surveys of the source trees. Line references are in eac
 
 ## 10. Layer 4: the assistant
 
-Status: DRAFT, 2026-11-17, built for review with six first adopters: Pellucia, Reckon, Draft, Chartella, Sonella
-(audio) and Montella (video). Chirag chose option B: one thin assistant layer in the shared module that uses the
+Status: DRAFT for Chirag's review, 2026-11-17. Built and tested with six first adopters: Pellucia, Reckon, Draft,
+Chartella, Sonella (audio) and Montella (video). Battery results and open items are in the layer 4 hand-over note.
+Open decision: the host lists another app's commands in search only after the person grants access, so a model
+cannot discover them first; the loop tells it to call `<app>.doc.describe`, which asks for the grant (10.2). Chirag chose option B: one thin assistant layer in the shared module that uses the
 AI rail, instead of wiring each app's assistant into the voice assistant (A) or keeping separate assistants (C).
 
 The goal: a person, the voice assistant or Anvil can ask any NakliOS app to do real work in it, such as "make a
