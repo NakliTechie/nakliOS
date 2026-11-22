@@ -1007,8 +1007,19 @@
   let homeHandle=null;      // granted FileSystemDirectoryHandle, or null
   let homeSaved=false;      // a handle is remembered but needs a click to re-grant
   let opfsPersisted=null;   // navigator.storage.persisted() at boot; null = unknown
+  // Chrome can leave queryPermission on a remembered folder unanswered for good (a moved or unplugged folder, or a
+  // stale handle), and an await with no limit kept Anvil at "still starting" forever on naklios.dev (2026-11-22).
+  // 'timeout' after the limit; callers treat it as not granted, so Anvil starts on browser storage and asks on a click.
+  const PERMISSION_QUERY_MS=1500;
+  function queryPermissionWithin(handle, ms=PERMISSION_QUERY_MS){
+    let timer;
+    return Promise.race([
+      Promise.resolve(handle.queryPermission({mode:'readwrite'})),
+      new Promise(resolve=>{ timer=setTimeout(()=>resolve('timeout'), ms); }),
+    ]).finally(()=>clearTimeout(timer));
+  }
   async function connectHome(h){
-    let perm=await h.queryPermission({mode:'readwrite'});
+    let perm=await queryPermissionWithin(h);
     if(perm!=='granted') perm=await h.requestPermission({mode:'readwrite'});
     if(perm!=='granted') return false;
     homeHandle=h; homeSaved=true; await idbSet(HOME_KEY,h); updateHomeChip();
@@ -5047,12 +5058,13 @@
   try{
     const saved = await idbGet(DIR_KEY);
     if(saved && typeof saved.queryPermission==='function'){
-      const perm = await saved.queryPermission({mode:'readwrite'});
+      const perm = await queryPermissionWithin(saved);
+      if(perm==='timeout') console.warn('[anvil] the remembered workspace folder did not answer a permission check; starting without it');
       if(perm==='granted'){ folderMode=true; await mountWorkspace(new FsaBackend(saved), 'folder · '+saved.name); await seedIfEmpty(); }
     }
   }catch(_){}
   // The remembered home: query only (a re-grant needs a click); the chip says which.
-  try{ const h=await idbGet(HOME_KEY); if(h&&typeof h.queryPermission==='function'){ homeSaved=true; if((await h.queryPermission({mode:'readwrite'}))==='granted') homeHandle=h; } }catch(_){}
+  try{ const h=await idbGet(HOME_KEY); if(h&&typeof h.queryPermission==='function'){ homeSaved=true; if((await queryPermissionWithin(h))==='granted') homeHandle=h; } }catch(_){}
   try{ if(navigator.storage&&navigator.storage.persisted) opfsPersisted=await navigator.storage.persisted(); }catch(_){}
   updateHomeChip();
   // Startup backfill: an empty index over existing record files rebuilds silently. The boot only
