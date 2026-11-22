@@ -427,6 +427,35 @@ whether a backend is configured.
 A refused request rejects with the reason in the message: not allowed, or did not
 verify.
 
+## Sign-in
+
+`naklios.experimental_auth.token({ provider: 'google', scopes })` gives an app a short-lived access token for the
+person's Google account, which the app then uses against Google's APIs directly (Gmail and Calendar allow
+browser requests). The host runs Google's browser sign-in in its own window, so one OAuth client, registered to
+naklios.dev, serves every app.
+
+- **Who may use it.** System apps, and same-origin mirrors listed with `hostServices:['auth']`.
+  `capabilities.experimental_auth` lists the providers an app may use.
+- **Scopes by name.** `gmail.modify`, `gmail.readonly`, `gmail.send`, `gmail.compose`, `gmail.labels`,
+  `calendar.events`, `calendar.readonly`, `calendar.calendarlist.readonly`, `openid`, `email` and `profile`, by
+  short name or full URL. Any other scope is refused, so the consent text always says what Google will grant.
+- **Grant-gated.** The person allows each app once per scope set (a Grant with principal `app:<id>`, tool
+  `auth.token`, scope `oauth:google:<scopes>`, from the same issuer and revocation list as `net`). A decline is
+  remembered until Settings → AI → Reset Google sign-ins.
+- **Exact scopes.** The host asks Google for exactly the requested set, never adding scopes granted earlier, and
+  caches one token per set. A token for scopes another app asked for is never handed to this app.
+- **Short-lived.** Google's browser flow gives tokens that last an hour and no refresh token. The host holds
+  tokens in memory only. Call `token()` again when one expires; the host reuses a token with at least a minute
+  left, and otherwise asks Google, usually without showing anything.
+- **Call it from a click.** Google's window needs the person's click. Without a recent one, the host shows a
+  "Continue to Google" dialog first.
+- **History-logged.** Each request appends one hash-chained event (door `auth`) to
+  `naklios/history/auth.ndjson`: the app, provider, scopes and outcome, never a token.
+
+Errors carry `.code`: `ENOAUTH` (not available to this app or standalone), `ENOGRANT` (the person declined),
+`EDENIED` (the person or Google refused a scope), `ECANCELLED`, `EINVAL` (unknown provider or scope) and
+`EGOOGLE`.
+
 ## TeX
 
 `naklios.experimental_tex` compiles a LaTeX project in the app's own storage. The engine is
@@ -740,7 +769,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-127 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+132 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -779,6 +808,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.experimental_tex` | field · **experimental** | The app may compile LaTeX projects in its own storage. |
 | `capabilities.experimental_web` | field · **experimental** | The app may search the web and read pages through the host. |
+| `capabilities.experimental_auth` | field · **experimental** | The outside-account providers this app may sign in to through the host, e.g. `['google']`; `[]` when none. |
 | `capabilities.experimental_aiReasoning` | field · **experimental** | The selected chat model is an endpoint, so chunks carry `delta.reasoning_content` and the `experimental_thinking` request option switches thinking. |
 | `capabilities.experimental_aiVision` | field · **experimental** | Agent requests may carry user `image_url` parts (base64 PNG, JPEG, WebP or GIF; 8 MB each, 16 and 24 MB per request); the selected model is an endpoint. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
@@ -896,6 +926,15 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `experimental_web` | namespace · **experimental** | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps, and same-origin mirrors listed with `hostServices:['web']`. |
 | `experimental_web.search` | function · **experimental** | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else DeepSeek when its key is saved, else Wikipedia. Answers `{ provider, results }`. |
 | `experimental_web.fetch` | function · **experimental** | Read one http(s) page directly, through the person's web relay, or through Jina Reader. Answers `{ url, status, kind, content, truncated, via }`. |
+
+### `experimental_auth` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_auth` | namespace · **experimental** | Sign-in to outside accounts through the host (`docs/app-contract.md`, "Sign-in"; `sys/host/auth.mjs`). System apps, and same-origin mirrors listed with `hostServices:['auth']`. Google first. |
+| `experimental_auth.providers` | function · **experimental** | The providers this app may use, e.g. `['google']`. Standalone: `[]`. |
+| `experimental_auth.token` | function · **experimental** | `{ provider, scopes }` → `{ accessToken, expiresAt, scopes }` for exactly those scopes, after the person allows the app once per scope set. Errors carry `.code`: `ENOAUTH`, `ENOGRANT`, `EDENIED`, `ECANCELLED`, `EINVAL`, `EGOOGLE`. |
+| `experimental_auth.revoke` | function · **experimental** | Drop the tokens this app holds for a provider; a token only this app held is revoked at the provider. Answers `{ revoked }`. |
 
 ### `experimental_commands` (namespace)
 
