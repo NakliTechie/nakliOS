@@ -40,6 +40,14 @@
           "location": {
             "type": "string",
             "description": "Where (optional)"
+          },
+          "calendar": {
+            "type": "string",
+            "enum": [
+              "local",
+              "google"
+            ],
+            "description": "\"google\" for the person's Google calendar (needs Google connected in Calendar); leave out for the NakliOS calendar"
           }
         },
         "required": [
@@ -50,7 +58,7 @@
     },
     {
       "name": "events.list",
-      "description": "Read what is on the NakliOS Calendar for a day or a few days, e.g. \"what is on today\", \"am I free tomorrow\".",
+      "description": "Read what is on the NakliOS Calendar for a day or a few days, e.g. \"what is on today\", \"am I free tomorrow\". Includes the Google calendar when it is connected; each event says which calendar it is on.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -90,6 +98,14 @@
           },
           "location": {
             "type": "string"
+          },
+          "calendar": {
+            "type": "string",
+            "enum": [
+              "local",
+              "google"
+            ],
+            "description": "\"google\" for the person's Google calendar (needs Google connected in Calendar); leave out for the NakliOS calendar"
           }
         },
         "required": [
@@ -107,6 +123,14 @@
           "title": {
             "type": "string",
             "minLength": 1
+          },
+          "calendar": {
+            "type": "string",
+            "enum": [
+              "local",
+              "google"
+            ],
+            "description": "\"google\" for the person's Google calendar (needs Google connected in Calendar); leave out for the NakliOS calendar"
           }
         },
         "required": [
@@ -137,6 +161,8 @@
     "delete-event": "events.delete",
     "save-event": "events.update",
     "confirm-cancel": "view",
-    "confirm-delete": "events.delete"
+    "confirm-delete": "events.delete",
+    "google": "person: connecting a Google account needs the person's own sign-in and consent",
+    "event-calendar": "events.create"
   }
 }
