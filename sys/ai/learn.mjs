@@ -14,7 +14,7 @@ import { filterProposals, createProposalLedger, rejectedList } from './proposal-
 import { foldTranscript, foldSessionContext, foldDecisions, foldOutcome, foldModels, foldSubstitutions, joined } from '../history/run-record.mjs';
 
 const EVIDENCE_VERBS = new Set(['run.started', 'assistant.said', 'tool.called', 'tool.responded',
-  'tool.failed', 'verify.failed', 'verify.passed', 'run.stopped', 'run.steered', 'run.nudged', 'run.checkpoint']);
+  'tool.failed', 'verify.failed', 'verify.passed', 'run.stopped', 'run.steered', 'run.nudged', 'run.checked', 'run.checkpoint']);
 const clipEvidence = (value) => String(value == null ? '' : value).replace(/\s+/g, ' ').slice(0, 240);
 
 // Event positions are stable within the hash-linked run. The review sees only these bounded

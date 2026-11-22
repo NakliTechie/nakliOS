@@ -6,6 +6,7 @@
 // holds the byte-equality lane against the inline app.
 import {utf8ByteLengthWithin,utf8Prefix} from './text-byte-bound.mjs';
 import { runAgentLoop } from './agent-loop.mjs';
+import { makeFinishCheck } from './scratch-check.mjs';
 import { pruneOpenAIMessages } from './supersede-prune.mjs';
 import { codingToolset, toolReadiness , scopeAllows, TOOL_SCOPES } from './agent-tools.mjs';
 import { renderProcedural } from './procedural.mjs';
@@ -294,14 +295,19 @@ export async function driveRun({
   // Superseded reads and empty results shrink in what each request sends (omp's pruning pass); null turns it off.
   prepareRequest = (messages) => pruneOpenAIMessages(messages),
   firstBudget = null, // test-door override for one bounded loop; normal callers use RUN_BUDGET
+  // async () => paths this run created so far (files only); the caller watches its own workspace.
+  // Code mode only: once per run, before it finishes, the model is asked about the created files the
+  // ask did not name (sys/ai/scratch-check.mjs). null turns the check off.
+  createdFiles = null,
 }) {
   let toolCalls = 0;
   const onLoop = (e) => { if (e && e.type === 'tool-call') toolCalls++; onEvent(e); };
   const aborted = () => !!(signal && signal.aborted);
+  const finishCheck = (mode === 'code' && typeof createdFiles === 'function') ? makeFinishCheck({ created: createdFiles, ask: ownerAsk(convo) }) : null;
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
     await rec.start({ messages, tools, model: model(), readiness, lesson }); // declared lesson evidence rides the run record
-    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact, compactAbove, prepareRequest });
+    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact, compactAbove, prepareRequest, ...(finishCheck ? { finishCheck } : {}) });
     await rec.finish(result);
     return result;
   };

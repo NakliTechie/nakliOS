@@ -120,6 +120,23 @@ export function replaySteer(record) {
   };
 }
 
+// The finish check's note, served back to the loop it was recorded in. The live loop asks at most
+// once per loop and records only a note it sent, so a replayed loop answers the first ask with that
+// note (or null when its loop recorded none) — the same finish point the live loop stopped at.
+export function replayFinishCheck(record) {
+  const byLoop = new Map(); let loop = -1;
+  for (const e of joined(record.events(), record.resolve)) {
+    if (e.tool === 'run.started') loop++;
+    else if (e.tool === 'run.checked') byLoop.set(loop, String(e.output?.content ?? '').replace(/^\[coordination\] /, ''));
+  }
+  let cur = -1;
+  return {
+    nextLoop() { cur++; },
+    check: async () => byLoop.get(cur) ?? null,
+    count() { return byLoop.size; },
+  };
+}
+
 export async function replayEntry(dump, { override = null, expectConsumed = true, maxSteps = 24, opts = {} } = {}) {
   const recorded = loadRecord(dump);
   const openings = openingsOf(recorded);
@@ -140,14 +157,17 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
   const gate = replayVerify(recorded);
   const verify = gate.count() ? gate : null;
   const steer = replaySteer(recorded); // B2: a record with no steers is a queue that never waits
+  const finish = replayFinishCheck(recorded);
 
   let result, threw = null;
   try {
     for (const { messages, tools } of openings) {
       await live.start({ messages, tools });
       steer.nextLoop();
+      finish.nextLoop();
       result = await runAgentLoop({
         messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent, steer,
+        ...(finish.count() ? { finishCheck: finish.check } : {}),
         // a step cap is not in the record either (the supervisor cell spins to it); it rides in opts
         maxSteps: opts.maxSteps ?? maxSteps, verify, signal, ...(opts.budget ? { budget: opts.budget } : {}),
         ...(opts.maxVerifyRounds ? { maxVerifyRounds: opts.maxVerifyRounds } : {}),

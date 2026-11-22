@@ -349,6 +349,8 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined,
       tools: scriptOn ? codemodeCatalog(baseTools, { enabled: true, mode: 'code' }) : baseTools,
       infer: rec.wrapInfer(infer), executeTool: exec, rec, verify, onEvent: rec.onEvent,
       gateNote: gated ? gateNote('bench gate: ' + task.id) : '', model: () => stamp,
+      // the app's finish check, on the bed's own workspace: files present now that the seed did not have
+      createdFiles: () => [...snapshot(ws.backend).keys()].filter((p) => !seedSnap.has(p)),
       ...(compaction ? { compact: bedCompactor(infer, compaction), compactAbove: compaction.compactAbove } : {}),
     });
   } catch (e) { crash = String(e && e.message || e); }

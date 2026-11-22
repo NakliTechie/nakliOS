@@ -51,6 +51,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
   'run.steered',      // input: { step }                        output: { content }  (CRIB-B B2: a child's completion, spliced in as a loop-authored user turn)
+  'run.checked',      // input: { step }                        output: { content }  (the once-per-run finish check: files created that the ask did not name)
   'expect.missed',    // input: { step, id, misses, streak, limit }    output: {}  (CRIB-D D1: a graded prediction missed — the streak that stops the run; limit = the run's configured streak, 0 = never)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
@@ -75,6 +76,7 @@ const LOOP_TO_VERB = Object.freeze({
   'tool-error': 'tool.failed',
   'repeat-nudge': 'run.nudged',
   'steer': 'run.steered',
+  'finish-check': 'run.checked',
   'expect-miss': 'expect.missed',
   'verify-pass': 'verify.passed',
   'verify-fail': 'verify.failed',
@@ -192,6 +194,8 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'run.nudged': enqueue(verb, () => ({ input: { step: s, times: e.times ?? null, denied: !!e.denied }, output: { content: String(e.content ?? '') } })); break;
         // B2: a child's completion the loop spliced in — a user turn the LOOP wrote, on the chain for the same reason
         case 'run.steered': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
+        // the finish check's note — a user turn the LOOP wrote, on the chain for the same reason
+        case 'run.checked': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
         // C1: the loop replaced its transcript after a context overflow — the same verb (and the same fold) as
         // a caller's compacted(), so the retry's request reconstructs.
         case 'run.compacted': enqueue(verb, () => ({ input: { method: String(e.method || 'shake'), from: Number(e.from) || 0, to: Number(e.to) || 0, step: s }, output: { replacement: Array.isArray(e.replacement) ? e.replacement : null, ...(e.usage ? { usage: e.usage } : {}) } })); break;
@@ -468,6 +472,7 @@ export function logUnit() {
         case 'verify.passed': rows.push({ k: 'system', text: '✓ gate passed — exit 0' }); return { rows, open };
         case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; ${out.via === null ? 'the run ended on it' : 'agent retrying'}` }); return { rows, open };
         case 'run.steered': rows.push({ k: 'system', text: '⇆ ' + String(out.content || '').replace(/^\[coordination\] /, '') }); return { rows, open }; // B2
+        case 'run.checked': rows.push({ k: 'system', text: 'Finish check: ' + String(out.content || '').replace(/^\[coordination\] /, '') }); return { rows, open };
         case 'run.stopped': {
           const st = out.stop;
           const label = st === 'aborted' ? 'stopped' : st === 'budget' ? `hit budget (${out.axis || ''})` : st === 'unverified' ? 'gate never passed' : st === 'error' ? `error: ${out.error || ''}` : st === 'clarify' ? `paused to ask: ${out.question || ''}` : st;
@@ -573,6 +578,7 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
         // may change between versions, and the surface must be what THAT run actually sent.
         case 'run.nudged':
         case 'run.steered':
+        case 'run.checked':
           if (!o.content) return s;
           out.push({ role: 'user', content: String(o.content) });
           return { out, pendingCalls: s.pendingCalls, started: s.started };
