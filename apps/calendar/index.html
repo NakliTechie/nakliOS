@@ -34,16 +34,19 @@ dialog{width:min(510px,calc(100vw - 24px));max-height:calc(100vh - 28px);overflo
 .toast{position:fixed;right:16px;bottom:42px;max-width:360px;background:var(--ink);color:var(--panel);border-radius:9px;padding:9px 12px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);pointer-events:none;transition:.16s;z-index:20}.toast.show{opacity:1;transform:none}
 @media(max-width:760px){.brand span:last-child{display:none}.topbar{gap:5px;padding-inline:7px}.locations button{padding-inline:5px}.calendar-head h1{min-width:0;font-size:17px}.form-grid{grid-template-columns:1fr}.form-grid .wide{grid-column:auto}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.event-pill.google,.agenda-event.google{box-shadow:inset 3px 0 0 #1a73e8}.toolbar-btn[aria-pressed="true"]{border-color:#1a73e8;color:#1a73e8}
 </style>
 </head>
 <body>
 <script src="../../sdk/naklios.js"></script>
 <script src="core.js"></script>
+<script src="google.js"></script>
 <div class="app">
   <header class="topbar">
     <div class="brand"><span class="mark">31</span><span>Calendar</span></div>
     <div class="locations" id="locations" aria-label="Calendar storage location"></div>
     <div class="spacer"></div>
+    <button class="toolbar-btn" id="google" hidden>Connect Google</button>
     <button class="toolbar-btn" id="import">Import .ics</button>
     <input id="import-file" type="file" accept=".ics,text/calendar" hidden>
     <button class="toolbar-btn" id="export">Export .ics</button>
@@ -70,6 +73,7 @@ dialog{width:min(510px,calc(100vw - 24px));max-height:calc(100vh - 28px);overflo
       <input id="event-id" type="hidden">
       <div class="form-grid">
         <label class="wide">Title<input id="event-title" maxlength="180" required autofocus></label>
+        <label class="wide" id="event-calendar-row" hidden>Calendar<select id="event-calendar"><option value="local">This device</option><option value="google">Google</option></select></label>
         <label class="check wide"><input id="event-all-day" type="checkbox"><span>All-day event</span></label>
         <label>Starts<input id="event-start" type="datetime-local" required></label>
         <label>Ends<input id="event-end" type="datetime-local" required></label>
@@ -90,7 +94,7 @@ dialog{width:min(510px,calc(100vw - 24px));max-height:calc(100vh - 28px);overflo
 </dialog>
 
 <dialog id="confirm-dialog">
-  <div class="dialog-body"><h2>Delete recurring event?</h2><p>This removes the entire event series from this storage location.</p></div>
+  <div class="dialog-body"><h2 id="confirm-title">Delete recurring event?</h2><p id="confirm-text">This removes the entire event series from this storage location.</p></div>
   <div class="dialog-actions"><button class="toolbar-btn" id="confirm-cancel">Cancel</button><button class="primary" id="confirm-delete">Delete series</button></div>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
@@ -105,6 +109,14 @@ let view=localStorage.getItem(VIEW_KEY)||'month',cursor=new Date(),saveQueue=Pro
 let resolveLoaded;const loaded=new Promise(resolve=>{resolveLoaded=resolve});
 let capabilitiesReady=false,unsubscribeFs=null,toastTimer=null,ownWrites=new Map(),remoteTimer=null;
 const defaultZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
+// Google Calendar (google.js): shown beside the local calendar once the person connects it; edits to a Google event go
+// to Google. The host gives a one-hour token for calendar.events (naklios.experimental_auth) after the person allows it.
+const G=window.CalendarGoogle,GOOGLE_KEY='naklios.calendar.google';
+let googleOn=localStorage.getItem(GOOGLE_KEY)==='1',googleEvents=[],googleRange='';
+function googleAvailable(){return!!naklios.experimental_auth&&naklios.experimental_auth.providers().includes('google')}
+async function googleToken({fresh}={}){if(fresh)await naklios.experimental_auth.revoke('google');return(await naklios.experimental_auth.token({provider:'google',scopes:G.SCOPES})).accessToken}
+const googleClient=G.createClient({getToken:googleToken});
+function allEvents(){return googleOn?data.events.concat(googleEvents):data.events}
 function now(){return Date.now()}function uid(){return globalThis.crypto?.randomUUID?.()||`event-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}
 function pad(n){return String(n).padStart(2,'0')}function localDate(date){return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`}
 function localDateTime(date){return `${localDate(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`}
@@ -129,28 +141,32 @@ async function load(){setSave(`Loading ${locationLabel(activeLocation)}…`);try
 function save(){data.updatedAt=now();const snapshot=JSON.stringify(data,null,2),location=activeLocation;setSave(`Saving to ${locationLabel(location)}…`);saveQueue=saveQueue.catch(()=>{}).then(async()=>{if(location!==activeLocation)return;ownWrites.set(DATA_FILE,now());await activeAdapter.write(DATA_FILE,snapshot);setSave(`Saved to ${locationLabel(activeLocation)}`);publishTodayWidget()}).catch(error=>{setSave('Save failed');showToast(`Could not save: ${error.message}`)});return saveQueue}
 
 function rangeForView(){if(view==='month'){const first=new Date(cursor.getFullYear(),cursor.getMonth(),1),start=addDays(first,-((first.getDay()+6)%7)),end=addDays(start,42);return{start,end}}if(view==='week'){const start=addDays(startOfDay(cursor),-((cursor.getDay()+6)%7));return{start,end:addDays(start,7)}}const start=startOfDay(cursor);return{start,end:addDays(start,1)}}
-function occurrences(){const range=rangeForView();return Core.expandEvents(data.events,range.start.getTime(),range.end.getTime())}
+function occurrences(){const range=rangeForView();return Core.expandEvents(allEvents(),range.start.getTime(),range.end.getTime())}
+function renderGoogleButton(){const b=$('google');b.hidden=!googleAvailable();b.textContent=googleOn?'Google ✓':'Connect Google';b.setAttribute('aria-pressed',String(googleOn));b.title=googleOn?'Showing your Google calendar here. Click to stop showing it.':'Show and edit your Google calendar here'}
+function setGoogle(on){googleOn=on;localStorage.setItem(GOOGLE_KEY,on?'1':'0');if(!on){googleEvents=[];googleRange=''}renderGoogleButton();render();publishTodayWidget()}
+// Fetches the visible range once per range; a refusal by the person turns the Google view off rather than asking again.
+async function refreshGoogle(force=false){if(!googleOn||!googleAvailable())return;const range=rangeForView(),key=`${range.start.getTime()}:${range.end.getTime()}`;if(!force&&key===googleRange)return;googleRange=key;try{const items=await googleClient.list(range.start.getTime(),range.end.getTime());if(googleRange!==key)return;googleEvents=items.map(item=>G.fromGoogle(item,defaultZone,Core)).filter(Boolean);render();publishTodayWidget()}catch(error){googleRange='';if(['ENOGRANT','ECANCELLED','EDENIED','ENOAUTH'].includes(error.code))setGoogle(false);showToast(`Google Calendar: ${error.message}`)}}
 function occurrenceDay(occ){return occ.event.allDay?occ.startLocal.slice(0,10):Core.utcToWall(occ.startUtc,defaultZone).slice(0,10)}
 function eventTime(occ){if(occ.event.allDay)return'All day';const local=Core.utcToWall(occ.startUtc,defaultZone);return new Date(`${local}:00`).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
-function render(){document.querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('active',button.dataset.view===view));const range=rangeForView(),items=occurrences();if(view==='month')renderMonth(range,items);else renderAgenda(range,items);renderTitle(range)}
+function render(){document.querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('active',button.dataset.view===view));const range=rangeForView(),items=occurrences();if(view==='month')renderMonth(range,items);else renderAgenda(range,items);renderTitle(range);void refreshGoogle()}
 function renderTitle(range){if(view==='month')$('period-title').textContent=cursor.toLocaleDateString([],{month:'long',year:'numeric'});else if(view==='week')$('period-title').textContent=`${range.start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${addDays(range.end,-1).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})}`;else $('period-title').textContent=cursor.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
-function eventButton(occ,agenda=false){const button=document.createElement('button');button.className=agenda?'agenda-event':`event-pill${occ.event.allDay?' all-day':''}`;button.dataset.eventId=occ.event.id;if(agenda)button.innerHTML=`<strong>${escapeHtml(occ.event.title)}</strong><span>${escapeHtml(eventTime(occ))}${occ.event.location?' · '+escapeHtml(occ.event.location):''}${occ.event.recurrence?.frequency!=='none'?' · repeats':''}</span>`;else button.textContent=`${occ.event.allDay?'':eventTime(occ)+' '}${occ.event.title}`;button.addEventListener('click',event=>{event.stopPropagation();openEvent(occ.event)});return button}
+function eventButton(occ,agenda=false){const button=document.createElement('button');button.className=(agenda?'agenda-event':`event-pill${occ.event.allDay?' all-day':''}`)+(occ.event.source==='google'?' google':'');button.dataset.eventId=occ.event.id;if(agenda)button.innerHTML=`<strong>${escapeHtml(occ.event.title)}</strong><span>${escapeHtml(eventTime(occ))}${occ.event.location?' · '+escapeHtml(occ.event.location):''}${occ.event.recurrence?.frequency!=='none'?' · repeats':''}</span>`;else button.textContent=`${occ.event.allDay?'':eventTime(occ)+' '}${occ.event.title}`;button.addEventListener('click',event=>{event.stopPropagation();openEvent(occ.event)});return button}
 function renderMonth(range,items){const root=$('calendar');root.className='content month';root.replaceChildren();for(const day of['Mon','Tue','Wed','Thu','Fri','Sat','Sun']){const head=document.createElement('div');head.className='weekday';head.textContent=day;root.append(head)}for(let index=0;index<42;index++){const date=addDays(range.start,index),key=localDate(date),cell=document.createElement('div');cell.tabIndex=0;cell.setAttribute('role','button');cell.setAttribute('aria-label',date.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'}));cell.className='day-cell';cell.classList.toggle('outside',date.getMonth()!==cursor.getMonth());cell.classList.toggle('today',key===localDate(new Date()));cell.innerHTML=`<span class="day-num">${date.getDate()}</span>`;cell.addEventListener('click',event=>{if(event.target===cell||event.target.classList.contains('day-num'))openEvent(null,date)});cell.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openEvent(null,date)}});for(const occ of items.filter(item=>occurrenceDay(item)===key).slice(0,4))cell.append(eventButton(occ));const count=items.filter(item=>occurrenceDay(item)===key).length;if(count>4){const more=document.createElement('div');more.className='event-pill';more.textContent=`+${count-4} more`;cell.append(more)}root.append(cell)}}
 function renderAgenda(range,items){const root=$('calendar');root.className=`content agenda${view==='day'?' day-view':''}`;root.replaceChildren();const days=view==='day'?1:7;for(let index=0;index<days;index++){const date=addDays(range.start,index),key=localDate(date),section=document.createElement('section');section.className='agenda-day';section.classList.toggle('today',key===localDate(new Date()));section.innerHTML=`<h2>${escapeHtml(date.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}))}</h2>`;const dayItems=items.filter(item=>occurrenceDay(item)===key);if(!dayItems.length)section.insertAdjacentHTML('beforeend','<div class="empty">No events</div>');for(const occ of dayItems)section.append(eventButton(occ,true));section.addEventListener('dblclick',event=>{if(event.target===section||event.target.tagName==='H2')openEvent(null,date)});root.append(section)}}
 
 function zoneOptions(){let zones=[defaultZone,'UTC','Asia/Kolkata','America/New_York','Europe/London','Asia/Tokyo'];try{zones=Intl.supportedValuesOf('timeZone')}catch(_){}const select=$('event-timezone');select.replaceChildren(...zones.map(zone=>{const option=document.createElement('option');option.value=zone;option.textContent=zone;return option}))}
 function setAllDayInputs(){const allDay=$('event-all-day').checked;for(const input of[$('event-start'),$('event-end')]){const value=input.value;input.type=allDay?'date':'datetime-local';input.value=allDay?value.slice(0,10):(value.includes('T')?value:`${value}T09:00`)}}
-function openEvent(event,date=new Date()){const start=new Date(date);if(!event){start.setHours(start.getHours()+1,0,0,0);const end=new Date(start.getTime()+3600000);$('event-id').value='';$('event-title').value='';$('event-all-day').checked=false;$('event-start').type=$('event-end').type='datetime-local';$('event-start').value=localDateTime(start);$('event-end').value=localDateTime(end);$('event-timezone').value=defaultZone;$('event-repeat').value='none';$('event-until').value='';$('event-location').value='';$('event-description').value='';$('delete-event').hidden=true;$('event-heading').textContent='New event'}else{$('event-id').value=event.id;$('event-title').value=event.title;$('event-all-day').checked=event.allDay;$('event-start').type=$('event-end').type=event.allDay?'date':'datetime-local';$('event-start').value=event.startLocal;$('event-end').value=event.endLocal;$('event-timezone').value=event.timeZone;$('event-repeat').value=event.recurrence?.frequency||'none';$('event-until').value=event.recurrence?.until||'';$('event-location').value=event.location||'';$('event-description').value=event.description||'';$('delete-event').hidden=false;$('event-heading').textContent=event.recurrence?.frequency!=='none'?'Edit event series':'Edit event'}$('event-error').textContent='';$('event-dialog').showModal()}
-async function commitEvent(){const id=$('event-id').value,title=$('event-title').value.trim(),allDay=$('event-all-day').checked,start=$('event-start').value,end=$('event-end').value;if(!title){$('event-error').textContent='Give this event a title.';return false}if(!start||!end){$('event-error').textContent='Choose both start and end.';return false}try{const tz=$('event-timezone').value||defaultZone,startMs=allDay?Date.parse(`${start}T00:00:00Z`):Date.parse(Core.wallToUtc(start,tz)),endMs=allDay?Date.parse(`${end}T00:00:00Z`):Date.parse(Core.wallToUtc(end,tz));if(endMs<=startMs)throw new Error('End must be after start.');const previous=data.events.find(item=>item.id===id),stamp=now(),next={id:id||uid(),title,startLocal:start,endLocal:end,allDay,timeZone:tz,recurrence:{frequency:$('event-repeat').value,interval:1,until:$('event-until').value||null},location:$('event-location').value.trim(),description:$('event-description').value.trim(),createdAt:previous?.createdAt||stamp,updatedAt:stamp};if(previous)Object.assign(previous,next);else data.events.push(next);await save();render();return true}catch(error){$('event-error').textContent=error.message;return false}}
-async function deleteCurrent(){const id=$('event-id').value;if(!id)return;data.events=data.events.filter(event=>event.id!==id);$('confirm-dialog').close();$('event-dialog').close();await save();render();showToast('Event series deleted')}
+function openEvent(event,date=new Date()){const start=new Date(date);if(!event){start.setHours(start.getHours()+1,0,0,0);const end=new Date(start.getTime()+3600000);$('event-id').value='';$('event-title').value='';$('event-all-day').checked=false;$('event-start').type=$('event-end').type='datetime-local';$('event-start').value=localDateTime(start);$('event-end').value=localDateTime(end);$('event-timezone').value=defaultZone;$('event-repeat').value='none';$('event-until').value='';$('event-location').value='';$('event-description').value='';$('delete-event').hidden=true;$('event-heading').textContent='New event'}else{$('event-id').value=event.id;$('event-title').value=event.title;$('event-all-day').checked=event.allDay;$('event-start').type=$('event-end').type=event.allDay?'date':'datetime-local';$('event-start').value=event.startLocal;$('event-end').value=event.endLocal;$('event-timezone').value=event.timeZone;$('event-repeat').value=event.recurrence?.frequency||'none';$('event-until').value=event.recurrence?.until||'';$('event-location').value=event.location||'';$('event-description').value=event.description||'';$('delete-event').hidden=false;$('event-heading').textContent=event.recurrence?.frequency!=='none'?'Edit event series':'Edit event'}$('event-error').textContent='';const fromGoogle=event?.source==='google';$('event-calendar-row').hidden=!(googleOn||fromGoogle);$('event-calendar').value=event?(fromGoogle?'google':'local'):(googleOn?'google':'local');$('event-calendar').disabled=!!event;for(const id of['event-repeat','event-until'])$(id).disabled=!!event?.recurringEventId;if(fromGoogle){$('delete-event').textContent='Delete event';$('event-heading').textContent=event.recurringEventId?'Edit this occurrence':'Edit Google event'}else $('delete-event').textContent='Delete series';$('event-dialog').showModal()}
+async function commitEvent(){const id=$('event-id').value,title=$('event-title').value.trim(),allDay=$('event-all-day').checked,start=$('event-start').value,end=$('event-end').value;if(!title){$('event-error').textContent='Give this event a title.';return false}if(!start||!end){$('event-error').textContent='Choose both start and end.';return false}try{const tz=$('event-timezone').value||defaultZone,startMs=allDay?Date.parse(`${start}T00:00:00Z`):Date.parse(Core.wallToUtc(start,tz)),endMs=allDay?Date.parse(`${end}T00:00:00Z`):Date.parse(Core.wallToUtc(end,tz));if(endMs<=startMs)throw new Error('End must be after start.');const previous=data.events.find(item=>item.id===id),stamp=now(),next={id:id||uid(),title,startLocal:start,endLocal:end,allDay,timeZone:tz,recurrence:{frequency:$('event-repeat').value,interval:1,until:$('event-until').value||null},location:$('event-location').value.trim(),description:$('event-description').value.trim(),createdAt:previous?.createdAt||stamp,updatedAt:stamp};const target=id?(id.startsWith('g:')?'google':'local'):$('event-calendar').value;if(target==='google'){const prior=googleEvents.find(item=>item.id===id),body={...next,recurringEventId:prior?.recurringEventId||null};setSave('Saving to Google…');if(prior)await googleClient.patch(prior.googleId,body);else await googleClient.insert(body);await refreshGoogle(true);setSave('Saved to Google');return true}if(previous)Object.assign(previous,next);else data.events.push(next);await save();render();return true}catch(error){$('event-error').textContent=error.message;return false}}
+async function deleteCurrent(){const id=$('event-id').value;if(!id)return;if(id.startsWith('g:')){const item=googleEvents.find(e=>e.id===id);$('confirm-dialog').close();$('event-dialog').close();try{await googleClient.remove(item.googleId);await refreshGoogle(true);showToast('Deleted from Google Calendar')}catch(error){showToast(`Google Calendar: ${error.message}`)}return}data.events=data.events.filter(event=>event.id!==id);$('confirm-dialog').close();$('event-dialog').close();await save();render();showToast('Event series deleted')}
 
 async function importIcs(file){try{const imported=Core.parseIcs(await file.text(),defaultZone);if(!imported.length)throw new Error('No VEVENT records found');const ids=new Set(data.events.map(event=>event.id));for(const event of imported){if(ids.has(event.id))event.id=uid();data.events.push(event)}await save();render();showToast(`Imported ${imported.length} event${imported.length===1?'':'s'}`)}catch(error){showToast(`Import failed: ${error.message}`)}finally{$('import-file').value=''}}
 function exportIcs(){const blob=new Blob([Core.exportIcs(data.events)],{type:'text/calendar'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`naklios-calendar-${localDate(new Date())}.ics`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),0)}
 function isOwn(path){const stamp=ownWrites.get(path);if(!stamp)return false;if(now()-stamp<2500)return true;ownWrites.delete(path);return false}async function subscribe(){if(unsubscribeFs){try{unsubscribeFs()}catch(_){}unsubscribeFs=null}if(activeLocation==='browser'||typeof naklios.fs.subscribe!=='function')return;try{unsubscribeFs=await naklios.fs.subscribe('',event=>{if(event.source!=='remote'&&isOwn(event.path))return;clearTimeout(remoteTimer);remoteTimer=setTimeout(()=>void load(),180)})}catch(_){}}
 function applyTheme(theme){const colors=theme?.colors;if(!colors)return;const style=document.documentElement.style;for(const[name,key]of[['--body','BODY'],['--panel','PANEL'],['--ink','INK'],['--brand','BRAND'],['--act','ACT'],['--ok','OK'],['--row','ROW']])style.setProperty(name,colors[key])}
 
-zoneOptions();$('event-all-day').addEventListener('change',setAllDayInputs);$('event-form').addEventListener('submit',async event=>{event.preventDefault();if(await commitEvent())$('event-dialog').close()});$('delete-event').addEventListener('click',()=> $('confirm-dialog').showModal());$('confirm-cancel').addEventListener('click',()=> $('confirm-dialog').close());$('confirm-delete').addEventListener('click',()=>void deleteCurrent());$('new-event').addEventListener('click',()=>openEvent());$('import').addEventListener('click',()=> $('import-file').click());$('import-file').addEventListener('change',event=>event.target.files[0]&&void importIcs(event.target.files[0]));$('export').addEventListener('click',exportIcs);$('today').addEventListener('click',()=>{cursor=new Date();render()});$('previous').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()-1);else cursor.setDate(cursor.getDate()-(view==='week'?7:1));render()});$('next').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()+1);else cursor.setDate(cursor.getDate()+(view==='week'?7:1));render()});document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>{view=button.dataset.view;localStorage.setItem(VIEW_KEY,view);render()}));document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='n'){event.preventDefault();openEvent()}if(event.key==='Escape'&&$('confirm-dialog').open)$('confirm-dialog').close()});
-naklios.beforeClose(()=>saveQueue);naklios.theme.onChange(applyTheme);naklios.theme.request();let boot=setTimeout(()=>{if(!capabilitiesReady){capabilitiesReady=true;void chooseInitial()}},650);naklios.onCapabilitiesChange(capabilities=>{renderLocations();if(!capabilitiesReady&&(capabilities.fsBackends.length||!capabilities.hosted)){clearTimeout(boot);capabilitiesReady=true;void chooseInitial()}else if(capabilitiesReady&&activeLocation!=='browser'&&!available().includes(activeLocation)){void activate('browser',{initial:true});showToast('Storage disconnected. Opened Browser calendar.')}});naklios.requestCapabilities();naklios.ready();render();
+zoneOptions();$('event-all-day').addEventListener('change',setAllDayInputs);$('event-form').addEventListener('submit',async event=>{event.preventDefault();if(await commitEvent())$('event-dialog').close()});$('delete-event').addEventListener('click',()=>{const g=$('event-id').value.startsWith('g:');$('confirm-title').textContent=g?'Delete from Google Calendar?':'Delete recurring event?';$('confirm-text').textContent=g?'This removes the event from your Google calendar.':'This removes the entire event series from this storage location.';$('confirm-dialog').showModal()});$('google').addEventListener('click',()=>setGoogle(!googleOn));$('confirm-cancel').addEventListener('click',()=> $('confirm-dialog').close());$('confirm-delete').addEventListener('click',()=>void deleteCurrent());$('new-event').addEventListener('click',()=>openEvent());$('import').addEventListener('click',()=> $('import-file').click());$('import-file').addEventListener('change',event=>event.target.files[0]&&void importIcs(event.target.files[0]));$('export').addEventListener('click',exportIcs);$('today').addEventListener('click',()=>{cursor=new Date();render()});$('previous').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()-1);else cursor.setDate(cursor.getDate()-(view==='week'?7:1));render()});$('next').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()+1);else cursor.setDate(cursor.getDate()+(view==='week'?7:1));render()});document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>{view=button.dataset.view;localStorage.setItem(VIEW_KEY,view);render()}));document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='n'){event.preventDefault();openEvent()}if(event.key==='Escape'&&$('confirm-dialog').open)$('confirm-dialog').close()});
+naklios.beforeClose(()=>saveQueue);naklios.theme.onChange(applyTheme);naklios.theme.request();let boot=setTimeout(()=>{if(!capabilitiesReady){capabilitiesReady=true;void chooseInitial()}},650);naklios.onCapabilitiesChange(capabilities=>{renderLocations();renderGoogleButton();void refreshGoogle();if(!capabilitiesReady&&(capabilities.fsBackends.length||!capabilities.hosted)){clearTimeout(boot);capabilitiesReady=true;void chooseInitial()}else if(capabilitiesReady&&activeLocation!=='browser'&&!available().includes(activeLocation)){void activate('browser',{initial:true});showToast('Storage disconnected. Opened Browser calendar.')}});naklios.requestCapabilities();naklios.ready();render();
 
 // ── Commands on the common rail (commands.json): the voice assistant and other callers reach the calendar through
 // the desktop catalog, which checks their grant; Calendar alone writes calendar.json. ──
@@ -173,7 +189,7 @@ function commandEvent(args){
 function publishTodayWidget(){
   if(!naklios.experimental_widgets)return;
   const start=startOfDay(new Date()),end=addDays(start,1);
-  const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:eventTime(o),title:o.event.title}));
+  const items=Core.expandEvents(allEvents(),start.getTime(),end.getTime()).map(o=>({time:eventTime(o),title:o.event.title}));
   naklios.experimental_widgets.update('today',{items,empty:'Nothing today',expires:end.getTime()},{persist:activeLocation!=='crate'});
 }
 function namedEvent(title){
@@ -205,15 +221,45 @@ function movedTimes(event,start,minutes){
   if(!Number.isFinite(length)||length<1||length>10080)throw new Error('duration_minutes must be between 1 and 10080');
   return{startLocal:wall,endLocal:Core.utcToWall(new Date(utc(wall)+length*6e4).toISOString(),zone)};
 }
+// Google: a command names calendar "google" to work on the person's Google calendar; that needs Google connected in
+// Calendar first, so a caller never starts a Google sign-in the person did not ask for here.
+function wantsGoogle(calendar){
+  if(calendar==null||calendar==='local')return false;
+  if(calendar!=='google')throw new Error('calendar must be "local" or "google"');
+  if(!googleOn||!googleAvailable())throw new Error('Google Calendar is not connected; press Connect Google in Calendar first.');
+  return true;
+}
+// Google events are found by exact title from yesterday to 90 days ahead.
+async function googleNamed(title){
+  const from=addDays(startOfDay(new Date()),-1).getTime(),to=addDays(startOfDay(new Date()),90).getTime();
+  const key=String(title).trim().toLowerCase();
+  const hits=(await googleClient.list(from,to)).map(item=>G.fromGoogle(item,defaultZone,Core)).filter(e=>e&&e.title.toLowerCase()===key);
+  if(!hits.length)throw new Error(`There is no Google event called ${title} in the next 90 days.`);
+  if(hits.length>1)throw new Error(`${hits.length} Google events are called ${title}; change them in Calendar.`);
+  if($('event-dialog').open&&$('event-id').value===hits[0].id)throw new Error(`${hits[0].title} is open in Calendar. Close it first.`);
+  return hits[0];
+}
 const COMMAND_HANDLERS={
   async 'events.create'(args){
     await loaded;
     const event=commandEvent(args);
+    if(wantsGoogle(args?.calendar)){
+      await googleClient.insert(event);await refreshGoogle(true);
+      return{created:true,title:event.title,start:event.startLocal,end:event.endLocal,all_day:event.allDay,where:'Google Calendar'};
+    }
     data.events.push(event);save();await saveQueue;render();
     return{created:true,title:event.title,start:event.startLocal,end:event.endLocal,all_day:event.allDay,where:locationLabel(activeLocation)};
   },
-  async 'events.update'({title,new_title,start,duration_minutes,location}){
+  async 'events.update'({title,new_title,start,duration_minutes,location,calendar}){
     await loaded;
+    if(wantsGoogle(calendar)){
+      const event=await googleNamed(title);
+      if(start!=null||duration_minutes!=null)Object.assign(event,movedTimes(event,start,duration_minutes));
+      if(new_title!=null)event.title=String(new_title).slice(0,180);
+      if(location!=null)event.location=String(location).slice(0,240);
+      await googleClient.patch(event.googleId,event);await refreshGoogle(true);
+      return{updated:event.title,start:event.startLocal,end:event.endLocal,where:'Google Calendar'};
+    }
     const event=settledEvent(title);
     if(event.recurrence?.frequency!=='none')throw new Error(`${event.title} repeats; change the series in Calendar.`);
     if(start!=null||duration_minutes!=null)Object.assign(event,movedTimes(event,start,duration_minutes));
@@ -222,21 +268,30 @@ const COMMAND_HANDLERS={
     save();await saveQueue;render();
     return{updated:event.title,start:event.startLocal,end:event.endLocal};
   },
-  async 'events.delete'({title}){
+  async 'events.delete'({title,calendar}){
     await loaded;
+    if(wantsGoogle(calendar)){
+      const event=await googleNamed(title);
+      await googleClient.remove(event.googleId);await refreshGoogle(true);
+      return{deleted:event.title,occurrence_only:!!event.recurringEventId,where:'Google Calendar'};
+    }
     const event=settledEvent(title);
     data.events=data.events.filter(item=>item!==event);
     save();await saveQueue;render();
     return{deleted:event.title,repeating:event.recurrence?.frequency!=='none'};
   },
+  // Lists both calendars when Google is connected; each event says which one it is on.
   async 'events.list'({date,days=1}){
     await loaded;
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date??'').trim());
     if(date!=null&&!m)throw new Error('date must be "YYYY-MM-DD"');
     const count=Math.min(14,Math.max(1,Math.round(Number(days)||1)));
     const start=m?new Date(+m[1],+m[2]-1,+m[3]):startOfDay(new Date()),end=addDays(start,count);
-    const hits=Core.expandEvents(data.events,start.getTime(),end.getTime()).slice(0,30).map(o=>({
+    let events=data.events;
+    if(googleOn&&googleAvailable())events=events.concat((await googleClient.list(start.getTime(),end.getTime())).map(item=>G.fromGoogle(item,defaultZone,Core)).filter(Boolean));
+    const hits=Core.expandEvents(events,start.getTime(),end.getTime()).slice(0,30).map(o=>({
       title:o.event.title,start:o.event.allDay?`${o.startLocal} (all day)`:o.startLocal.replace('T',' '),
+      calendar:o.event.source==='google'?'google':'local',
       ...(o.event.location?{location:o.event.location}:{})}));
     const range=`${localDate(start)}${count>1?` for ${count} days`:''}`;
     return hits.length?{range,events:hits}:{range,events:[],message:'Nothing on the calendar.'};
