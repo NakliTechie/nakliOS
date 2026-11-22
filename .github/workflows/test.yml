@@ -187,6 +187,9 @@ jobs:
       - name: Verify the transcript render plans noop/append/rebuild and leaves the reader's scroll alone
         run: node sys/ai/test/log-render-plan.test.mjs
 
+      - name: Verify a finished turn's actions fold under the answer, and errors and running calls never fold
+        run: node sys/ai/test/log-fold.test.mjs
+
       - name: Verify the follow-up queue survives a crash, holds on a bad ending, and migrates legacy strings
         run: node sys/ai/test/followup-queue.test.mjs
 

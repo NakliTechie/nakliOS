@@ -144,6 +144,15 @@
   .change:hover{border-color:var(--accent);color:var(--fg-0)}
   .change .ci{color:var(--accent);flex:0 0 auto} .change .cf{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .change .cv{color:var(--fg-2);margin-left:auto;padding-left:8px;flex:0 0 auto}
   .msg.queued{opacity:.5} .msg.queued .who{color:var(--accent)}
+  /* Folded actions: a finished turn's tool calls behind one summary line under the answer. */
+  .fold-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 14px}
+  .fold-sum{display:inline-flex;align-items:center;gap:7px;max-width:100%;font-family:var(--mono);font-size:11.5px;color:var(--fg-1);background:var(--bg-1);border:1px solid var(--rule);border-radius:7px;padding:5px 10px;cursor:pointer;text-align:left}
+  .fold-sum:hover{border-color:var(--accent);color:var(--fg-0)}
+  .fold-sum:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .fold-sum .fi{color:var(--accent);flex:0 0 auto;transition:transform var(--dur) var(--ease)} .fold-sum[aria-expanded="true"] .fi{transform:rotate(90deg)}
+  .fold-sum .fs{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .fold-stop{color:var(--fg-2);font-size:12px;min-width:0;overflow-wrap:anywhere}
+  .fold-body{margin:-6px 0 14px;padding-left:10px;border-left:2px solid var(--rule)}
   /* composer */
   #composer{flex:0 0 auto;border-top:1px solid var(--rule);background:var(--bg-1);padding:10px 20px 12px}
   #composer .cwrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
@@ -472,7 +481,8 @@
   // The persistence optimisation is untouched — the app still writes it, the AGENT cannot.
   const SEARCH_INDEX_PATH = '.anvil/search-index.json';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
-  import { rowKey, rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
+  import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
+  import { planFolds, foldSummary, foldKeys } from '../../sys/ai/log-fold.mjs';
   import { planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET, turnChanges, planTurnRevert } from '../../sys/ai/change-preimages.mjs';
   import { buildReviewDiff, reviewVersion, reviewPrompt, MAX_REVIEW_BYTES } from '../../sys/ai/review-diff.mjs';
   import { highlightLine } from '../../sys/ai/review-highlight.mjs';
@@ -2031,6 +2041,10 @@
   // One element per log row — ALWAYS one, a hidden placeholder for a kind that draws nothing — so the
   // wrapper's i-th child is row i and a `patch` can replace a row in place (U1).
   function buildLogRow(t, e, i){
+    // Folded actions: a finished turn's end-of-run row draws the fold; its folded rows draw a hidden
+    // placeholder in their own slot (one node per row still holds) unless the fold is building them.
+    if(foldPlan.folds.has(i)) return buildFoldRow(t, e, i, foldPlan.folds.get(i));
+    if(foldPlan.hidden.has(i) && !buildingFold){ const ph=document.createElement('span'); ph.hidden=true; ph.className='row-placeholder folded'; return ph; }
     if(e.k==='user'||e.k==='system'){
       const d=document.createElement('div'); d.className='msg '+e.k;
       d.innerHTML=`<div class="who">${e.k==='user'?'you':'system'}</div><div class="body"></div>`;
@@ -2066,7 +2080,7 @@
       }
       // U1: a user's open/close is recorded on the row and in the key cache, so no render reverts it
       // (a <details> used to close on every rebuild — the fleet ticker's, every 5 s — because e.open was never written)
-      dt.addEventListener('toggle', ()=>{ e.open = dt.open; if(logCache.taskId===t.id && Array.isArray(logCache.keys) && i<logCache.keys.length) logCache.keys[i] = rowKey(e, i); });
+      dt.addEventListener('toggle', ()=>{ e.open = dt.open; if(logCache.taskId===t.id && Array.isArray(logCache.keys) && i<logCache.keys.length) logCache.keys = displayKeys(t); });
       return dt;
     } else if(e.k==='subagent'){
       // ESS-2: the child's row — B1: live / unverifiable while in flight (by the clock), then its final stop.
@@ -2091,6 +2105,31 @@
     }
     const ph=document.createElement('span'); ph.hidden=true; ph.className='row-placeholder'; return ph;
   }
+  // Folded actions (harness bench, 2026-11-22). Display only: planFolds reads t.log and writes nothing,
+  // and which folds are open lives here in memory, never in the task. Errors, running calls and
+  // failed children are never folded, so nothing that needs the owner hides behind a closed fold.
+  let foldPlan = { hidden:new Set(), folds:new Map() };
+  const foldOpen = new Set();   // `${task id}:${row index}` of each fold the reader opened
+  let buildingFold = false;
+  function displayKeys(t){ foldPlan = planFolds(t.log); return foldKeys(rowKeys(t.log), foldPlan, i=>foldOpen.has(t.id+':'+i)); }
+  function buildFoldRow(t, e, i, f){
+    const key=t.id+':'+i, bodyId='fold-'+t.id+'-'+i;
+    const d=document.createElement('div'); d.className='fold';
+    const line=document.createElement('div'); line.className='fold-line';
+    const btn=document.createElement('button'); btn.type='button'; btn.className='fold-sum'; btn.setAttribute('aria-controls', bodyId);
+    btn.innerHTML='<span class="fi" aria-hidden="true">▸</span><span class="fs"></span>';
+    btn.querySelector('.fs').textContent=foldSummary(f);
+    btn.title='Show or hide the actions this turn took';
+    const stop=document.createElement('span'); stop.className='fold-stop'; stop.textContent=e.text;
+    line.appendChild(btn); line.appendChild(stop);
+    const body=document.createElement('div'); body.className='fold-body'; body.id=bodyId;
+    const fill=()=>{ if(body.childElementCount) return; buildingFold=true; try{ for(const j of f.members) body.appendChild(buildLogRow(t, t.log[j], j)); } finally { buildingFold=false; } };
+    const show=(open)=>{ btn.setAttribute('aria-expanded', open?'true':'false'); body.hidden=!open; if(open) fill(); };
+    show(foldOpen.has(key));
+    // Toggled in place, not through a re-render, so the button keeps keyboard focus.
+    btn.onclick=()=>{ const open=!foldOpen.has(key); if(open) foldOpen.add(key); else foldOpen.delete(key); show(open); if(logCache.taskId===t.id) logCache.keys=displayKeys(t); };
+    d.appendChild(line); d.appendChild(body); return d;
+  }
   function renderLog(){
     const box=$('log'); const t=activeTask();
     if(!t){ logCache={taskId:null,keys:null}; box.innerHTML='<div class="empty"><h2>No task selected</h2>Pick a task on the left, or make a new one.</div>'; return; }
@@ -2113,7 +2152,7 @@
     // nodes for every event (measured: 48ms per render at 600 rows, and the reader yanked to the
     // bottom each time). `logCache` holds the keys of what is currently on screen; a plan of
     // `append` builds only the tail into the SAME wrapper, `noop` touches nothing.
-    const keys = rowKeys(t.log);
+    const keys = displayKeys(t);
     const cached = (logCache.taskId===t.id) ? logCache.keys : null;
     const plan = planLogUpdate(cached, keys);
     const existingWrap = box.querySelector('.wrap');
