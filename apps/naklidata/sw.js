@@ -20,7 +20,7 @@
 // app keeps booting (engine boot will then either use the CDN if back
 // online, or surface its own error). See DECISIONS 2026-05-17 11:50.
 
-const CACHE_VERSION = 'bcsBNu7gIMLMr';
+const CACHE_VERSION = 'bX2iQ3X6ycV8R';
 // Policy version deliberately rotates the cache when eligibility rules change,
 // even if the inlined application hash stays the same.
 const CACHE_POLICY_VERSION = 'p3';
@@ -275,6 +275,24 @@ self.addEventListener('fetch', (event) => {
         }
         return res ?? Response.error();
       }),
+    );
+    return;
+  }
+
+  // Code (lazy chunks and the taxonomy worker): network-first, cache when offline.
+  // The page itself is network-first, so stale-while-revalidate code could pair a
+  // new page with the previous deploy's chunks, whose exports differ (DECISIONS KU).
+  if (pathname.startsWith('/chunks/') || pathname === '/taxonomy.worker.js') {
+    event.respondWith(
+      fetch(req)
+        .then(async (res) => {
+          if (responseCanBeCached(res)) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(req, res.clone()).catch(() => {});
+          }
+          return res;
+        })
+        .catch(async () => (await caches.match(req)) ?? Response.error()),
     );
     return;
   }
