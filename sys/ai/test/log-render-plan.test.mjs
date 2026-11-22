@@ -147,7 +147,9 @@ assert.equal((anvil.match(/logCache=\{taskId:null,keys:null\}/g) || []).length, 
 // ── U1: the app performs the plan node for node, and a user's toggle survives ──
 assert.match(anvil, /function buildLogRow\(t, e, i\)\{[\s\S]{0,6000}?const ph=document\.createElement\('span'\); ph\.hidden=true;/, 'one node per row, a placeholder for a kind that draws nothing');
 assert.match(anvil, /if\(nodes\.length===cached\.length\)\{ for\(const i of plan\.patched\) existingWrap\.replaceChild\(buildLogRow\(t, t\.log\[i\], i\), nodes\[i\]\); \}\n\s*else \{ plan\.mode='rebuild'; \}/, 'a patch replaces the changed nodes, and rebuilds when the node count is not the row count');
-assert.match(anvil, /dt\.addEventListener\('toggle', \(\)=>\{ e\.open = dt\.open;[^\n]*logCache\.keys\[i\] = rowKey\(e, i\); \}\);/, 'a user-opened <details> is written to the row and the key cache, so no render closes it');
+// Folded actions (2026-11-22): the key cache is refreshed through displayKeys, because a folded row's
+// key carries its fold and its host's key carries its members.
+assert.match(anvil, /dt\.addEventListener\('toggle', \(\)=>\{ e\.open = dt\.open;[^\n]*logCache\.keys = displayKeys\(t\); \}\);/, 'a user-opened <details> is written to the row and the key cache, so no render closes it');
 assert.ok(anvil.indexOf("q.remove(); }") < anvil.indexOf("if(plan.mode==='patch' && existingWrap){"), 'queue chips are removed before the node count is compared');
 console.log('log-render-plan: noop/append/patch/rebuild, keys cover what is drawn, verified≠claimed, scroll belongs to the reader');
 
