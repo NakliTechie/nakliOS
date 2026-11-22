@@ -7035,7 +7035,7 @@ function aiAppOwnsSystemFs(appId){
 // One narrow host service for a same-origin mirror the catalog names (`hostServices:['web']`),
 // without kind:'system', which would also open the whole store and naklios.net. Added 2026-11-15
 // for Gupshup (web search, skills); Lectella has the same need for URL sources.
-const APP_HOST_SERVICES = new Set(['web', 'skills']);
+const APP_HOST_SERVICES = new Set(['web', 'skills', 'auth']);
 function appHasHostService(appId, service){
   if (!APP_HOST_SERVICES.has(service)) return false;
   const app = APPS.find(item => item.id === appId);
@@ -8692,6 +8692,119 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
   return _netTail;
 }
 // The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
+// ── Sign-in to outside accounts (naklios.experimental_auth, 2026-11-22) ─────────────────────────
+// sys/host/auth.mjs holds the rules; this block gives it the person's consent (one Grant per app per scope set,
+// the same issuer and revocation list as naklios.net), Google Identity Services' token flow in this window, and a
+// hash-chained History file (OPFS naklios/history/auth.ndjson: app, provider, scopes, outcome; never a token).
+// The OAuth client belongs to the Google Cloud project `naklios`; its JavaScript origins are naklios.dev and the
+// local check addresses (localhost and 127.0.0.1 on port 8947). The client ID is public by design.
+const GOOGLE_OAUTH_CLIENT_ID = '820850121313-91alpuup79ni898lgolesfu74kmeknhe.apps.googleusercontent.com';
+const AUTH_GRANTS_KEY = 'nakliOS.authGrants.v1'; // { [appId]: { ['google ' + scopeKey]: grant | { denied:true, decidedAt } } }
+function authGrants(){ try { return JSON.parse(localStorage.getItem(AUTH_GRANTS_KEY) || '{}') || {}; } catch(_) { return {}; } }
+function saveAuthGrants(v){ try { localStorage.setItem(AUTH_GRANTS_KEY, JSON.stringify(v)); } catch(_) {} }
+function authGrantCount(){ return Object.values(authGrants()).reduce((n, slots) => n + Object.keys(slots || {}).length, 0); }
+function authAllowed(appId){ return aiAppOwnsEgress(appId) || appHasHostService(appId, 'auth'); }
+const authPrompts = new Map();
+async function authEnsureGrant(appId, provider, scopeKey, describe){
+  const slot = provider + ' ' + scopeKey;
+  const have = (authGrants()[appId] || {})[slot];
+  if (have && have.denied) throw Object.assign(new Error(`Signing in to ${provider} was not allowed for this app`), { code:'ENOGRANT' });
+  if (!have || !have.identifier) {
+    const key = appId + '\0' + slot;
+    if (!authPrompts.has(key)) authPrompts.set(key, (async () => {
+      const name = APPS.find(a => a.id === appId)?.name || appId;
+      rpcPromptOpens(appId);
+      const ok = await nakliosConfirm(`${name} wants to use your Google account to:\n\n• ${describe.join('\n• ')}\n\n` +
+        `Google asks you to choose the account next. ${name} gets a sign-in token that lasts one hour and talks to Google directly; ` +
+        `nothing passes through a NakliOS server. NakliOS records each sign-in in History, never the token.`,
+        { title:'Allow Google sign-in?', okLabel:'Allow', cancelLabel:'Not now' });
+      const all = authGrants(); all[appId] = all[appId] || {};
+      if (!ok) { all[appId][slot] = { denied:true, decidedAt: Date.now() }; saveAuthGrants(all); return null; }
+      const { g } = await netMods();
+      const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools(['auth.token']), g.caveat.scope('oauth:' + provider + ':' + scopeKey)] });
+      all[appId][slot] = grant; saveAuthGrants(all); return grant;
+    })().finally(() => authPrompts.delete(key)));
+    rpcPromptOpens(appId);
+    const grant = await authPrompts.get(key);
+    if (!grant) throw Object.assign(new Error(`Signing in to ${provider} was not allowed for this app`), { code:'ENOGRANT' });
+  }
+  const grant = (authGrants()[appId] || {})[slot];
+  const { g } = await netMods();
+  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool:'auth.token', target:'oauth:' + provider + ':' + scopeKey, now: Date.now(), revocationList: netRevoked() });
+  if (!v.ok) throw Object.assign(new Error(`The sign-in grant did not verify (${v.reason})`), { code:'ENOGRANT' });
+  return grant.identifier;
+}
+function revokeAuthGrants(){
+  const revoked = netRevoked();
+  for (const slots of Object.values(authGrants())) for (const v of Object.values(slots || {})) if (v && v.identifier) revoked.add(v.identifier);
+  try { localStorage.setItem(NET_REVOKED_KEY, JSON.stringify([...revoked])); } catch(_) {}
+  saveAuthGrants({});
+}
+let _gisLoad = null;
+function loadGoogleIdentity(){
+  if (window.google?.accounts?.oauth2) return Promise.resolve(window.google.accounts.oauth2);
+  return _gisLoad || (_gisLoad = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = () => window.google?.accounts?.oauth2 ? resolve(window.google.accounts.oauth2) : reject(new Error('Google sign-in did not load'));
+    s.onerror = () => { _gisLoad = null; reject(new Error('Could not load Google sign-in (offline or blocked)')); };
+    document.head.appendChild(s);
+  }));
+}
+async function googleRequestToken(provider, scopeUrls){
+  const oauth2 = await loadGoogleIdentity();
+  return new Promise((resolve, reject) => {
+    const client = oauth2.initTokenClient({
+      client_id: GOOGLE_OAUTH_CLIENT_ID,
+      scope: scopeUrls.join(' '),
+      include_granted_scopes: false,
+      callback: (r) => {
+        if (r?.error) return reject(Object.assign(new Error(`Google refused: ${r.error_description || r.error}`), { code: r.error === 'access_denied' ? 'EDENIED' : 'EGOOGLE' }));
+        resolve({ accessToken: r.access_token, expiresIn: Number(r.expires_in) || 3600, grantedScopes: String(r.scope || '').split(/\s+/).filter(Boolean) });
+      },
+      error_callback: (e) => reject(Object.assign(new Error(e?.message || e?.type || 'Google sign-in failed'),
+        { code: e?.type === 'popup_failed_to_open' ? 'EPOPUP' : e?.type === 'popup_closed' ? 'ECANCELLED' : 'EGOOGLE' })),
+    });
+    client.requestAccessToken({ prompt: '' });
+  });
+}
+const authHistory = { head: undefined, tail: Promise.resolve() };
+function authHistoryAppend({ appId, provider, scopes, grantId, outcome }){
+  const run = authHistory.tail.then(async () => {
+    const { l } = await netMods();
+    const root = await navigator.storage.getDirectory();
+    const d = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+    const fh = await d.getFileHandle('auth.ndjson', { create:true });
+    const file = await fh.getFile();
+    if (authHistory.head === undefined) {
+      const lines = (await file.text()).split('\n').filter(Boolean);
+      authHistory.head = lines.length ? await l.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    }
+    const input = { provider, scopes };
+    const { event, head } = await l.appendEvent(authHistory.head, { ts: Date.now(), principal:'app:' + appId, door:'auth', tool:'auth.token', app: appId, input, output: outcome, grant_id: grantId || null });
+    const w = await fh.createWritable({ keepExistingData:true });
+    await w.write({ type:'write', position: file.size, data: JSON.stringify({ ...event, input, output: outcome }) + '\n' });
+    await w.close();
+    authHistory.head = head;
+  });
+  authHistory.tail = run.catch((e) => { console.error('[naklios] auth History append failed', e); });
+  return authHistory.tail;
+}
+let _authService = null;
+async function authService(){
+  if (_authService) return _authService;
+  const { createAuthService } = await import('./sys/host/auth.mjs');
+  return _authService = createAuthService({
+    authorize: authEnsureGrant,
+    requestToken: googleRequestToken,
+    continueSignIn: (name) => nakliosConfirm(`${name} is asking Google for your sign-in, and the browser needs one more click to open Google's window.`,
+      { title:'Continue to Google', okLabel:'Continue', cancelLabel:'Cancel' }),
+    record: authHistoryAppend,
+    revokeToken: async (provider, token) => { const o = await loadGoogleIdentity(); await new Promise(r => o.revoke(token, r)); },
+    appName: (appId) => APPS.find(a => a.id === appId)?.name || appId,
+  });
+}
+
 // ── Web search and page reading (naklios.experimental_web) ──────────────────────────
 // sys/host/web.mjs reads for agent apps whose Worker has no DNS and meets CORS. Each site needs the person's
 // one-time consent per app (the same network Grant as naklios.net), and every request lands in History.
@@ -8973,6 +9086,8 @@ function capabilitySnapshot(appId){
     aiSearchState:ragHost.state,
     experimental_tex:texCapabilityForApp(appId),
     experimental_web:aiAppOwnsEgress(appId) || appHasHostService(appId, 'web'),
+    // Sign-in to outside accounts (Google first): system apps and same-origin mirrors granted auth.
+    experimental_auth: authAllowed(appId) ? ['google'] : [],
     // Endpoints stream reasoning (OpenAI reasoning_content, Anthropic thinking); the browser
     // models do not report it separately.
     experimental_aiReasoning:aiModel.runtime === 'endpoint',
@@ -9719,6 +9834,18 @@ window.addEventListener('message', async e => {
       try { reply.result = await netHostFetch(appId, msg); } // S1: Grant-gated, History-logged
       finally { releaseHold(); }
     } catch(err){ reply.error = String(err?.message || err); }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
+  } else if (msg.type === 'naklios:auth:token' || msg.type === 'naklios:auth:revoke'){
+    const reply = { type:'naklios:auth:reply', requestId: msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      if (!authAllowed(appId)) throw Object.assign(new Error('Sign-in is available to same-origin system apps and mirrors granted auth'), { code:'ENOAUTH' });
+      const auth = await authService();
+      const releaseHold = rpcHold(appId, fsWaitNotice(e.source, msg.requestId, replyTo));
+      try { reply.result = msg.type === 'naklios:auth:token' ? await auth.token(appId, { provider: msg.provider, scopes: msg.scopes }) : await auth.revoke(appId, msg.provider); }
+      finally { releaseHold(); }
+    } catch(err){ reply.error = String(err?.message || err); if (err?.code) reply.code = err.code; }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:web:search' || msg.type === 'naklios:web:fetch'){
     const reply = { type:'naklios:web:reply', requestId: msg.requestId };
@@ -11150,6 +11277,10 @@ function openSettings(section){
           ${netGrantCount() ? '' : 'disabled'} title="Revokes every network grant and forgets every decline — each app asks again before its next request through your egress backend">
           Reset network decisions${netGrantCount() ? ` (${netGrantCount()})` : ''}
         </button>
+        <button class="nw-fs-btn-secondary" id="auth-revoke-grants" type="button"
+          ${authGrantCount() ? '' : 'disabled'} title="Revokes every Google sign-in grant, forgets every decline and revokes the tokens NakliOS holds; each app asks again">
+          Reset Google sign-ins${authGrantCount() ? ` (${authGrantCount()})` : ''}
+        </button>
       </div>
       ${appGrantRowsHTML()}
       ${doorSettingsHTML()}
@@ -11809,6 +11940,13 @@ function openSettings(section){
     row.closest('.nw-door-client-row')?.remove();
     aiSettingsResult.textContent = `The program "${client}" can no longer use NakliOS; it must be allowed again.`;
   }));
+  wrap.querySelector('#auth-revoke-grants')?.addEventListener('click', async (event) => {
+    revokeAuthGrants();
+    if (_authService) { try { await _authService.revokeAll(); } catch(_) {} }
+    event.currentTarget.disabled = true;
+    event.currentTarget.textContent = 'Reset Google sign-ins';
+    aiSettingsResult.textContent = 'Google sign-ins were reset: grants revoked, tokens revoked at Google, declines forgotten; each app asks again.';
+  });
   wrap.querySelector('#net-revoke-grants')?.addEventListener('click', (event) => {
     revokeNetGrants();
     event.currentTarget.disabled = true;

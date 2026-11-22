@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NakliOS privacy policy</title>
+<meta name="description" content="How NakliOS handles your data, including data from your Google account.">
+<style>
+  :root { --bg:#fbfaf7; --fg:#1d1d1f; --muted:#5c5c63; --line:#e4e2dc; --link:#3d3bb8; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:19px; margin:32px 0 8px; }
+  p, li { color:var(--fg); } .muted { color:var(--muted); font-size:14px; }
+  a { color:var(--link); } ul { padding-left:20px; }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>NakliOS privacy policy</h1>
+  <p class="muted">Last updated 22 November 2026. NakliOS is made by Chirag Patnaik (NakliTechie).</p>
+
+  <p>NakliOS (naklios.dev) is a desktop that runs in your browser. Its apps keep your data on your device: in your
+  browser's storage, or in a folder you pick. NakliOS has no accounts, no analytics and no advertising, and it runs no
+  server that stores your files, mail or calendar.</p>
+
+  <h2>Data from your Google account</h2>
+  <p>Some NakliOS apps (Mail and Calendar) can connect to your Google account when you ask them to. When they do:</p>
+  <ul>
+    <li><strong>What they ask for.</strong> Only the permissions shown on Google's consent screen and in NakliOS's own
+      prompt before it, for example "read, send, label and delete your Gmail" or "see and edit events in your Google
+      calendars". Each app asks separately.</li>
+    <li><strong>Where the data goes.</strong> Your browser talks to Google directly. Mail, events and contacts read from
+      Google are shown on your screen and may be cached on your device, in your browser's storage or the folder you
+      chose for NakliOS. They are not sent to NakliTechie or to any server NakliTechie runs.</li>
+    <li><strong>Sign-in tokens.</strong> Google gives NakliOS a token that lasts one hour. NakliOS keeps it in the
+      browser's memory only, never on disk, and never stores your Google password. NakliOS keeps a local log of which
+      app signed in and when, without the token.</li>
+    <li><strong>AI features.</strong> If you choose to use an AI feature on your mail or calendar (for example "draft a
+      reply"), the text you select goes to the AI model you configured in NakliOS: one running in your browser, or an
+      AI service whose address and key you entered yourself. NakliTechie does not provide or see that service. Data
+      from Google is never used to train AI models.</li>
+    <li><strong>No selling or sharing.</strong> Data from Google is used only to show you your own mail and calendar
+      and to do what you ask. It is never sold, never used for advertising, and never shared with anyone.</li>
+  </ul>
+  <p>NakliOS's use and transfer of information received from Google APIs adheres to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+    including the Limited Use requirements.</p>
+
+  <h2>Removing access and data</h2>
+  <ul>
+    <li>In NakliOS, open Settings → AI and press <strong>Reset Google sign-ins</strong>. This revokes the tokens NakliOS
+      holds and makes every app ask again.</li>
+    <li>You can also remove NakliOS at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+    <li>Cached mail and events live in your browser's site data for naklios.dev, or in the folder you picked. Clearing
+      that site data, or deleting the folder, removes them.</li>
+  </ul>
+
+  <h2>Other data</h2>
+  <p>naklios.dev is served by Cloudflare, which keeps standard request logs (such as IP address and time) for
+  security and operation. NakliOS itself sets no tracking cookies.</p>
+
+  <h2>Changes and contact</h2>
+  <p>Changes to this policy appear on this page with a new date. Questions: <a href="mailto:chirag.patnaik@gmail.com">chirag.patnaik@gmail.com</a>.</p>
+
+  <footer class="muted"><a href="/">NakliOS</a> · <a href="/terms">Terms of use</a></footer>
+</main>
+</body>
+</html>

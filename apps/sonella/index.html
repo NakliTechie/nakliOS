@@ -213,7 +213,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
 globalThis.__SONELLA_WORKERS = {"asr":"(() => {\n  // src/workers/asr.js\n  var MODEL_ID = \"sonella/whisper-tiny\";\n  var pipe = null;\n  var refused = [];\n  async function load(m) {\n    const blob = (bytes, type) => URL.createObjectURL(new Blob([bytes], { type }));\n    const T = await import(blob(m.runtime, \"text/javascript\"));\n    if (typeof T.pipeline !== \"function\" || !T.env?.backends?.onnx?.wasm) throw new Error(\"the speech runtime lacks pipeline() or its ONNX settings\");\n    const { env } = T;\n    const files = new Map(Object.entries(m.files));\n    env.allowRemoteModels = false;\n    env.allowLocalModels = true;\n    env.useBrowserCache = false;\n    env.useWasmCache = false;\n    env.useCustomCache = true;\n    env.customCache = {\n      match: async (k) => {\n        const s = String(k?.url ?? k), at = s.indexOf(`/${MODEL_ID}/`), b = at < 0 ? null : files.get(s.slice(at + MODEL_ID.length + 2));\n        if (!b) {\n          refused.push(s);\n          return void 0;\n        }\n        return new Response(b);\n      },\n      put: async () => {\n      }\n    };\n    env.fetch = async (u) => {\n      refused.push(String(u?.url ?? u));\n      return new Response(null, { status: 404, statusText: \"Sonella fetches nothing here\" });\n    };\n    const wasm = env.backends.onnx.wasm;\n    wasm.wasmPaths = { mjs: blob(m.ortMjs, \"text/javascript\"), wasm: blob(m.ortWasm, \"application/wasm\") };\n    wasm.wasmBinary = m.ortWasm;\n    wasm.numThreads = 1;\n    wasm.proxy = false;\n    pipe = await T.pipeline(\"automatic-speech-recognition\", MODEL_ID, { dtype: \"q8\", device: \"wasm\" });\n  }\n  var reply = (msg) => {\n    self.postMessage({ ...msg, refused });\n    refused = [];\n  };\n  self.onmessage = async ({ data: m }) => {\n    try {\n      if (m.type === \"load\") {\n        await load(m);\n        reply({ id: m.id, ok: true });\n        return;\n      }\n      if (m.type === \"run\") {\n        if (!pipe) throw new Error(\"the model is not loaded\");\n        const out = await pipe(m.audio, { language: m.language, task: \"transcribe\" });\n        reply({ id: m.id, ok: true, text: String(out?.text ?? \"\").trim() });\n      }\n    } catch (e) {\n      reply({ id: m.id, ok: false, error: String(e?.message ?? e) });\n    }\n  };\n})();\n","blockstore":"(() => {\n  // src/workers/blockstore.js\n  var root = null;\n  var dir = null;\n  var dirName = null;\n  var pools = /* @__PURE__ */ new Map();\n  var index = /* @__PURE__ */ new Map();\n  var fileOf = (pool) => `pool-${pool}.bin`;\n  var reply = (rid, body, transfer) => self.postMessage({ rid, ...body }, transfer || []);\n  async function handle(e) {\n    const { rid, op } = e.data;\n    try {\n      if (op === \"open\") {\n        root = await navigator.storage.getDirectory();\n        dirName = e.data.name;\n        dir = await root.getDirectoryHandle(dirName, { create: true });\n        reply(rid, { ok: true });\n      } else if (op === \"write\") {\n        const pool = e.data.pool ?? 0;\n        let p = pools.get(pool);\n        if (!p) {\n          const fh = await dir.getFileHandle(fileOf(pool), { create: true });\n          p = { handle: await fh.createSyncAccessHandle(), size: 0 };\n          p.handle.truncate(0);\n          pools.set(pool, p);\n        }\n        const bytes = new Uint8Array(e.data.buf);\n        p.handle.write(bytes, { at: p.size });\n        index.set(e.data.id, [pool, p.size, bytes.byteLength]);\n        p.size += bytes.byteLength;\n        reply(rid, { ok: true, size: p.size });\n      } else if (op === \"read\") {\n        const loc = index.get(e.data.id);\n        const p = loc && pools.get(loc[0]);\n        if (!p) throw new Error(`Block ${e.data.id} is not in the pool`);\n        const buf = new ArrayBuffer(loc[2]);\n        p.handle.read(new Uint8Array(buf), { at: loc[1] });\n        reply(rid, { ok: true, buf }, [buf]);\n      } else if (op === \"drop\") {\n        const pool = e.data.pool, p = pools.get(pool);\n        p?.handle.close();\n        pools.delete(pool);\n        for (const [id, loc] of index) if (loc[0] === pool) index.delete(id);\n        let removed = null;\n        if (dir) {\n          await dir.removeEntry(fileOf(pool)).then(() => {\n            removed = fileOf(pool);\n          }, () => {\n          });\n        }\n        reply(rid, { ok: true, removed });\n      } else if (op === \"list\") {\n        const files = [];\n        if (dir) {\n          for await (const [name, h] of dir.entries()) if (h.kind === \"file\") files.push({ name, bytes: pools.get(Number(name.slice(5, -4)))?.size ?? (await h.getFile()).size });\n        }\n        reply(rid, { ok: true, files, folder: dirName });\n      } else if (op === \"sweep\") {\n        const removed = [];\n        root ??= await navigator.storage.getDirectory();\n        for await (const [name] of root.entries()) {\n          if (!name.startsWith(\".sonella-blocks-\") || name === dirName) continue;\n          const session = name.slice(\".sonella-blocks-\".length).replace(/\\.bin$/, \"\");\n          const free = await navigator.locks.request(`sonella-blocks-${session}`, { ifAvailable: true }, (lock) => !!lock);\n          if (free) {\n            await root.removeEntry(name, { recursive: true }).catch(() => {\n            });\n            removed.push(name);\n          }\n        }\n        reply(rid, { ok: true, removed });\n      } else if (op === \"close\") {\n        for (const p of pools.values()) p.handle.close();\n        pools.clear();\n        index.clear();\n        if (dirName) await root.removeEntry(dirName, { recursive: true }).catch(() => {\n        });\n        reply(rid, { ok: true });\n      }\n    } catch (err) {\n      reply(rid, { ok: false, error: String(err?.message || err) });\n    }\n  }\n  var queue = Promise.resolve();\n  self.onmessage = (e) => {\n    queue = queue.then(() => handle(e));\n  };\n})();\n","probe":"(() => {\n  // src/workers/probe.js\n  self.onmessage = async (e) => {\n    const { op } = e.data || {};\n    if (op === \"ping\") {\n      self.postMessage({ pong: \"pong\" });\n      return;\n    }\n    if (op === \"opfs\") {\n      const name = \".sonella-probe.bin\";\n      try {\n        const root = await navigator.storage.getDirectory();\n        const fh = await root.getFileHandle(name, { create: true });\n        const h = await fh.createSyncAccessHandle();\n        const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);\n        h.truncate(0);\n        h.write(data, { at: 0 });\n        h.flush();\n        const back = new Uint8Array(8);\n        const n = h.read(back, { at: 0 });\n        h.close();\n        await root.removeEntry(name);\n        self.postMessage({ ok: n === 8 && back[7] === 8, bytes: n, error: n === 8 ? null : `read ${n} bytes` });\n      } catch (err) {\n        self.postMessage({ ok: false, error: String(err && err.message || err) });\n      }\n    }\n  };\n})();\n"};
 globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js\n  var SonellaPlayer = class extends AudioWorkletProcessor {\n    constructor() {\n      super();\n      this.queue = [];\n      this.pos = 0;\n      this.played = 0;\n      this.gen = 0;\n      this.ended = false;\n      this.tick = 0;\n      this.port.onmessage = (e) => {\n        const m = e.data;\n        if (m.type === \"chunk\") {\n          if (m.gen === this.gen) {\n            this.queue.push(m);\n            this.ended = false;\n          }\n        } else if (m.type === \"reset\") {\n          this.queue = [];\n          this.pos = 0;\n          this.played = 0;\n          this.gen = m.gen;\n          this.ended = false;\n        } else if (m.type === \"end\") {\n          if (m.gen === this.gen) this.queue.push({ end: true });\n        }\n      };\n    }\n    process(_inputs, outputs) {\n      const out = outputs[0];\n      const L = out[0], R = out[1] ?? out[0];\n      let w = 0;\n      while (w < L.length && this.queue.length) {\n        const c = this.queue[0];\n        if (c.end) {\n          this.queue.shift();\n          if (!this.ended) {\n            this.ended = true;\n            this.port.postMessage({ type: \"ended\", gen: this.gen, played: this.played + w });\n          }\n          continue;\n        }\n        const k = Math.min(L.length - w, c.L.length - this.pos);\n        L.set(c.L.subarray(this.pos, this.pos + k), w);\n        R.set((c.R ?? c.L).subarray(this.pos, this.pos + k), w);\n        w += k;\n        this.pos += k;\n        if (this.pos >= c.L.length) {\n          this.queue.shift();\n          this.pos = 0;\n        }\n      }\n      if (w < L.length) {\n        L.fill(0, w);\n        if (R !== L) R.fill(0, w);\n      }\n      this.played += w;\n      let queued = -this.pos;\n      for (const c of this.queue) if (!c.end) queued += c.L.length;\n      if (++this.tick % 8 === 0 || w < L.length) this.port.postMessage({ type: \"pos\", gen: this.gen, played: this.played, queued, time: currentTime });\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-player\", SonellaPlayer);\n})();\n","probe":"(() => {\n  // src/worklets/probe.js\n  var SonellaProbe = class extends AudioWorkletProcessor {\n    process(_inputs, outputs) {\n      for (const ch of outputs[0]) ch.fill(0.25);\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-probe\", SonellaProbe);\n})();\n","recorder":"(() => {\n  // src/worklets/recorder.js\n  var SonellaRecorder = class extends AudioWorkletProcessor {\n    process(inputs) {\n      const inp = inputs[0];\n      if (inp && inp.length) this.port.postMessage(inp.map((ch) => ch.slice()));\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-recorder\", SonellaRecorder);\n})();\n"};</script>
 <script>
-/* naklios-sdk:begin ver=2 sha256=5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2 */
+/* naklios-sdk:begin ver=2 sha256=cc9922943539ac612bb1322fe858fab6a901caedc8dd2c6416cd48dc3b66703f */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -379,6 +379,8 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
     experimental_tex: false,
     // experimental_web: this app may search the web and read pages through the host.
     experimental_web: false,
+    // experimental_auth: the outside-account providers this app may sign in to through the host (['google']).
+    experimental_auth: [],
     // experimental_aiReasoning: the selected model streams its reasoning beside the reply
     // (chunks carry delta.reasoning_content), and experimental_thinking may switch it.
     experimental_aiReasoning: false,
@@ -831,6 +833,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.experimental_tex = msg.experimental_tex === true;
       capabilities.experimental_web = msg.experimental_web === true;
+      capabilities.experimental_auth = Array.isArray(msg.experimental_auth) ? msg.experimental_auth.filter(function (p) { return typeof p === 'string'; }) : [];
       capabilities.experimental_aiReasoning = msg.experimental_aiReasoning === true;
       capabilities.experimental_aiVision = msg.experimental_aiVision === true;
       capabilities.net = msg.net === true;
@@ -1014,13 +1017,13 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
                 msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
                 msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply' ||
-                msg.type === 'naklios:tasks:reply' ||
+                msg.type === 'naklios:tasks:reply' || msg.type === 'naklios:auth:reply' ||
                 msg.type === 'naklios:browser:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
       if (p.timer) clearTimeout(p.timer);
-      if (msg.error) p.reject(new Error(msg.error));
+      if (msg.error) { var rpcErr = new Error(msg.error); if (msg.code) rpcErr.code = msg.code; p.reject(rpcErr); }
       else p.resolve(msg.result);
     } else if (msg.type === 'naklios:tasks:due' && Array.isArray(msg.tasks)) {
       // The host's clock found due tasks for this app; claim them with experimental_tasks.claim().
@@ -1443,6 +1446,35 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
       fetch: function (url) {
         if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS page reading is unavailable to this app'));
         return rpc('naklios:web:fetch', { url: String(url || '') }, 120000);
+      },
+    },
+
+    // Sign-in to outside accounts. The host runs the provider's browser sign-in in its own window and asks the
+    // person once per app per scope set; the app gets a short-lived access token and calls the provider's API
+    // itself. Google first: scopes by short name ('gmail.modify', 'calendar.events') or full URL.
+    experimental_auth: {
+      // The providers this app may use; [] when none (standalone, or the app is not allowed).
+      providers: function () { return (capabilities.experimental_auth || []).slice(); },
+      // token({ provider, scopes }) -> { accessToken, expiresAt, scopes }. Call it from a click handler: Google's
+      // window needs the person's click, and without one the host shows a "Continue to Google" dialog first.
+      // Errors carry .code: ENOAUTH (not available), ENOGRANT (person declined), EDENIED (Google or the person
+      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE.
+      token: function (opts) {
+        opts = opts || {};
+        var provider = opts.provider || 'google';
+        if (!inNakliOS || (capabilities.experimental_auth || []).indexOf(provider) < 0) {
+          var e = new Error(inNakliOS ? 'Sign-in to ' + provider + ' is not available to this app' : 'Not hosted — sign-in unavailable standalone');
+          e.code = 'ENOAUTH';
+          return Promise.reject(e);
+        }
+        // The person may take minutes on Google's screen; the host also stops this clock while its prompt is open.
+        return rpc('naklios:auth:token', { provider: provider, scopes: opts.scopes || [] }, 300000);
+      },
+      // Drop the tokens this app holds for the provider (a token only this app held is revoked at the provider).
+      revoke: function (provider) {
+        provider = provider || 'google';
+        if (!inNakliOS || (capabilities.experimental_auth || []).indexOf(provider) < 0) return Promise.resolve({ revoked: 0 });
+        return rpc('naklios:auth:revoke', { provider: provider });
       },
     },
 

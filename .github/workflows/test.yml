@@ -119,6 +119,9 @@ jobs:
       - name: Web search and page reading for agent apps (provider choice, consent per host, reading order, History without addresses)
         run: node scripts/test-host-web.mjs
 
+      - name: Sign-in to outside accounts (consent per scope set, exact-scope tokens, popup retry, refused scopes, revoke, History without tokens)
+        run: node scripts/test-host-auth.mjs
+
       - name: Verify naklios.net egress SDK seam (ENOEGRESS until a backend is advertised)
         run: node scripts/test-net-seam.mjs
 
