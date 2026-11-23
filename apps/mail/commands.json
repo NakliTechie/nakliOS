@@ -1,0 +1,67 @@
+{
+  "widgets": [
+    {
+      "id": "unread",
+      "title": "Mail",
+      "display": "list"
+    }
+  ],
+  "commands": [
+    {
+      "name": "mail.search",
+      "description": "Search the person's Gmail with Gmail's own search words, e.g. \"from:ravi is:unread\", \"subject:invoice newer_than:7d\". Returns message ids, senders, subjects, dates and snippets, newest first. Needs Gmail connected in Mail. Never marks mail read.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Gmail search words; leave out for the inbox"
+          },
+          "max": {
+            "type": "number",
+            "description": "How many messages, 1 to 25 (default 10)"
+          }
+        }
+      }
+    },
+    {
+      "name": "mail.read",
+      "description": "Read one Gmail message by the id that mail.search or mail.unread gave: sender, recipients, subject, date, plain text (up to 20,000 characters), attachment names, and the dated promises found in it by Emergic's rules. Never marks mail read.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The message id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "mail.unread",
+      "description": "How many unread messages are in the person's Gmail inbox, and the newest of them. Needs Gmail connected in Mail.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "max": {
+            "type": "number",
+            "description": "How many unread messages to list, 1 to 25 (default 10)"
+          }
+        }
+      }
+    }
+  ],
+  "parity": {
+    "search-form": "mail.search",
+    "search": "mail.search",
+    "refresh": "mail.unread",
+    "google": "person: connecting a Google account needs the person's own sign-in and consent"
+  }
+}

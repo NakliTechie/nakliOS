@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mail — NakliOS</title>
+<meta name="description" content="Read and search your Gmail in NakliOS. Mail goes from this browser straight to Google.">
+<style>
+:root{
+  --body:#faf2e2;--panel:#fdf8ec;--ink:#2c1810;--brand:#c8512a;--act:#2a4a8a;--ok:#5a7a30;--row:#f0e2c8;
+  --muted:color-mix(in srgb,var(--ink) 58%,var(--body));--faint:color-mix(in srgb,var(--ink) 35%,var(--body));
+  --line:color-mix(in srgb,var(--ink) 14%,transparent);--strong:color-mix(in srgb,var(--ink) 27%,transparent);
+}
+*{box-sizing:border-box}[hidden]{display:none!important}html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--body);color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit;color:inherit}button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column;min-height:0}
+.topbar{display:flex;align-items:center;gap:9px;min-height:54px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:760}
+.mark{display:grid;place-items:center;width:29px;height:29px;border-radius:9px;background:var(--brand);color:#fff}
+.search{flex:1;display:flex;max-width:520px}.search input{flex:1;border:1px solid var(--line);border-radius:8px;background:var(--body);padding:6px 10px}
+.btn{border:1px solid var(--line);border-radius:8px;background:var(--row);padding:6px 10px}.btn:hover{background:color-mix(in srgb,var(--row) 70%,var(--ink) 6%)}
+.btn[aria-pressed="true"]{border-color:#1a73e8;color:#1a73e8}
+.main{flex:1;display:grid;grid-template-columns:minmax(260px,380px) 1fr;min-height:0}
+.list{overflow:auto;border-right:1px solid var(--line);background:var(--panel)}
+.row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 12px}
+.row:hover{background:var(--row)}.row.active{background:color-mix(in srgb,var(--act) 12%,var(--panel))}
+.row .top{display:flex;gap:8px;align-items:baseline}.row .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .when{color:var(--muted);font-size:11px;white-space:nowrap}.row .subj{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .snip{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.unread .who,.row.unread .subj{font-weight:700}
+.reader{overflow:auto;padding:18px 22px;min-width:0}
+.reader h1{font:700 19px/1.25 Georgia,serif;margin:0 0 8px}.meta{color:var(--muted);font-size:12px;margin-bottom:12px}
+.promises{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}.promise{border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:8px;padding:5px 9px;background:var(--panel);font-size:12px}
+.body{white-space:pre-wrap;overflow-wrap:anywhere;max-width:760px}
+.html-frame{width:100%;min-height:60vh;border:1px solid var(--line);border-radius:8px;background:#fff}
+.empty{color:var(--muted);padding:40px 22px;text-align:center}
+.status{min-height:28px;display:flex;align-items:center;gap:8px;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px}
+@media(max-width:760px){.main{grid-template-columns:1fr}.reader{display:none}.main.reading .list{display:none}.main.reading .reader{display:block}.brand span:last-child{display:none}}
+</style>
+</head>
+<body>
+<script src="../../sdk/naklios.js"></script>
+<script src="gmail.js"></script>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark">✉</span><span>Mail</span></div>
+    <form class="search" id="search-form" role="search"><input id="search" type="search" placeholder="Search Gmail (from:ravi is:unread)" aria-label="Search Gmail"></form>
+    <button class="btn" id="refresh" title="Check for new mail" hidden>Refresh</button>
+    <button class="btn" id="google" hidden>Connect Google</button>
+  </header>
+  <div class="main" id="main">
+    <nav class="list" id="list" aria-label="Messages"></nav>
+    <article class="reader" id="reader"><div class="empty" id="reader-empty">Pick a message to read it.</div></article>
+  </div>
+  <footer class="status"><span id="status">Mail goes from this browser straight to Google. Recent headers are kept in this browser for a quick start.</span></footer>
+</div>
+<script type="module">
+const G=window.MailGmail;
+const $=id=>document.getElementById(id);
+const GOOGLE_KEY='naklios.mail.google', DB='naklios-mail', CACHE_MS=5*60*1000;
+const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+let googleOn=localStorage.getItem(GOOGLE_KEY)==='1', query='in:inbox', messages=[], current=null, me='', rulesPromise=null;
+const googleAvailable=()=>!!naklios.experimental_auth&&naklios.experimental_auth.providers().includes('google');
+async function googleToken({fresh}={}){if(fresh)await naklios.experimental_auth.revoke('google');return(await naklios.experimental_auth.token({provider:'google',scopes:G.SCOPES})).accessToken}
+const gmail=G.createClient({getToken:googleToken});
+const rules=()=>rulesPromise||(rulesPromise=import('../../sys/emergic-rules/rules.mjs').then(m=>m.loadEmergicRules()).catch(e=>{rulesPromise=null;throw e}));
+
+// ── a small cache of recent headers and snippets (no bodies), so the list shows at once on open ──
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function cacheGet(key){try{const db=await idb();return await new Promise(res=>{const q=db.transaction('kv').objectStore('kv').get(key);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)})}catch{return null}}
+async function cachePut(key,value){try{const db=await idb();db.transaction('kv','readwrite').objectStore('kv').put(value,key)}catch{}}
+async function cacheClear(){try{const db=await idb();db.transaction('kv','readwrite').objectStore('kv').clear()}catch{}}
+
+const fmt=ms=>{const d=new Date(ms),now=new Date();return d.toDateString()===now.toDateString()?d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):d.toLocaleDateString([], {day:'numeric',month:'short'})};
+const shortName=from=>{const p=G.person(from);return p.name||p.address||'(unknown)'};
+function setStatus(text){$('status').textContent=text}
+
+function renderGoogle(){const b=$('google');b.hidden=!googleAvailable();b.textContent=googleOn?'Google ✓':'Connect Google';b.setAttribute('aria-pressed',String(googleOn));b.title=googleOn?'Reading your Gmail here. Click to disconnect.':'Read your Gmail here';$('refresh').hidden=!googleOn}
+function renderList(){
+  const list=$('list');list.textContent='';
+  if(!googleOn){const e=document.createElement('div');e.className='empty';e.textContent=googleAvailable()?'Connect Google to read your Gmail here.':'Open Mail inside NakliOS (naklios.dev) to connect Gmail.';list.append(e);return}
+  if(!messages.length){const e=document.createElement('div');e.className='empty';e.textContent='No messages.';list.append(e);return}
+  for(const m of messages){
+    const b=document.createElement('button');b.className='row'+(m.unread?' unread':'')+(current&&current.id===m.id?' active':'');b.dataset.id=m.id;
+    const top=document.createElement('div');top.className='top';const who=document.createElement('span');who.className='who';who.textContent=shortName(m.from);
+    const when=document.createElement('span');when.className='when';when.textContent=fmt(m.date);top.append(who,when);
+    const s=document.createElement('div');s.className='subj';s.textContent=m.subject;const n=document.createElement('div');n.className='snip';n.textContent=m.snippet;
+    b.append(top,s,n);b.addEventListener('click',()=>void openMessage(m.id,{byPerson:true}));list.append(b);
+  }
+}
+
+// HTML mail shows only in a sandboxed frame with no scripts and no outside requests (no tracking pixels).
+function htmlFrame(html){
+  const f=document.createElement('iframe');f.className='html-frame';f.setAttribute('sandbox','');f.setAttribute('referrerpolicy','no-referrer');
+  f.srcdoc=`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">${html}`;
+  return f;
+}
+function renderReader(msg,found){
+  const r=$('reader');r.textContent='';
+  if(!msg){const e=document.createElement('div');e.className='empty';e.textContent='Pick a message to read it.';r.append(e);return}
+  const h=document.createElement('h1');h.textContent=msg.subject;
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=`${msg.from} · to ${msg.to.join(', ')||'—'} · ${new Date(msg.date).toLocaleString()}`+(msg.attachments.length?` · ${msg.attachments.length} attachment(s)`:'');
+  r.append(h,meta);
+  if(found&&found.length){const p=document.createElement('div');p.className='promises';p.setAttribute('aria-label','Promises in this message');
+    for(const x of found){const c=document.createElement('span');c.className='promise';c.textContent=`${x.direction==='i_owe'?'You owe':'Owed to you'} by ${x.due}${x.inferred?' (about)':''}: ${x.what}`;p.append(c)}r.append(p)}
+  if(msg.html){const t=document.createElement('button');t.className='btn';t.id='show-html';t.textContent='Show formatted';const body=document.createElement('div');body.className='body';body.textContent=msg.text;
+    t.addEventListener('click',()=>{const on=t.textContent==='Show formatted';t.textContent=on?'Show plain text':'Show formatted';body.replaceWith(on?htmlFrame(msg.html):Object.assign(document.createElement('div'),{className:'body',textContent:msg.text}));});
+    r.append(t,document.createElement('br'),document.createElement('br'),body)}
+  else{const body=document.createElement('div');body.className='body';body.textContent=msg.text;r.append(body)}
+}
+
+async function promisesOf(msg){
+  if(!me||!msg.text)return[];
+  try{const r=await rules();return r.promisesIn({from:msg.from,to:msg.to,reply_to:msg.replyTo||'',body:msg.text,sent_on:G.localDay(msg.date,zone)},me)}
+  catch(e){console.warn('[mail] promise rules unavailable',e);return[]}
+}
+
+async function openMessage(id,{byPerson=false}={}){
+  const row=messages.find(m=>m.id===id);current=row||{id};renderList();$('main').classList.add('reading');setStatus('Opening…');
+  try{const msg=await gmail.read(id);current=msg;renderReader(msg,await promisesOf(msg));setStatus('Mail goes from this browser straight to Google.');
+    if(byPerson&&msg.unread){await gmail.markRead(id);if(row)row.unread=false;renderList();void publishUnread()}}
+  catch(e){handleError(e)}
+}
+
+function handleError(error){if(['ENOGRANT','ECANCELLED','EDENIED','ENOAUTH'].includes(error.code))setGoogle(false);setStatus(`Gmail: ${error.message}`)}
+
+async function refresh(){
+  if(!googleOn||!googleAvailable())return;
+  setStatus('Checking Gmail…');
+  try{
+    if(!me)me=(await gmail.profile()).emailAddress||'';
+    const out=await gmail.search(query,30);messages=out.messages;renderList();
+    if(query==='in:inbox')void cachePut('inbox',{me,savedAt:Date.now(),messages});
+    setStatus(`${messages.length} message(s) · checked ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`);void publishUnread();
+  }catch(e){handleError(e)}
+}
+
+async function setGoogle(on){googleOn=on;localStorage.setItem(GOOGLE_KEY,on?'1':'0');if(!on){messages=[];current=null;me='';await cacheClear();renderReader(null);if(naklios.experimental_widgets)naklios.experimental_widgets.update('unread',{items:[],empty:'Gmail not connected'},{persist:true})}renderGoogle();renderList();if(on)await refresh()}
+
+// The desktop card: how many unread messages in the inbox, and the newest few.
+async function publishUnread(){
+  if(!naklios.experimental_widgets||!googleOn)return;
+  try{const count=await gmail.unreadCount();const top=messages.filter(m=>m.unread).slice(0,5).map(m=>`${shortName(m.from)}: ${m.subject}`);
+    naklios.experimental_widgets.update('unread',{heading:`${count} unread`,items:top,empty:'Inbox read'},{persist:true})}catch{}
+}
+
+$('google').addEventListener('click',()=>void setGoogle(!googleOn));
+$('refresh').addEventListener('click',()=>void refresh());
+$('search-form').addEventListener('submit',e=>{e.preventDefault();query=$('search').value.trim()||'in:inbox';current=null;renderReader(null);void refresh()});
+
+// ── Commands on the common rail: callers read mail through the desktop catalog, which checks their grant.
+// They never mark mail read. ──
+function needGmail(){if(!googleOn||!googleAvailable())throw new Error('Gmail is not connected; press Connect Google in Mail first.')}
+const clip=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
+const row=m=>({id:m.id,from:m.from,subject:m.subject,date:new Date(m.date).toISOString(),snippet:m.snippet,unread:m.unread});
+const COMMAND_HANDLERS={
+  async 'mail.search'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||10));return{query:String(args?.query||'in:inbox'),estimate:out.estimate,messages:out.messages.map(row)}},
+  async 'mail.read'(args){needGmail();if(!args?.id)throw new Error('Give the message id from mail.search or mail.unread.');const msg=await gmail.read(String(args.id));if(!me)me=(await gmail.profile()).emailAddress||'';
+    return{...row(msg),to:msg.to,cc:msg.cc,text:clip(msg.text,20000),attachments:msg.attachments.map(a=>a.name),promises:(await promisesOf(msg)).map(({direction,who,what,due,inferred})=>({direction,who,what,due,inferred}))}},
+  async 'mail.unread'(args){needGmail();const out=await gmail.search('is:unread in:inbox',Math.min(25,Number(args?.max)||10));return{count:await gmail.unreadCount(),messages:out.messages.map(row)}},
+};
+if(naklios.experimental_commands){
+  fetch('./commands.json').then(r=>r.json()).then(manifest=>naklios.experimental_commands.register(manifest.commands.map(c=>({...c,handler:COMMAND_HANDLERS[c.name]})))).catch(e=>console.warn('[mail] commands could not register',e));
+}
+
+// Start: show cached headers at once, then check Gmail; check again every 5 minutes while Mail is open.
+(async()=>{
+  renderGoogle();
+  const cached=googleOn?await cacheGet('inbox'):null;
+  if(cached&&Array.isArray(cached.messages)){messages=cached.messages;me=cached.me||'';setStatus(`Showing saved headers from ${new Date(cached.savedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}…`)}
+  renderList();
+})();
+let started=false;
+naklios.onCapabilitiesChange(()=>{renderGoogle();renderList();if(!started&&googleOn&&googleAvailable()){started=true;void refresh()}});
+naklios.requestCapabilities();naklios.ready();
+setInterval(()=>{if(document.visibilityState==='visible')void refresh()},CACHE_MS);
+</script>
+</body>
+</html>
