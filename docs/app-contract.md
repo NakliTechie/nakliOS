@@ -458,12 +458,15 @@ naklios.dev, serves every app.
   left, and otherwise asks Google, usually without showing anything.
 - **Call it from a click.** Google's window needs the person's click. Without a recent one, the host shows a
   "Continue to Google" dialog first.
+- **Background calls pass `prompt: false`.** `token({ provider, scopes, prompt: false })` returns only a token the
+  host already holds and never shows a window; with none it fails with `ENOSIGNIN`. Command handlers and automatic
+  checks use it, so another app's call never opens a sign-in; the person signs in from the app's own button.
 - **History-logged.** Each request appends one hash-chained event (door `auth`) to
   `naklios/history/auth.ndjson`: the app, provider, scopes and outcome, never a token.
 
 Errors carry `.code`: `ENOAUTH` (not available to this app or standalone), `ENOGRANT` (the person declined),
-`EDENIED` (the person or Google refused a scope), `ECANCELLED`, `EINVAL` (unknown provider or scope) and
-`EGOOGLE`.
+`EDENIED` (the person or Google refused a scope), `ECANCELLED`, `EINVAL` (unknown provider or scope),
+`EGOOGLE` and `ENOSIGNIN` (`prompt: false` and no token held).
 
 ## TeX
 

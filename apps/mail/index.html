@@ -88,8 +88,10 @@ const GOOGLE_KEY='naklios.mail.google', DB='naklios-mail', CACHE_MS=5*60*1000;
 const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
 let googleOn=localStorage.getItem(GOOGLE_KEY)==='1', query='in:inbox', messages=[], current=null, me='', rulesPromise=null, triaged=new Map(), reply=null;
 const googleAvailable=()=>!!naklios.experimental_auth&&naklios.experimental_auth.providers().includes('google');
-async function googleToken({fresh}={}){if(fresh)await naklios.experimental_auth.revoke('google');return(await naklios.experimental_auth.token({provider:'google',scopes:G.SCOPES})).accessToken}
+async function googleToken({fresh,prompt=true}={}){if(fresh&&prompt)await naklios.experimental_auth.revoke('google');return(await naklios.experimental_auth.token({provider:'google',scopes:G.SCOPES,...(prompt?{}:{prompt:false})})).accessToken}
 const gmail=G.createClient({getToken:googleToken});
+// Commands other apps and agents run never open Google's window: they use a token Mail already holds, or say so.
+const gmailQuiet=G.createClient({getToken:o=>googleToken({...o,prompt:false}).catch(e=>{throw e.code==='ENOSIGNIN'?Object.assign(new Error('Gmail needs a fresh sign-in: open Mail and press Refresh, then try again.'),{code:'ENOSIGNIN'}):e})});
 const rules=()=>rulesPromise||(rulesPromise=import('../../sys/emergic-rules/rules.mjs').then(m=>m.loadEmergicRules()).catch(e=>{rulesPromise=null;throw e}));
 
 // ── a small cache of recent headers and snippets (no bodies), so the list shows at once on open ──
@@ -151,20 +153,22 @@ async function openMessage(id,{byPerson=false}={}){
   catch(e){handleError(e)}
 }
 
-function handleError(error){if(['ENOGRANT','ECANCELLED','EDENIED','ENOAUTH'].includes(error.code))setGoogle(false);setStatus(`Gmail: ${error.message}`)}
+function handleError(error){if(error.code==='ENOSIGNIN'){setStatus('Gmail needs a fresh sign-in: press Refresh.');return}if(['ENOGRANT','ECANCELLED','EDENIED','ENOAUTH'].includes(error.code))setGoogle(false);setStatus(`Gmail: ${error.message}`)}
 
-async function refresh(){
+// A person's click may open Google's window; the automatic checks (on open, every 5 minutes) never do.
+async function refresh({byPerson=false}={}){
   if(!googleOn||!googleAvailable())return;
+  const g=byPerson?gmail:gmailQuiet;
   setStatus('Checking Gmail…');
   try{
-    if(!me)me=(await gmail.profile()).emailAddress||'';
-    const out=await gmail.search(query,30);messages=out.messages;renderList();
+    if(!me)me=(await g.profile()).emailAddress||'';
+    const out=await g.search(query,30);messages=out.messages;renderList();
     if(query==='in:inbox')void cachePut('inbox',{me,savedAt:Date.now(),messages});
     setStatus(`${messages.length} message(s) · checked ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`);void publishUnread();
   }catch(e){handleError(e)}
 }
 
-async function setGoogle(on){googleOn=on;localStorage.setItem(GOOGLE_KEY,on?'1':'0');if(!on){messages=[];current=null;me='';await cacheClear();renderReader(null);if(naklios.experimental_widgets)naklios.experimental_widgets.update('unread',{items:[],empty:'Gmail not connected'},{persist:true})}renderGoogle();renderList();if(on)await refresh()}
+async function setGoogle(on){googleOn=on;localStorage.setItem(GOOGLE_KEY,on?'1':'0');if(!on){messages=[];current=null;me='';await cacheClear();renderReader(null);if(naklios.experimental_widgets)naklios.experimental_widgets.update('unread',{items:[],empty:'Gmail not connected'},{persist:true})}renderGoogle();renderList();if(on)await refresh({byPerson:true})}
 
 // The desktop card: how many unread messages in the inbox, and the newest few.
 async function publishUnread(){
@@ -174,8 +178,8 @@ async function publishUnread(){
 }
 
 $('google').addEventListener('click',()=>void setGoogle(!googleOn));
-$('refresh').addEventListener('click',()=>void refresh());
-$('search-form').addEventListener('submit',e=>{e.preventDefault();query=$('search').value.trim()||'in:inbox';current=null;renderReader(null);void refresh()});
+$('refresh').addEventListener('click',()=>void refresh({byPerson:true}));
+$('search-form').addEventListener('submit',e=>{e.preventDefault();query=$('search').value.trim()||'in:inbox';current=null;renderReader(null);void refresh({byPerson:true})});
 
 // ── AI through the person's chosen model (Settings → AI). Mail works without it; triage and AI drafts need it. ──
 const aiOn=()=>!!naklios.capabilities?.ai;
@@ -217,8 +221,8 @@ function offerUndo(label,fn){const u=$('undo');u.hidden=false;u.onclick=async()=
 async function remove(kind){
   if(!current?.id)return;const id=current.id;
   try{
-    if(kind==='archive'){await COMMAND_HANDLERS['mail.archive']({id});offerUndo('Archive',()=>COMMAND_HANDLERS['mail.archive']({id,undo:true}));setStatus('Archived. It stays in All Mail.')}
-    else{await COMMAND_HANDLERS['mail.trash']({id});offerUndo('Delete',()=>COMMAND_HANDLERS['mail.trash']({id,undo:true}));setStatus('Moved to Trash. Gmail keeps it 30 days.')}
+    if(kind==='archive'){await gmail.archive(id);offerUndo('Archive',()=>gmail.unarchive(id));setStatus('Archived. It stays in All Mail.')}
+    else{await gmail.trash(id);void publishUnread();offerUndo('Delete',()=>gmail.untrash(id));setStatus('Moved to Trash. Gmail keeps it 30 days.')}
     messages=messages.filter(m=>m.id!==id);current=null;renderReader(null);renderList();$('main').classList.remove('reading');
   }catch(e){handleError(e)}
 }
@@ -246,31 +250,31 @@ function needGmail(){if(!googleOn||!googleAvailable())throw new Error('Gmail is 
 const clip=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
 const row=m=>({id:m.id,threadId:m.threadId,from:m.from,subject:m.subject,date:new Date(m.date).toISOString(),snippet:m.snippet,unread:m.unread});
 const COMMAND_HANDLERS={
-  async 'mail.search'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||10));return{query:String(args?.query||'in:inbox'),estimate:out.estimate,messages:out.messages.map(row)}},
-  async 'mail.read'(args){needGmail();if(!args?.id)throw new Error('Give the message id from mail.search or mail.unread.');const msg=await gmail.read(String(args.id));if(!me)me=(await gmail.profile()).emailAddress||'';
+  async 'mail.search'(args){needGmail();const out=await gmailQuiet.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||10));return{query:String(args?.query||'in:inbox'),estimate:out.estimate,messages:out.messages.map(row)}},
+  async 'mail.read'(args){needGmail();if(!args?.id)throw new Error('Give the message id from mail.search or mail.unread.');const msg=await gmailQuiet.read(String(args.id));if(!me)me=(await gmailQuiet.profile()).emailAddress||'';
     return{...row(msg),me,to:msg.to,cc:msg.cc,text:clip(msg.text,20000),attachments:msg.attachments.map(a=>a.name),promises:(await promisesOf(msg)).map(({direction,who,what,due,inferred})=>({direction,who,what,due,inferred}))}},
-  async 'mail.triage'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||15));
+  async 'mail.triage'(args){needGmail();const out=await gmailQuiet.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||15));
     const found=await triageRows(out.messages);const byId=new Map(out.messages.map(m=>[m.id,m]));renderList();
     return{query:String(args?.query||'in:inbox'),messages:found.map(t=>({...row(byId.get(t.id)),action:t.action,why:t.why}))}},
   // Saves a reply in Gmail Drafts and never sends. With no body, the person's AI model drafts it.
-  async 'mail.draft'(args){needGmail();if(!args?.id)throw new Error('Give the id of the message to reply to.');const msg=await gmail.read(String(args.id));
+  async 'mail.draft'(args){needGmail();if(!args?.id)throw new Error('Give the id of the message to reply to.');const msg=await gmailQuiet.read(String(args.id));
     const body=String(args.body||'').trim()||await draftText(msg,String(args.instruction||''));const fields=G.replyTo(msg);
-    const saved=await gmail.createDraft({...fields,body},fields.threadId);return{draftId:saved.draftId,threadId:saved.threadId,to:saved.to,subject:saved.subject,body}},
+    const saved=await gmailQuiet.createDraft({...fields,body},fields.threadId);return{draftId:saved.draftId,threadId:saved.threadId,to:saved.to,subject:saved.subject,body}},
   // Destructive: the desktop shows the person the recipient and subject and asks every time. The draft must still
   // match what the caller showed, so a changed draft is refused rather than sent.
-  async 'mail.send'(args){needGmail();if(!args?.draftId)throw new Error('Give the draftId from mail.draft.');const d=await gmail.getDraft(String(args.draftId));
+  async 'mail.send'(args){needGmail();if(!args?.draftId)throw new Error('Give the draftId from mail.draft.');const d=await gmailQuiet.getDraft(String(args.draftId));
     const same=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
     if(!same(G.person(d.to).address,G.person(args.to).address)||!same(d.subject,args.subject))throw new Error(`The draft now goes to ${d.to} with subject "${d.subject}", not what this call names; nothing was sent.`);
-    const sent=await gmail.sendDraft(d.draftId);void refresh();return{sent:true,id:sent.id,threadId:sent.threadId,to:d.to,subject:d.subject}},
+    const sent=await gmailQuiet.sendDraft(d.draftId);void refresh();return{sent:true,id:sent.id,threadId:sent.threadId,to:d.to,subject:d.subject}},
   // Forwarding saves a draft too; sending it is mail.send.
-  async 'mail.forward'(args){needGmail();if(!args?.id||!args?.to)throw new Error('Give the message id and who to forward it to.');const msg=await gmail.read(String(args.id));
-    const f=G.forwardOf(msg);const body=(args.note?String(args.note):'')+f.quoted;const saved=await gmail.createDraft({to:String(args.to),subject:f.subject,body},'');
+  async 'mail.forward'(args){needGmail();if(!args?.id||!args?.to)throw new Error('Give the message id and who to forward it to.');const msg=await gmailQuiet.read(String(args.id));
+    const f=G.forwardOf(msg);const body=(args.note?String(args.note):'')+f.quoted;const saved=await gmailQuiet.createDraft({to:String(args.to),subject:f.subject,body},'');
     return{draftId:saved.draftId,to:saved.to,subject:saved.subject,attachmentsNotForwarded:msg.attachments.map(a=>a.name)}},
   async 'mail.archive'(args){needGmail();if(!args?.id)throw new Error('Give the message id.');const id=String(args.id);
-    await(args.undo?gmail.unarchive(id):gmail.archive(id));return{id,archived:!args.undo}},
+    await(args.undo?gmailQuiet.unarchive(id):gmailQuiet.archive(id));return{id,archived:!args.undo}},
   async 'mail.trash'(args){needGmail();if(!args?.id)throw new Error('Give the message id.');const id=String(args.id);
-    await(args.undo?gmail.untrash(id):gmail.trash(id));void publishUnread();return{id,trashed:!args.undo}},
-  async 'mail.unread'(args){needGmail();const out=await gmail.search('is:unread in:inbox',Math.min(25,Number(args?.max)||10));return{count:await gmail.unreadCount(),messages:out.messages.map(row)}},
+    await(args.undo?gmailQuiet.untrash(id):gmailQuiet.trash(id));void publishUnread();return{id,trashed:!args.undo}},
+  async 'mail.unread'(args){needGmail();const out=await gmailQuiet.search('is:unread in:inbox',Math.min(25,Number(args?.max)||10));return{count:await gmailQuiet.unreadCount(),messages:out.messages.map(row)}},
 };
 if(naklios.experimental_commands){
   fetch('./commands.json').then(r=>r.json()).then(manifest=>naklios.experimental_commands.register(manifest.commands.map(c=>({...c,handler:COMMAND_HANDLERS[c.name]})))).catch(e=>console.warn('[mail] commands could not register',e));

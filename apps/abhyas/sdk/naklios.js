@@ -1260,7 +1260,9 @@
       // token({ provider, scopes }) -> { accessToken, expiresAt, scopes }. Call it from a click handler: Google's
       // window needs the person's click, and without one the host shows a "Continue to Google" dialog first.
       // Errors carry .code: ENOAUTH (not available), ENOGRANT (person declined), EDENIED (Google or the person
-      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE.
+      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE, ENOSIGNIN (prompt:false and no
+      // token held). prompt:false asks only for a token the host already holds and never opens a window: use it in
+      // command handlers and background checks.
       token: function (opts) {
         opts = opts || {};
         var provider = opts.provider || 'google';
@@ -1270,7 +1272,9 @@
           return Promise.reject(e);
         }
         // The person may take minutes on Google's screen; the host also stops this clock while its prompt is open.
-        return rpc('naklios:auth:token', { provider: provider, scopes: opts.scopes || [] }, 300000);
+        var payload = { provider: provider, scopes: opts.scopes || [] };
+        if (opts.prompt === false) payload.prompt = false;
+        return rpc('naklios:auth:token', payload, 300000);
       },
       // Drop the tokens this app holds for the provider (a token only this app held is revoked at the provider).
       revoke: function (provider) {

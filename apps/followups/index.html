@@ -95,7 +95,7 @@ async function check(){
       await save();
       setStatus(`Read ${fresh.length} new message(s): ${added} follow-up(s) found, ${closed} closed by a reply · ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`);
       return{read:fresh.length,added,closed};
-    }catch(e){setStatus(/not connected|Connect Google/i.test(e.message)?'Connect Google in Mail first, then Check Mail again.':`Check Mail: ${e.message}`);throw e}
+    }catch(e){setStatus(/fresh sign-in/i.test(e.message)?'Gmail needs a fresh sign-in: open Mail and press Refresh, then Check Mail again.':/not connected|Connect Google/i.test(e.message)?'Connect Google in Mail first, then Check Mail again.':`Check Mail: ${e.message}`);throw e}
     finally{checking=null}
   })();
 }
