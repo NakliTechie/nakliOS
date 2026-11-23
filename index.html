@@ -2342,6 +2342,50 @@ async function fsList(prefix=''){
   }
   return out.sort();
 }
+// One page of a directory's immediate children for the Folder backend. A cursor holds the live
+// directory iterator, bound to the calling app, the prefix and the page size; it expires after two
+// minutes and at most 16 stay open. The directory can change between pages, so a page never claims
+// a consistent snapshot.
+const fsListCursors = new Map();
+let fsListCursorSeq = 0;
+async function fsListPage(prefix, maxEntries, cursor, owner){
+  if (!state.fsHandle) throw new Error('No folder connected');
+  const fail = (code, text) => Object.assign(new Error(code + ': ' + text), { code });
+  if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 1000) throw fail('EINVAL', 'maxEntries must be an integer from 1 to 1000');
+  const now = Date.now();
+  for (const [token, old] of fsListCursors){
+    if (now - old.at > 120000){ fsListCursors.delete(token); try { await old.iterator.return?.(); } catch(_){} }
+  }
+  let page;
+  if (cursor != null){
+    page = typeof cursor === 'string' ? fsListCursors.get(cursor) : null;
+    if (!page || page.owner !== owner || page.prefix !== prefix || page.maxEntries !== maxEntries) throw fail('EINVAL', 'invalid or expired listing cursor');
+    fsListCursors.delete(cursor);
+  } else {
+    let dir = state.fsHandle;
+    try { for (const seg of prefix.split('/').filter(Boolean)) dir = await dir.getDirectoryHandle(seg); }
+    catch(_){ throw fail('ENOENT', 'no such directory'); }
+    page = { owner, prefix, maxEntries, iterator: dir.entries()[Symbol.asyncIterator](), at: now };
+  }
+  const entries = [];
+  let done = false;
+  for (let i = 0; i < maxEntries; i++){
+    const next = await page.iterator.next();
+    if (next.done){ done = true; break; }
+    const [name, handle] = next.value;
+    entries.push((prefix ? prefix + '/' : '') + name + (handle.kind === 'directory' ? '/' : ''));
+  }
+  let token = null;
+  if (!done){
+    token = 'page-' + (++fsListCursorSeq) + '-' + Math.random().toString(36).slice(2);
+    page.at = now; fsListCursors.set(token, page);
+    while (fsListCursors.size > 16){
+      const [oldest, prior] = fsListCursors.entries().next().value;
+      fsListCursors.delete(oldest); try { await prior.iterator.return?.(); } catch(_){}
+    }
+  }
+  return { entries: entries.sort(), truncated: !done, cursor: token, snapshotConsistent: false };
+}
 async function fsDelete(path){
   const { dir, name } = await fsGetDir(path);
   await dir.removeEntry(name, { recursive: true });
@@ -5052,7 +5096,9 @@ const BACKENDS = {
     async append(safePath, line){ await fsAppend(safePath, line); },
     async delete(safePath){ await fsDelete(safePath); },
     async exists(safePath){ return await fsExists(safePath); },
+    supportsBoundedListing: true,
     async list(prefix){ return await fsList(prefix); },
+    async listPage(prefix, maxEntries, cursor, owner){ return await fsListPage(prefix, maxEntries, cursor, owner); },
     async stat(safePath){ return await fsStat(safePath); },
     async mkdir(safePath){ await fsMkdir(safePath); },
   },
@@ -5411,9 +5457,15 @@ async function fsHostList(msg, appId){
   if (!backend.isConnected()) throw new Error('Backend disconnected');
   const subPath = (msg.prefix || '').split('/').filter(s => s && s !== '.' && s !== '..').join('/');
   const fullPrefix = subPath ? `apps/${appId}/${subPath}` : `apps/${appId}`;
-  const all = await backend.list(fullPrefix);
   const stripPrefix = `apps/${appId}/`;
-  return all.map(p => p.startsWith(stripPrefix) ? p.slice(stripPrefix.length) : p);
+  const strip = p => p.startsWith(stripPrefix) ? p.slice(stripPrefix.length) : p;
+  if (msg.maxEntries !== undefined || msg.cursor != null){
+    if (backend.supportsBoundedListing !== true) throw Object.assign(new Error('ENOTSUP: this storage backend has no paged listing'), { code: 'ENOTSUP' });
+    const page = await backend.listPage(fullPrefix, msg.maxEntries, msg.cursor ?? null, appId);
+    return { entries: page.entries.map(strip), truncated: page.truncated, cursor: page.cursor, snapshotConsistent: page.snapshotConsistent === true };
+  }
+  const all = await backend.list(fullPrefix);
+  return all.map(strip);
 }
 
 // ── System-scoped filesystem (the whole store, no app clamp) ─────────
@@ -9060,6 +9112,7 @@ function capabilitySnapshot(appId){
     fsBackend,
     fsBoundedReads: fsCap && (fsBackend === 'fsa' || (fsBackend === 'crate' && state.crate?.supportsBoundedReads === true)),
     fsRangeReads: fsCap && fsBackend === 'fsa',
+    fsBoundedListing: fsCap && fsBackend === 'fsa',
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,

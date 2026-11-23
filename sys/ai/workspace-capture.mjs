@@ -86,6 +86,9 @@ export async function snapshotWorkspace(fs, { fileLimit = CAPTURE_FILE_LIMIT, re
   }
   // A live listing can still establish observations of known files. It cannot
   // prove that unobserved paths were absent, even after its final page.
+  // `covered`: every directory was enumerated to its end with no listing problem, though possibly
+  // live. One live listing cannot certify absence; created() needs two (see createWorkspaceCapture).
+  const covered = listed;
   if (problems.has('workspace listing is live; absence cannot be certified')) listed = false;
   entries.sort((a, b) => a.path.localeCompare(b.path));
   let used = 0;
@@ -105,7 +108,7 @@ export async function snapshotWorkspace(fs, { fileLimit = CAPTURE_FILE_LIMIT, re
     const bytes = read.data; used += bytes.length;
     files.set(path, { known: true, hash: byteDigest(bytes), text: decodeText(bytes), size: bytes.length });
   }
-  return { files, listed, complete: problems.size === 0, problems: [...problems] };
+  return { files, listed, covered, complete: problems.size === 0, problems: [...problems] };
 }
 
 export function compareSnapshots(before, after) {
@@ -154,13 +157,25 @@ export function createWorkspaceCapture(fs, run, options = {}) {
   if (!Number.isSafeInteger(run) || run < 0) throw new Error('invalid capture run');
   let baseline = null, current = null;
   const touched = new Set(), problems = new Set();
+  let recheck = null; // a second complete listing at start, taken only when the first was live
   async function take() {
     const snap = await snapshotWorkspace(fs, options);
     for (const problem of snap.problems) addProblem(problems, problem);
     return snap;
   }
   return {
-    async start() { baseline = current = await take(); return { complete: baseline.complete, problems: [...problems] }; },
+    async start() {
+      baseline = current = await take();
+      // A folder backend lists live, so one listing may miss a file the owner moved mid-walk. A second
+      // complete listing gives created() two independent looks: a file both missed is the only kind
+      // it could wrongly call new. It needs names only, so it reads no file bytes, and its own
+      // problems stay out of the run's capture report.
+      if (!baseline.listed && baseline.covered) {
+        const again = await snapshotWorkspace(fs, { ...options, readLimit: 0 });
+        recheck = again.covered ? again : null;
+      }
+      return { complete: baseline.complete, problems: [...problems] };
+    },
     checkpoint(){
       if(!baseline)throw new Error('capture never started');
       // JSON escaping needs at most six bytes per UTF-16 code unit. Check
@@ -182,11 +197,14 @@ export function createWorkspaceCapture(fs, run, options = {}) {
       current = next;
     },
     // Files present at the last observation and absent from the baseline — the run's new files, for the
-    // finish check (sys/ai/scratch-check.mjs). An incomplete baseline listing cannot certify absence,
-    // so it reports none rather than call an existing file new.
+    // finish check (sys/ai/scratch-check.mjs). A certified baseline (a consistent listing) proves the
+    // absence. A live baseline counts only with its complete second listing, and a file either listing
+    // saw is never new. Any other incomplete baseline reports none. The finish check only asks the
+    // model; Anvil deletes nothing.
     created() {
-      if (!baseline || !current || !baseline.listed) return [];
-      return [...current.files].filter(([path, row]) => !baseline.files.has(path) && !row?.directory).map(([path]) => path).sort();
+      if (!baseline || !current || !(baseline.listed || recheck)) return [];
+      return [...current.files].filter(([path, row]) => !row?.directory && !baseline.files.has(path)
+        && !(recheck && recheck.files.has(path))).map(([path]) => path).sort();
     },
     async finish() {
       if (!baseline) return { rows: [], touched: [], complete: false, problems: ['capture never started'] };

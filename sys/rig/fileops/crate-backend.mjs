@@ -47,6 +47,12 @@ export class CrateBackend {
     return this.host.supportsBoundedReads === true && typeof this.host.stat === 'function';
   }
 
+  // Paged listing is a host promise (naklios.fs.supportsBoundedListing): one page of immediate
+  // children per call, so a caller never downloads a whole object-store manifest to read a folder.
+  get supportsBoundedListing() {
+    return this.host.supportsBoundedListing === true;
+  }
+
   async readBinary(safePath, { maxBytes } = {}) {
     if (maxBytes !== undefined && !this.supportsBoundedReads)
       throw Object.assign(new Error('host does not support bounded reads'), { code: 'ENOTSUP' });
@@ -119,7 +125,8 @@ export class CrateBackend {
   // IMMEDIATE children only (one level), each a full safePath, directories
   // suffixed '/'. Derived from the host's descendant-key listing plus session dir
   // markers — the MemoryBackend algorithm (fileops owns deeper recursion).
-  async list(prefix) {
+  async list(prefix, { maxEntries, cursor = null } = {}) {
+    if (maxEntries !== undefined) return this._listPage(prefix, maxEntries, cursor);
     const base = prefix === '' ? '' : prefix + '/';
     const children = new Map(); // childName -> isDir
     const consider = (key, forceDir) => {
@@ -141,6 +148,29 @@ export class CrateBackend {
     return [...children.entries()]
       .map(([name, isDir]) => base + name + (isDir ? '/' : ''))
       .sort();
+  }
+
+  // One host page, checked and returned in the backend list shape (full safePaths, directories
+  // suffixed '/'). Session directory markers are left out: they could repeat a name an earlier page
+  // already returned, and a host that pages persists its directories anyway.
+  async _listPage(prefix, maxEntries, cursor) {
+    const fail = (code, text) => Object.assign(new Error(text), { code });
+    if (!this.supportsBoundedListing) throw fail('ENOTSUP', 'host does not support paged listing');
+    const page = await this.host.list(prefix, { maxEntries, cursor });
+    if (!page || !Array.isArray(page.entries) || page.entries.length > maxEntries) throw fail('EIO', 'host returned an invalid listing page');
+    const base = prefix === '' ? '' : prefix + '/';
+    const out = [];
+    for (const key of page.entries) {
+      const rest = typeof key === 'string' && key.startsWith(base) ? key.slice(base.length) : '';
+      const isDir = rest.endsWith('/'), name = isDir ? rest.slice(0, -1) : rest;
+      if (!name || name.includes('/') || name === '.' || name === '..') throw fail('EIO', 'host returned an invalid listing entry');
+      out.push(base + name + (isDir ? '/' : ''));
+    }
+    out.sort();
+    out.truncated = page.truncated === true;
+    out.cursor = out.truncated && typeof page.cursor === 'string' ? page.cursor : null;
+    out.snapshotConsistent = page.snapshotConsistent === true;
+    return out;
   }
 }
 

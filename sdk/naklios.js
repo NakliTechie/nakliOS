@@ -140,6 +140,7 @@
     fsBackend: null,
     fsBoundedReads: false,
     fsRangeReads: false,
+    fsBoundedListing: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -591,6 +592,7 @@
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.fsRangeReads = msg.fsRangeReads === true;
+      capabilities.fsBoundedListing = msg.fsBoundedListing === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -990,6 +992,7 @@
     },
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
+      get supportsBoundedListing() { return capabilities.fsBoundedListing === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
@@ -998,7 +1001,14 @@
       stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
-      list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
+      // list(prefix) returns every child name. list(prefix, { maxEntries, cursor }) returns one page,
+      // { entries, truncated, cursor, snapshotConsistent }, when supportsBoundedListing is true.
+      list:       function (prefix, options) {
+        var page = {};
+        if (options && options.maxEntries !== undefined) page.maxEntries = options.maxEntries;
+        if (options && options.cursor != null) page.cursor = options.cursor;
+        return rpc('naklios:fs:list', fsPayload(Object.assign({ prefix: prefix || '' }, page)));
+      },
       delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
       exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
       // Watch an app-relative path or directory. Crate events are immediate;
