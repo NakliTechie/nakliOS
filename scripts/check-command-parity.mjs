@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Two doors, one core (doctrine rule 6, common rail step 6): a control that changes data has a declared command, or
-// says why it stays the person's. Notes and Calendar are checked control by control: every id on a button, input,
+// says why it stays the person's. Notes, Calendar and Mail are checked control by control: every id on a button, input,
 // select, textarea or form must appear in `parity` in commands.json, as a command, `view`, or `person: <reason>`.
 // Mirrored apps draw their controls at run time, so they are held to a valid manifest with a handler for each command.
 import assert from 'node:assert/strict';
@@ -27,7 +27,7 @@ function manifestOf(id) {
   return manifest;
 }
 
-for (const id of ['notes', 'calendar']) {
+for (const id of ['notes', 'calendar', 'mail']) {
   const manifest = manifestOf(id);
   const html = read(`apps/${id}/index.html`);
   const parity = manifest.parity || {};
@@ -55,4 +55,4 @@ for (const id of mirrored) {
 
 assert.deepEqual(controlIds('<button class="a" id="x">X</button><div id="y"></div><input id="z">'), ['x', 'z']);
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-console.log(`command parity: every Notes and Calendar control is accounted for, and ${mirrored.length + 2} manifests are valid (${mirrored.join(', ')}): PASS`);
+console.log(`command parity: every Notes, Calendar and Mail control is accounted for, and ${mirrored.length + 2} manifests are valid (${mirrored.join(', ')}): PASS`);

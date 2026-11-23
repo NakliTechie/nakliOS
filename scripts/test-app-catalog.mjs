@@ -112,8 +112,13 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'fld-essentials'[\s\S]*?apps:\['files','notes','calendar','notepad','books','calculator'\]/,
-  'Calendar has one predictable home in Essentials',
+  /id:'fld-essentials'[\s\S]*?apps:\['files','notes','calendar','mail','notepad','books','calculator'\]/,
+  'Calendar and Mail have one predictable home in Essentials',
+);
+assert.match(
+  html,
+  /id:'mail'[\s\S]*?kind:'system'[\s\S]*?url:'\.\/apps\/mail\/'[\s\S]*?embedUrl:'\.\/apps\/mail\/'/,
+  'Mail is a bundled system app',
 );
 assert.match(
   html,

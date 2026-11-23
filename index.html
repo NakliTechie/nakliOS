@@ -1630,6 +1630,14 @@ const APPS = [
     description:'Private month, week, and day calendar with recurring events, ICS exchange, and separate Browser, Folder, or Crate calendars.',
     tags:['tool','calendar','events','productivity'],
     svg:`<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><path d="M8 13h3v4H8z"/>` },
+  { id:'mail', name:'Mail', kind:'system',
+    url:'./apps/mail/',
+    embedUrl:'./apps/mail/',
+    commands:'./apps/mail/commands.json',
+    glyph:'✉', bg:'brand',
+    description:'Read and search your Gmail. Mail goes from this browser straight to Google, and dated promises in a message are found by Emergic\'s rules.',
+    tags:['tool','mail','gmail','emergic','productivity'],
+    svg:`<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>` },
   { id:'editor', name:'Editor', kind:'system', commands:'./apps/editor/commands.json',
     url:'./apps/editor/',
     embedUrl:'./apps/editor/',
@@ -1974,7 +1982,7 @@ APPS.push(...THIRD_PARTY_CATALOG_APPS);
 // ════════════════════════════════════════════════════════════════════
 const FOLDERS = [
   { id:'fld-essentials', kind:'folder', name:'Essentials', glyph:'✦', bg:'brand',
-    apps:['files','notes','calendar','notepad','books','calculator'] },
+    apps:['files','notes','calendar','mail','notepad','books','calculator'] },
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','ductella','atelier','paginella','sonella','montella','chartella','pellucia','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',
