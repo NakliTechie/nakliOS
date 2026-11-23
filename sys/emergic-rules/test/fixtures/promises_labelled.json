@@ -1,0 +1,878 @@
+{
+ "about": "52 business-email sentences labelled by an outside reviewer (Vaak, 2026-10-15) before the rules ran on them. expect: the dated promises a reader finds, [] when none. vaak: what Vaak's commitments.find returned (2026-11-22), for parity. sent is India time; bodies are whitespace-collapsed.",
+ "source": "vaak/connector/tests/promises_labelled.py",
+ "me": "chirag@atrium.in",
+ "rows": [
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Will revert by EOD.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-15"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Will revert by EOD.",
+     "due": "2026-10-15",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "PFA the invoice. Will share the balance statement by Monday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-19"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Will share the balance statement by Monday.",
+     "due": "2026-10-19",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We'd try to close this by next week.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-23"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "We'd try to close this by next week.",
+     "due": "2026-10-23",
+     "inferred": true
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I'll be out of office till Friday with limited access to email.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Payment will be released on 25th.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-25"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Payment will be released on 25th.",
+     "due": "2026-10-25",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Kindly confirm by tomorrow.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Let me check and get back.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We are planning to launch by Q4.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I will send the revised deck by Friday.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-16"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I will send the revised deck by Friday.",
+     "due": "2026-10-16",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Sure, we'll have the PO issued by 20th Oct.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-20"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "we'll have the PO issued by 20th Oct.",
+     "due": "2026-10-20",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "The contract will be with you by 30 October.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-30"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "The contract will be with you by 30 October.",
+     "due": "2026-10-30",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Asha <asha@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Noted, thanks. On Mon, 12 Oct 2026 at 11:02, Ravi Kumar <ravi@vendor.in> wrote: > I'll send it by Friday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Thanks Ravi. On Wed, 14 Oct 2026 at 09:15, Ravi Kumar <ravi@vendor.in> wrote: > We will deliver the samples by Monday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "FYI. ---------- Forwarded message --------- From: Neha <neha@client.com> Date: Tue, 13 Oct 2026 Subject: Specs I will share the final specs by Thursday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I am currently out of the office and will return on Monday, 19 October. I will respond to your email upon my return.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Shop <news@shop.com>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Sale ends Friday! Shop now.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Shop <noreply@shop.com>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We'll ship your order by Tuesday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-20"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Shop <noreply@shop.com>",
+     "what": "We'll ship your order by Tuesday.",
+     "due": "2026-10-20",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Google Calendar <calendar-notification@google.com>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Invitation: Quarterly review @ Fri 16 Oct 2026 3pm - 4pm (IST). Join with Google Meet.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Priya <priya@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Please find the quote attached. Regards, Priya Sharma | Office closed on 2 November for Diwali",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I shall send the signed copy by the 20th.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-20"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I shall send the signed copy by the 20th.",
+     "due": "2026-10-20",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "You will receive the payment by month end.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-31"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "You will receive the payment by month end.",
+     "due": "2026-10-31",
+     "inferred": true
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We can deliver within 2 weeks of PO.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Will do, I'll call you tomorrow morning.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-16"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Will do, I'll call you tomorrow morning.",
+     "due": "2026-10-16",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Could you please share the GST details by Monday?",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "If you approve today, we can dispatch by Saturday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Draft will be shared by Wednesday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-21"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Draft will be shared by Wednesday.",
+     "due": "2026-10-21",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "The team is working on it and should be done by next Tuesday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-20"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "The team is working on it and should be done by next Tuesday.",
+     "due": "2026-10-20",
+     "inferred": true
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We will get back to you shortly.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Last date for submission is 31st October.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I'm going to send the numbers by Monday.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-19"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I'm going to send the numbers by Monday.",
+     "due": "2026-10-19",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We had sent the invoice on 5th October.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "As discussed, I will share the MoM by EOD today.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-15"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I will share the MoM by EOD today.",
+     "due": "2026-10-15",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Brand <hello@brand.com>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Hope you had a great weekend. We will be launching the new plan on 1st November, stay tuned!",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Ravi will send the cheque by Friday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-16"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Ravi will send the cheque by Friday.",
+     "due": "2026-10-16",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Our team will revert on this by Tuesday.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-20"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Our team will revert on this by Tuesday.",
+     "due": "2026-10-20",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We will not be able to deliver by Friday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I will try to share it by tomorrow, if possible.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-16"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I will try to share it by tomorrow, if possible.",
+     "due": "2026-10-16",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "When will you send the PO? We need it by Monday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Bank <alerts@bank.com>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Thanks for your payment. Your next EMI is due on 5th November.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I'll get the documents couriered by the 2nd.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-11-02"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I'll get the documents couriered by the 2nd.",
+     "due": "2026-11-02",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-12-30T10:00",
+   "body": "We will share the final numbers by 2nd January.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2027-01-02"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "We will share the final numbers by 2nd January.",
+     "due": "2027-01-02",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-17T10:00",
+   "body": "I'll send it by Friday.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-23"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I'll send it by Friday.",
+     "due": "2026-10-23",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "I will share it by Monday, 19 Oct.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-19"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "I will share it by Monday, 19 Oct.",
+     "due": "2026-10-19",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Thanks, we'll circulate the agenda before the 3pm call today.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-15"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "we'll circulate the agenda before the 3pm call today.",
+     "due": "2026-10-15",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Hi Neha, PFB the details. Will share the remaining by Monday.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-19"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Will share the remaining by Monday.",
+     "due": "2026-10-19",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Let me know if you need anything by Friday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Can we connect tomorrow at 11?",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We'll be in touch next week to schedule the demo.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-23"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "We'll be in touch next week to schedule the demo.",
+     "due": "2026-10-23",
+     "inferred": true
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Delivery is scheduled for 22 Oct.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Noted. We will release the payment once we receive the invoice by Friday.",
+   "expect": [],
+   "vaak": []
+  },
+  {
+   "from": "chirag@atrium.in",
+   "to": [
+    "Ravi Kumar <ravi@vendor.in>"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "We will review and share feedback by Thursday, 22nd October.",
+   "expect": [
+    {
+     "direction": "i_owe",
+     "due": "2026-10-22"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "i_owe",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "We will review and share feedback by Thursday, 22nd October.",
+     "due": "2026-10-22",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "from": "Ravi Kumar <ravi@vendor.in>",
+   "to": [
+    "chirag@atrium.in"
+   ],
+   "sent": "2026-10-15T10:00",
+   "body": "Apologies for the delay, I will definitely send it by tomorrow.",
+   "expect": [
+    {
+     "direction": "owed_to_me",
+     "due": "2026-10-16"
+    }
+   ],
+   "vaak": [
+    {
+     "direction": "owed_to_me",
+     "who": "Ravi Kumar <ravi@vendor.in>",
+     "what": "Apologies for the delay, I will definitely send it by tomorrow.",
+     "due": "2026-10-16",
+     "inferred": false
+    }
+   ]
+  }
+ ]
+}

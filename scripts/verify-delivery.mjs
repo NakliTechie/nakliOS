@@ -55,6 +55,7 @@ const expectedRules = [
   'worker/',
   'extension/',
   'tools/',
+  'sys/emergic-rules/crate/',
 ];
 // .assetsignore uses gitignore syntax, so a line starting with # is a comment, not a rule.
 const rules = assetsIgnore.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));

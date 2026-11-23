@@ -22,3 +22,5 @@ worker/
 extension/
 # the outside door's Go relay is built locally, never served
 tools/
+# the Rust source of the Emergic rules wasm is built locally, never served
+sys/emergic-rules/crate/

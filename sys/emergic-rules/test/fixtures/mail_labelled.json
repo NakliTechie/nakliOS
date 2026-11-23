@@ -1,0 +1,1236 @@
+{
+ "about": "Labelled mail from Vaak's fresh-eyes review (2026-10-15): pile-ups (asks of the person) and bills, with receipt sequences. Labels are for the pile-up and bill rules. vaak_promises: what Vaak's commitments.find returned for each message (2026-11-22); the promise rules must match it. Invented mail, no client data.",
+ "source": "vaak/connector/tests/mail_labelled.py",
+ "me": "Asha Rao <asha.rao@brightpath.in>",
+ "pileups": [
+  {
+   "id": "p01",
+   "from": "Accounts <accounts@shreeganesh-traders.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice SGT/2026/481",
+   "sent": "2026-10-14T09:30",
+   "body": "Dear Madam, PFA invoice no. SGT/2026/481 dated 12.10.2026 for ₹48,200 against PO 7781. Kindly process the payment by 20th October. Regards, Accounts Team",
+   "label": {
+    "kind": "invoice",
+    "due": "2026-10-20"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p02",
+   "from": "Rohit Jain <rohit@jainstationers.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice for Sept supplies",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, PFA invoice for your approval. Thanks, Rohit",
+   "label": {
+    "kind": [
+     "invoice",
+     "approval"
+    ],
+    "due": null
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p03",
+   "from": "Vikram Mehta <vikram.mehta@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Leave approval",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, Requesting your approval for Neha's leave from 19 Oct to 23 Oct. Please approve by tomorrow.",
+   "label": {
+    "kind": "approval",
+    "due": "2026-10-15"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p04",
+   "from": "Karan Shah <karan.shah@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "GST rate",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, Quick one - what is the GST rate we applied on the Pune consignment? Need it for the reconciliation.",
+   "label": {
+    "kind": "query",
+    "due": null
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p05",
+   "from": "Onboarding <vendor.onboarding@tatamotors.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Vendor onboarding documents",
+   "sent": "2026-10-14T09:30",
+   "body": "Dear Ms. Rao, Kindly share the signed NDA and your company's PAN copy by Friday so we can onboard you.",
+   "label": {
+    "kind": "document",
+    "due": "2026-10-16"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p06",
+   "from": "Admin <admin@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Office closed on 2 Nov",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi team, FYI - the office will be closed on 2 Nov for Diwali. No action needed.",
+   "label": null,
+   "vaak_promises": [
+    {
+     "direction": "owed_to_me",
+     "who": "Admin <admin@brightpath.in>",
+     "what": "FYI - the office will be closed on 2 Nov for Diwali.",
+     "due": "2026-11-02",
+     "inferred": false
+    }
+   ]
+  },
+  {
+   "id": "p07",
+   "from": "Sunil <sunil@kaveri-foods.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Re: Payment",
+   "sent": "2026-10-14T09:30",
+   "body": "Thanks a lot Asha, received the payment. Have a great Diwali!",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p08",
+   "from": "The Ken <newsletter@the-ken.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Why Indian SaaS is pivoting",
+   "sent": "2026-10-14T09:30",
+   "body": "This week: why Indian SaaS is pivoting to AI agents. Can founders keep up? Read the full story. Manage preferences | Unsubscribe",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p09",
+   "from": "ET Prime <etprime@etmail.economictimes.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your morning brief",
+   "sent": "2026-10-14T09:30",
+   "body": "Good morning. Will the RBI cut rates this week? Our editors weigh in. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. Markets opened higher on Tuesday as banks rallied. To stop receiving these emails, unsubscribe here.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p10",
+   "from": "Jira <jira@brightpath.atlassian.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "[JIRA] (FIN-482) Reconciliation script",
+   "sent": "2026-10-14T09:30",
+   "body": "Rahul Verma assigned FIN-482 to you. Can you review the reconciliation script? View issue. You're receiving this because you're the assignee. Manage notifications",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p11",
+   "from": "Rahul Verma <notifications@github.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "[brightpath/ledger] Fix rounding (PR #212)",
+   "sent": "2026-10-14T09:30",
+   "body": "@rahulv requested your review on this pull request. Could you take a look? Reply to this email directly or view it on GitHub.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p12",
+   "from": "Google Calendar <calendar-notification@google.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invitation: Q3 review @ Thu 15 Oct 2026 3pm - 4pm (IST)",
+   "sent": "2026-10-14T09:30",
+   "body": "Vikram Mehta has invited you to Q3 review. When: Thu 15 Oct 2026 3pm - 4pm. Going? Yes - Maybe - No. Invitation from Google Calendar",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p13",
+   "from": "Vikram Mehta <vikram.mehta@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invitation: Budget sync @ Fri 16 Oct 2026 11am",
+   "sent": "2026-10-14T09:30",
+   "body": "Vikram Mehta has invited you to Budget sync. When: Fri 16 Oct 2026 11am - 11:30am (IST). Going? Yes Maybe No. Invitation from Google Calendar. You are receiving this email because you are an attendee.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p14",
+   "from": "Suresh Iyer <suresh@kalpataru-infra.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Automatic reply: Invoice query",
+   "sent": "2026-10-14T09:30",
+   "body": "I am out of office until 20 October with limited access to email. For urgent matters, please contact accounts@kalpataru-infra.in.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p15",
+   "from": "Meghna Das <meghna.das@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Re: Chennai order",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Deepak, can you confirm the dispatch date for the Chennai order? Asha - cc'ing you for visibility.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p16",
+   "from": "Deepak Nair <deepak.nair@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Re: Chennai order",
+   "sent": "2026-10-14T09:30",
+   "body": "Thanks all, noted.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p17",
+   "from": "Jane Doe <jane@northbridge-advisory.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice #INV-2026-0918",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, Please find attached invoice #INV-2026-0918 for September consulting services, USD 4,500, payable within 30 days. Let me know if you have any questions. Best, Jane",
+   "label": {
+    "kind": "invoice",
+    "due": "2026-11-13"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p18",
+   "from": "CA Ramesh Gupta <ramesh@guptaandco.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Audit query 14",
+   "sent": "2026-10-14T09:30",
+   "body": "Dear Asha, Could you clarify whether the ₹2.4 lakh advance to Mehta Traders was against a PO? We need this to close the audit query by 18/10.",
+   "label": {
+    "kind": "query",
+    "due": "2026-10-18"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p19",
+   "from": "HR <hr@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Investment proofs",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, Please submit your investment proofs on the portal before 25th October.",
+   "label": {
+    "kind": "document",
+    "due": "2026-10-25"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p20",
+   "from": "Pooja Kulkarni <pooja.k@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Kaveri Foods onboarding",
+   "sent": "2026-10-14T09:30",
+   "body": "Asha, the vendor onboarding for Kaveri Foods is pending with you in SAP. Can you approve it today?",
+   "label": {
+    "kind": "approval",
+    "due": "2026-10-14"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p21",
+   "from": "Payments <payments@infosys.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Remittance advice 5512",
+   "sent": "2026-10-14T09:30",
+   "body": "Remittance advice: We have credited INR 3,20,000 to your account towards invoice 5512. This is a system generated mail, please do not reply.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p22",
+   "from": "Amazon Business <auto-confirm@amazon.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your order has been placed",
+   "sent": "2026-10-14T09:30",
+   "body": "Your order #403-1234567 has been placed. Arriving Friday. Questions? Visit Help.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p23",
+   "from": "Rahul from PayFlow <rahul@payflow.io>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "AP automation for BrightPath",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, Are you the right person to talk to about AP automation? Would you be open to a 15-min call next week?",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p24",
+   "from": "Nikhil Rao <nikhil.rao@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "TDS certificates",
+   "sent": "2026-10-14T09:30",
+   "body": "Can you send me the Q2 TDS certificates by EOD?",
+   "label": {
+    "kind": "document",
+    "due": "2026-10-14"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p25",
+   "from": "Partner <partner@sharma-associates.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Engagement letter FY27",
+   "sent": "2026-10-14T09:30",
+   "body": "Please sign the attached engagement letter and return it by 30 Oct.",
+   "label": {
+    "kind": [
+     "approval",
+     "document"
+    ],
+    "due": "2026-10-30"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p26",
+   "from": "Manoj <manoj@manojtransport.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "invoice",
+   "sent": "2026-10-14T09:30",
+   "body": "Asha ji, kal tak invoice bhej dijiye please. Thanks",
+   "label": {
+    "kind": [
+     "invoice",
+     "document",
+     "request"
+    ],
+    "due": "2026-10-15"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p27",
+   "from": "Billing <billing@orionchem.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Query on credit note CN-221",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi, can we get the credit note revised to ₹12,500? Thanks",
+   "label": {
+    "kind": [
+     "invoice",
+     "query"
+    ],
+    "due": null
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p28",
+   "from": "Accounts <ar@deccanpackaging.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Gentle reminder: invoice 7781",
+   "sent": "2026-10-14T09:30",
+   "body": "Gentle reminder: our invoice 7781 dated 1 Sep was due on 1 October and remains unpaid. Kindly arrange payment at the earliest.",
+   "label": {
+    "kind": "invoice",
+    "due": "2026-10-01"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p29",
+   "from": "Leena <leena@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Re: Recon done",
+   "sent": "2026-10-14T09:30",
+   "body": "Thanks for the quick turnaround! Hope you had a good weekend?",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p30",
+   "from": "Vikram Mehta (via Google Drive) <drive-shares-dm-noreply@google.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "FY27 budget",
+   "sent": "2026-10-14T09:30",
+   "body": "Vikram Mehta shared a document with you: FY27 budget. Please review the numbers before Thursday.",
+   "label": {
+    "kind": [
+     "request",
+     "query",
+     "approval",
+     "document"
+    ],
+    "due": "2026-10-15"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p31",
+   "from": "Accounts <accounts@sunrisepolymers.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Payment status: invoice 4471",
+   "sent": "2026-10-14T09:30",
+   "body": "Hi Asha, could you let us know when the payment for invoice 4471 will be released?",
+   "label": {
+    "kind": [
+     "invoice",
+     "query"
+    ],
+    "due": null
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p32",
+   "from": "Vikram Mehta <vikram.mehta@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Fwd: Invoice 9921",
+   "sent": "2026-10-14T09:30",
+   "body": "Asha, please look into this and approve if fine. ---------- Forwarded message --------- From: billing@acme.example Please find invoice 9921 for ₹88,000.",
+   "label": {
+    "kind": "approval",
+    "due": null
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "p33",
+   "from": "Asha Rao <asha.rao@brightpath.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Re: TDS certificates",
+   "sent": "2026-10-14T09:30",
+   "body": "Can you confirm which quarter you need?",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p34",
+   "from": "LinkedIn <messages-noreply@linkedin.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "You have a new message",
+   "sent": "2026-10-14T09:30",
+   "body": "Priya sent you a message: Are you hiring for finance roles? View message.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p35",
+   "from": "HDFC Bank <alerts@hdfcbank.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "OTP for login",
+   "sent": "2026-10-14T09:30",
+   "body": "Your OTP for NetBanking login is 482913. Do not share it with anyone. If not requested by you, please call 1800 202 6161.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "p36",
+   "from": "Zoho Support <support@zohocorp.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "How did we do?",
+   "sent": "2026-10-14T09:30",
+   "body": "How did we do? Please rate your experience with Zoho support. It takes 30 seconds.",
+   "label": null,
+   "vaak_promises": []
+  }
+ ],
+ "bills": [
+  {
+   "id": "b01",
+   "from": "Airtel <ebill@airtel.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your Airtel Postpaid bill for Oct 2026",
+   "sent": "2026-10-10T08:00",
+   "body": "Dear Customer, your Airtel Postpaid bill for mobile 98XXXXXX21 is ready. Bill amount: ₹1,177.82. Due date: 24-Oct-2026. Pay now via Airtel Thanks app.",
+   "label": {
+    "payee": "airtel",
+    "amount": 1177.82,
+    "currency": "INR",
+    "due": "2026-10-24"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b02",
+   "from": "BESCOM <noreply@bescom.co.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Electricity bill for RR No. 1234567",
+   "sent": "2026-10-09T07:00",
+   "body": "Electricity Bill for RR No. 1234567: Bill Amount Rs.2,846.00, Due Date 28/10/2026. Pay before due date to avoid disconnection.",
+   "label": {
+    "payee": "bescom",
+    "amount": 2846.0,
+    "currency": "INR",
+    "due": "2026-10-28"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b03",
+   "from": "HDFC Bank Credit Cards <emailstatements.cards@hdfcbank.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your HDFC Bank Credit Card statement",
+   "sent": "2026-10-12T06:00",
+   "body": "Your HDFC Bank Credit Card statement for card ending 4421 is ready. Total Amount Due: ₹46,382.50 Minimum Amount Due: ₹2,320.00 Payment Due Date: 02 Nov 2026",
+   "label": {
+    "payee": "hdfc",
+    "amount": 46382.5,
+    "currency": "INR",
+    "due": "2026-11-02"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b04",
+   "from": "ICICI Bank Credit Card <credit_cards@icicibank.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "ICICI Bank Credit Card statement",
+   "sent": "2026-10-11T06:00",
+   "body": "Thank you for your payment of ₹12,000 received on 05-Oct-2026. Your statement for card XX9012 is ready. Total Amount Due ₹31,450.00. Due Date: 30 October 2026.",
+   "label": {
+    "payee": "icici",
+    "amount": 31450.0,
+    "currency": "INR",
+    "due": "2026-10-30"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b05",
+   "from": "Bajaj Finance <emi.reminder@bajajfinserv.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "EMI reminder",
+   "sent": "2026-10-13T09:00",
+   "body": "Your EMI of Rs. 18,540 for loan a/c 4XXXXXX812 is due on 5th November 2026. Please maintain sufficient balance.",
+   "label": {
+    "payee": "bajaj",
+    "amount": 18540.0,
+    "currency": "INR",
+    "due": "2026-11-05"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b06",
+   "from": "SBI <donotreply@sbi.co.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Home loan EMI intimation",
+   "sent": "2026-10-13T09:00",
+   "body": "Dear Customer, EMI of INR 52,300 towards Home Loan a/c 3XXXXXX445 will be debited on 10/11/2026.",
+   "label": {
+    "payee": "sbi",
+    "amount": 52300.0,
+    "currency": "INR",
+    "due": "2026-11-10"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b07",
+   "from": "Accounts <accounts@printwell.co.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Tax Invoice PW/481",
+   "sent": "2026-10-12T11:00",
+   "body": "Taxable Value: ₹50,000.00 CGST @9%: ₹4,500.00 SGST @9%: ₹4,500.00 Invoice Total: ₹59,000.00 Payment due by 30 Oct 2026.",
+   "label": {
+    "payee": "accounts",
+    "amount": 59000.0,
+    "currency": "INR",
+    "due": "2026-10-30"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b08",
+   "from": "Sharma Tech Services <billing@sharmatech.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice ST-2291",
+   "sent": "2026-10-12T11:00",
+   "body": "Sub-total INR 1,20,000 IGST 18% INR 21,600 Grand Total INR 1,41,600. Payable by 15th November.",
+   "label": {
+    "payee": "sharma",
+    "amount": 141600.0,
+    "currency": "INR",
+    "due": "2026-11-15"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b09",
+   "from": "Atlassian <noreply@am.atlassian.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice AT-88213",
+   "sent": "2026-10-12T02:00",
+   "body": "Invoice AT-88213: Your Jira Software subscription renewal. Total: USD 1,250.00. Payment due: November 1, 2026.",
+   "label": {
+    "payee": "atlassian",
+    "amount": 1250.0,
+    "currency": "USD",
+    "due": "2026-11-01"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b10",
+   "from": "Notion Labs, Inc. <invoice+statements@stripe.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your invoice from Notion Labs, Inc. #1A2B-0007",
+   "sent": "2026-10-04T02:00",
+   "body": "Invoice from Notion Labs, Inc. Amount due $96.00 Due November 3, 2026. Pay this invoice.",
+   "label": {
+    "payee": "notion",
+    "amount": 96.0,
+    "currency": "USD",
+    "due": "2026-11-03"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b11",
+   "from": "Figma <invoice+statements@stripe.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your invoice from Figma #77F1-0012",
+   "sent": "2026-10-05T02:00",
+   "body": "Invoice from Figma. Amount due $180.00 Due October 30, 2026. Pay this invoice.",
+   "label": {
+    "payee": "figma",
+    "amount": 180.0,
+    "currency": "USD",
+    "due": "2026-10-30"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b13",
+   "from": "Myntra <offers@myntra.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Big Fashion Festival",
+   "sent": "2026-10-13T12:00",
+   "body": "Big Fashion Festival! Save ₹500 on your first order. Offer ends Friday. Shop now.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b14",
+   "from": "Spotify <no-reply@spotify.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Premium for ₹59",
+   "sent": "2026-10-13T12:00",
+   "body": "Get 3 months of Premium for ₹59. Offer ends by 31 October. Cancel anytime.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b15",
+   "from": "LIC of India <noreply@licindia.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Premium due reminder",
+   "sent": "2026-10-13T12:00",
+   "body": "Premium due reminder: Policy 8XXXXX12, premium of ₹24,780 is due on 28-Oct-2026.",
+   "label": {
+    "payee": "lic",
+    "amount": 24780.0,
+    "currency": "INR",
+    "due": "2026-10-28"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b16",
+   "from": "Amazon.in <auto-confirm@amazon.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your Amazon.in order",
+   "sent": "2026-10-13T12:00",
+   "body": "Your order of ₹2,499 has been placed. Arriving by Friday. Order total: ₹2,499.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b17",
+   "from": "HDFC Bank InstaAlerts <alerts@hdfcbank.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Account credited",
+   "sent": "2026-09-30T18:00",
+   "body": "Your a/c XX1234 is credited with INR 1,25,000.00 on 30-09-2026 by NEFT SALARY BRIGHTPATH. Available balance INR 2,04,330.50.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b18",
+   "from": "HDFC Bank <alerts@hdfcbank.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "OTP for transaction",
+   "sent": "2026-10-13T12:00",
+   "body": "Your OTP for payment of Rs 4,999 to AMAZON is 663412. Valid for 10 minutes. Do not share.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b20",
+   "from": "Ravi Constructions <ravi.constructions@gmail.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Final bill - interior work",
+   "sent": "2026-10-12T12:00",
+   "body": "Dear Sir, final bill for interior work Rs.1.2 lakh. Kindly pay by 25th October.",
+   "label": {
+    "payee": "ravi",
+    "amount": 120000.0,
+    "currency": "INR",
+    "due": "2026-10-25"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b21",
+   "from": "Sunrise Realty <legal@sunrise-realty.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice: land advance",
+   "sent": "2026-10-12T12:00",
+   "body": "Invoice for land advance: ₹1.5 crore, payment due by 31/10/2026.",
+   "label": {
+    "payee": "sunrise",
+    "amount": 15000000.0,
+    "currency": "INR",
+    "due": "2026-10-31"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b22",
+   "from": "Meena Tutor <meena.tuition@gmail.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "October fee",
+   "sent": "2026-10-06T12:00",
+   "body": "Hi, the tuition fee bill for October is ₹6,000, please pay by 20th.",
+   "label": {
+    "payee": "meena",
+    "amount": 6000.0,
+    "currency": "INR",
+    "due": "2026-10-20"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b25",
+   "from": "Mahanagar Gas <ebill@mahanagargas.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "MGL bill 5512",
+   "sent": "2026-10-11T12:00",
+   "body": "Your MGL bill no 5512 amount ₹642.00 is due on 21 Oct 2026.",
+   "label": {
+    "payee": "mahanagar",
+    "amount": 642.0,
+    "currency": "INR",
+    "due": "2026-10-21"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b26",
+   "from": "BBMP Property Tax <ptax@bbmp.gov.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Property tax 2026-27",
+   "sent": "2026-10-11T12:00",
+   "body": "Property tax for 2026-27 of ₹14,210 is payable before 31 October 2026 to avail 5% rebate.",
+   "label": {
+    "payee": "bbmp",
+    "amount": 14210.0,
+    "currency": "INR",
+    "due": "2026-10-31"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b27",
+   "from": "Netflix <info@account.netflix.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your membership renewal",
+   "sent": "2026-10-14T06:00",
+   "body": "Your membership renewal: we've charged ₹649 to your card. Next billing date 14 Nov 2026.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b28",
+   "from": "Vi <ebill@vodafoneidea.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Overdue: your Vi bill",
+   "sent": "2026-10-14T08:00",
+   "body": "Your bill of ₹599 was due on 10 Oct 2026. Please pay immediately to avoid barring.",
+   "label": {
+    "payee": "vi",
+    "amount": 599.0,
+    "currency": "INR",
+    "due": "2026-10-10"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b29",
+   "from": "Deccan Packaging <ar@deccanpackaging.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Reminder: invoice 332",
+   "sent": "2026-10-14T08:00",
+   "body": "Reminder: invoice 332 for ₹8,400 was due on 5 October. Please clear it this week.",
+   "label": {
+    "payee": "deccan",
+    "amount": 8400.0,
+    "currency": "INR",
+    "due": "2026-10-05"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b30",
+   "from": "Income Tax Department <noreply@incometax.gov.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Advance tax reminder",
+   "sent": "2026-10-14T08:00",
+   "body": "Reminder: the third instalment of advance tax is due by 15 December 2026.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b32",
+   "from": "SBI Card <statements@sbicard.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "SBI Card e-statement",
+   "sent": "2026-10-10T08:00",
+   "body": "Your SBI Card statement. Minimum Amount Due: ₹1,500.00 Total Amount Due: ₹29,880.00 Payment Due Date: 28/10/2026",
+   "label": {
+    "payee": "sbi",
+    "amount": 29880.0,
+    "currency": "INR",
+    "due": "2026-10-28"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b33",
+   "from": "Jio <care@jio.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Your JioFiber bill",
+   "sent": "2026-10-10T08:00",
+   "body": "Previous balance ₹0.00. Current charges ₹1,062.00. Total amount payable ₹1,062.00. Pay by 26 Oct 2026.",
+   "label": {
+    "payee": "jio",
+    "amount": 1062.0,
+    "currency": "INR",
+    "due": "2026-10-26"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b34",
+   "from": "HDFC Bank Offers <offers@hdfcbank.net>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Last date to avail!",
+   "sent": "2026-10-13T08:00",
+   "body": "Last date to avail! Flat Rs. 2,000 off on HDFC credit card EMI. Offer valid till 20 October.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b35",
+   "from": "Airtel <offers@airtel.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Cashback on your bill",
+   "sent": "2026-10-13T08:00",
+   "body": "Recharge before 18 Oct and get ₹50 cashback on your next Airtel bill.",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b36",
+   "from": "Pune Legal Associates <accounts@punelegal.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Invoice PLA/77",
+   "sent": "2026-10-13T08:00",
+   "body": "Professional fees invoice. Amount payable: Rs 18,880 (Rupees Eighteen Thousand Eight Hundred Eighty only). Kindly pay by 31st October.",
+   "label": {
+    "payee": "pune",
+    "amount": 18880.0,
+    "currency": "INR",
+    "due": "2026-10-31"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b38",
+   "from": "NMIMS Accounts <accounts@nmims.edu>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Fee invoice",
+   "sent": "2026-10-13T08:00",
+   "body": "Fee invoice: Semester fee Rs.1,25,000 due by 10 Nov 2026.",
+   "label": {
+    "payee": "nmims",
+    "amount": 125000.0,
+    "currency": "INR",
+    "due": "2026-11-10"
+   },
+   "vaak_promises": []
+  },
+  {
+   "id": "b39",
+   "from": "Swiggy <noreply@swiggy.in>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Swiggy One renewal",
+   "sent": "2026-10-13T08:00",
+   "body": "Your Swiggy One membership renewal is due on 20 Oct. Renew now at ₹299 and save ₹150 by Sunday!",
+   "label": null,
+   "vaak_promises": []
+  },
+  {
+   "id": "b40",
+   "from": "Tata AIG <renewals@tataaig.com>",
+   "to": [
+    "Asha Rao <asha.rao@brightpath.in>"
+   ],
+   "subject": "Motor policy renewal",
+   "sent": "2026-10-13T08:00",
+   "body": "Your motor insurance policy renewal premium is ₹11,240 (incl. GST ₹1,714). Renew before 22 Oct 2026 to avoid a lapse.",
+   "label": {
+    "payee": "tata",
+    "amount": 11240.0,
+    "currency": "INR",
+    "due": "2026-10-22"
+   },
+   "vaak_promises": []
+  }
+ ],
+ "receipts": [
+  {
+   "name": "stripe: Linear's $8 receipt must not close Notion's or Figma's invoice",
+   "messages": [
+    {
+     "id": "b10",
+     "from": "Notion Labs, Inc. <invoice+statements@stripe.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Your invoice from Notion Labs, Inc. #1A2B-0007",
+     "sent": "2026-10-04T02:00",
+     "body": "Invoice from Notion Labs, Inc. Amount due $96.00 Due November 3, 2026. Pay this invoice.",
+     "vaak_promises": []
+    },
+    {
+     "id": "b11",
+     "from": "Figma <invoice+statements@stripe.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Your invoice from Figma #77F1-0012",
+     "sent": "2026-10-05T02:00",
+     "body": "Invoice from Figma. Amount due $180.00 Due October 30, 2026. Pay this invoice.",
+     "vaak_promises": []
+    },
+    {
+     "id": "r1",
+     "from": "Linear <receipts+8812@stripe.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Your receipt from Linear #2231",
+     "sent": "2026-10-13T10:00",
+     "body": "Receipt from Linear. Amount paid $8.00. Payment successful. Thank you for your payment.",
+     "vaak_promises": []
+    }
+   ],
+   "still_open": [
+    "b10",
+    "b11"
+   ]
+  },
+  {
+   "name": "gmail.com: a plumber's receipt must not close the tutor's or the builder's bill",
+   "messages": [
+    {
+     "id": "b22",
+     "from": "Meena Tutor <meena.tuition@gmail.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "October fee",
+     "sent": "2026-10-06T12:00",
+     "body": "Hi, the tuition fee bill for October is ₹6,000, please pay by 20th.",
+     "vaak_promises": []
+    },
+    {
+     "id": "b20",
+     "from": "Ravi Constructions <ravi.constructions@gmail.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Final bill - interior work",
+     "sent": "2026-10-12T12:00",
+     "body": "Dear Sir, final bill for interior work Rs.1.2 lakh. Kindly pay by 25th October.",
+     "vaak_promises": []
+    },
+    {
+     "id": "r2",
+     "from": "Ramesh Plumber <ramesh.plumbing@gmail.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Payment",
+     "sent": "2026-10-13T10:00",
+     "body": "Thank you for your payment of ₹1,800. Regards, Ramesh",
+     "vaak_promises": []
+    }
+   ],
+   "still_open": [
+    "b20",
+    "b22"
+   ]
+  },
+  {
+   "name": "same sender, two bills: a receipt naming ₹799 closes the broadband bill only",
+   "messages": [
+    {
+     "id": "a1",
+     "from": "Airtel <ebill@airtel.in>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Airtel Xstream Fiber bill",
+     "sent": "2026-10-08T08:00",
+     "body": "Your broadband bill amount ₹799.00 is due on 22 Oct 2026.",
+     "vaak_promises": []
+    },
+    {
+     "id": "a2",
+     "from": "Airtel <ebill@airtel.in>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Airtel Postpaid bill",
+     "sent": "2026-10-09T08:00",
+     "body": "Your postpaid bill amount ₹1,177.00 is due on 24 Oct 2026.",
+     "vaak_promises": []
+    },
+    {
+     "id": "r3",
+     "from": "Airtel <ebill@airtel.in>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Payment received",
+     "sent": "2026-10-13T08:00",
+     "body": "Payment of ₹799.00 received for your broadband account. Thank you for your payment.",
+     "vaak_promises": []
+    }
+   ],
+   "still_open": [
+    "a2"
+   ]
+  },
+  {
+   "name": "a card statement that thanks you for last month's payment is a new bill, and closes nothing",
+   "messages": [
+    {
+     "id": "c1",
+     "from": "ICICI Bank Credit Card <credit_cards@icicibank.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "ICICI statement September",
+     "sent": "2026-09-11T06:00",
+     "body": "Your statement is ready. Total Amount Due ₹12,000.00. Due Date: 30 September 2026.",
+     "vaak_promises": []
+    },
+    {
+     "id": "b04",
+     "from": "ICICI Bank Credit Card <credit_cards@icicibank.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "ICICI Bank Credit Card statement",
+     "sent": "2026-10-11T06:00",
+     "body": "Thank you for your payment of ₹12,000 received on 05-Oct-2026. Your statement for card XX9012 is ready. Total Amount Due ₹31,450.00. Due Date: 30 October 2026.",
+     "vaak_promises": []
+    }
+   ],
+   "still_open": [
+    "b04"
+   ]
+  },
+  {
+   "name": "partial payment of a card bill (minimum due) must not close the full bill",
+   "messages": [
+    {
+     "id": "b32",
+     "from": "SBI Card <statements@sbicard.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "SBI Card e-statement",
+     "sent": "2026-10-10T08:00",
+     "body": "Your SBI Card statement. Minimum Amount Due: ₹1,500.00 Total Amount Due: ₹29,880.00 Payment Due Date: 28/10/2026",
+     "vaak_promises": []
+    },
+    {
+     "id": "r5",
+     "from": "SBI Card <statements@sbicard.com>",
+     "to": [
+      "Asha Rao <asha.rao@brightpath.in>"
+     ],
+     "subject": "Payment received",
+     "sent": "2026-10-13T08:00",
+     "body": "We have received your payment of ₹1,500.00 towards your SBI Card. Thank you for your payment.",
+     "vaak_promises": []
+    }
+   ],
+   "still_open": [
+    "b32"
+   ]
+  }
+ ]
+}

@@ -58,6 +58,8 @@ jobs:
 
       - name: Google Calendar in Calendar (mapping both ways, paging, one 401 retry, 204 deletes, page and command wiring)
         run: node scripts/test-calendar-google.mjs
+      - name: Emergic's common rules as WebAssembly match Emergic's shared follow-ups corpus (B3)
+        run: node scripts/test-emergic-rules.mjs
 
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs
