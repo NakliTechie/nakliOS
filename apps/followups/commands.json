@@ -1,0 +1,66 @@
+{
+  "widgets": [
+    {
+      "id": "due",
+      "title": "Follow-ups",
+      "display": "list"
+    }
+  ],
+  "commands": [
+    {
+      "name": "followups.list",
+      "description": "List the person's follow-ups: dated promises they owe and are owed, from their mail and what they typed. Dates come from Emergic's rules, never a model. Each has a key for followups.close.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "enum": ["open", "due", "late", "today", "upcoming", "undated", "closed"],
+            "description": "Which ones: open (default), due (late plus today), late, today, upcoming, undated, or closed"
+          }
+        }
+      }
+    },
+    {
+      "name": "followups.add",
+      "description": "Add a follow-up in the person's words, e.g. \"Send Ravi the PO by Friday\". The due day is read from the words by Emergic's rules, counted from today; with no day named it has no date.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "what": { "type": "string", "minLength": 1, "description": "What is owed, with when if known" },
+          "owed": { "type": "boolean", "description": "true when someone owes the person; leave out when the person owes it" },
+          "who": { "type": "string", "description": "Who it is owed to or by (optional)" }
+        },
+        "required": ["what"]
+      }
+    },
+    {
+      "name": "followups.close",
+      "description": "Close a follow-up as done or dropped, or reopen it, by the key from followups.list. how also takes the person's own word, e.g. \"done\" or \"drop it\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string", "minLength": 1, "description": "The key from followups.list" },
+          "how": { "type": "string", "description": "done (default), dropped, open to reopen, or the person's own word" }
+        },
+        "required": ["key"]
+      }
+    },
+    {
+      "name": "followups.check",
+      "description": "Read the last 14 days of the person's mail through Mail for new dated promises, and close open ones that a later reply in the same thread answered. Needs Gmail connected in Mail. Never changes mail.",
+      "scope": "write",
+      "input": { "type": "object", "properties": {} }
+    }
+  ],
+  "parity": {
+    "add-form": "followups.add",
+    "add-dir": "followups.add",
+    "add-text": "followups.add",
+    "add": "followups.add",
+    "check": "followups.check"
+  }
+}

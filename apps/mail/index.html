@@ -244,11 +244,11 @@ $('triage').addEventListener('click',async()=>{const b=$('triage');b.disabled=tr
 // They never mark mail read. ──
 function needGmail(){if(!googleOn||!googleAvailable())throw new Error('Gmail is not connected; press Connect Google in Mail first.')}
 const clip=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
-const row=m=>({id:m.id,from:m.from,subject:m.subject,date:new Date(m.date).toISOString(),snippet:m.snippet,unread:m.unread});
+const row=m=>({id:m.id,threadId:m.threadId,from:m.from,subject:m.subject,date:new Date(m.date).toISOString(),snippet:m.snippet,unread:m.unread});
 const COMMAND_HANDLERS={
   async 'mail.search'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||10));return{query:String(args?.query||'in:inbox'),estimate:out.estimate,messages:out.messages.map(row)}},
   async 'mail.read'(args){needGmail();if(!args?.id)throw new Error('Give the message id from mail.search or mail.unread.');const msg=await gmail.read(String(args.id));if(!me)me=(await gmail.profile()).emailAddress||'';
-    return{...row(msg),to:msg.to,cc:msg.cc,text:clip(msg.text,20000),attachments:msg.attachments.map(a=>a.name),promises:(await promisesOf(msg)).map(({direction,who,what,due,inferred})=>({direction,who,what,due,inferred}))}},
+    return{...row(msg),me,to:msg.to,cc:msg.cc,text:clip(msg.text,20000),attachments:msg.attachments.map(a=>a.name),promises:(await promisesOf(msg)).map(({direction,who,what,due,inferred})=>({direction,who,what,due,inferred}))}},
   async 'mail.triage'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||15));
     const found=await triageRows(out.messages);const byId=new Map(out.messages.map(m=>[m.id,m]));renderList();
     return{query:String(args?.query||'in:inbox'),messages:found.map(t=>({...row(byId.get(t.id)),action:t.action,why:t.why}))}},

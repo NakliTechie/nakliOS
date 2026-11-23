@@ -60,8 +60,10 @@ jobs:
         run: node scripts/test-calendar-google.mjs
       - name: Emergic's common rules as WebAssembly match Emergic's shared follow-ups corpus (B3)
         run: node scripts/test-emergic-rules.mjs
-      - name: Gmail in Mail (mapping, MIME parts, search, one 401 retry, mark-read, sandboxed HTML, command wiring) (B4)
+      - name: Gmail in Mail (mapping, MIME parts, search, 401 retry, mark-read, sandboxed HTML, writing mail, triage, drafts, archive, trash, command wiring) (B4, B5)
         run: node scripts/test-mail-gmail.mjs
+      - name: Follow-ups on Emergic's follow-ups corpus with a fixed clock (found, deduped, closed by reply, typed, due card) (B6)
+        run: node scripts/test-followups.mjs
 
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Follow-ups — NakliOS</title>
+<meta name="description" content="Dated promises you owe and are owed, found in your mail by Emergic's rules and closed when the thread answers them.">
+<style>
+:root{
+  --body:#faf2e2;--panel:#fdf8ec;--ink:#2c1810;--brand:#5a7a30;--act:#2a4a8a;--late:#b3261e;--row:#f0e2c8;
+  --muted:color-mix(in srgb,var(--ink) 58%,var(--body));--line:color-mix(in srgb,var(--ink) 14%,transparent);
+}
+*{box-sizing:border-box}[hidden]{display:none!important}html,body{height:100%;margin:0}
+body{background:var(--body);color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+button,input,select{font:inherit;color:inherit}button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column;min-height:0}
+.topbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-height:54px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:760}
+.mark{display:grid;place-items:center;width:29px;height:29px;border-radius:9px;background:var(--brand);color:#fff}
+form.add{flex:1;display:flex;gap:6px;min-width:280px;max-width:640px}form.add input{flex:1;min-width:0}
+input,select{border:1px solid var(--line);border-radius:8px;background:var(--body);padding:6px 10px}
+.btn{border:1px solid var(--line);border-radius:8px;background:var(--row);padding:6px 10px}.btn:hover{background:color-mix(in srgb,var(--row) 70%,var(--ink) 6%)}
+.btn.small{padding:2px 8px;font-size:12px}
+main{flex:1;overflow:auto;padding:12px 16px 24px}
+h2{font:700 12px/1 -apple-system,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+h2.late{color:var(--late)}
+.item{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:6px;max-width:860px}
+.item .text{flex:1;min-width:0}.item .what{overflow-wrap:anywhere}.item .meta{color:var(--muted);font-size:11px;margin-top:2px}
+.item .due{font-weight:700;white-space:nowrap}.item.late .due{color:var(--late)}
+.item .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.dir{display:inline-block;border-radius:6px;padding:0 6px;margin-right:6px;font-size:10px;font-weight:700;text-transform:uppercase;background:var(--row)}
+.dir.i_owe{background:color-mix(in srgb,var(--late) 14%,var(--panel));color:var(--late)}.dir.owed_to_me{color:var(--act)}
+.empty{color:var(--muted);padding:40px 12px;text-align:center}
+details summary{cursor:pointer;color:var(--muted);margin-top:18px}
+.status{min-height:28px;display:flex;align-items:center;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<script src="../../sdk/naklios.js"></script>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark">↻</span><span>Follow-ups</span></div>
+    <form class="add" id="add-form">
+      <select id="add-dir" aria-label="Who owes it"><option value="i_owe">I owe</option><option value="owed_to_me">Owed to me</option></select>
+      <input id="add-text" placeholder="Send Ravi the PO by Friday" aria-label="New follow-up, with when it is due">
+      <button class="btn" id="add" type="submit">Add</button>
+    </form>
+    <button class="btn" id="check" title="Read the last 14 days of mail for promises and replies">Check Mail</button>
+  </header>
+  <main id="main"></main>
+  <footer class="status"><span id="status">Dates come from Emergic's rules, never from a model. Follow-ups are kept in this browser.</span></footer>
+</div>
+<script type="module">
+import * as F from './core.mjs';
+const $=id=>document.getElementById(id);
+const DB='naklios-followups', CHECK_MS=15*60*1000, MAIL_QUERY='newer_than:14d (in:inbox OR in:sent)';
+const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+const today=()=>F.localDay(Date.now(),zone);
+let items=[], scanned=[], me='', rulesPromise=null, checking=null;
+const rules=()=>rulesPromise||(rulesPromise=import('../../sys/emergic-rules/rules.mjs').then(m=>m.loadEmergicRules()).catch(e=>{rulesPromise=null;throw e}));
+function setStatus(t){$('status').textContent=t}
+
+// ── storage: one IndexedDB store in this browser ──
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function get(key){try{const db=await idb();return await new Promise(res=>{const q=db.transaction('kv').objectStore('kv').get(key);q.onsuccess=()=>res(q.result??null);q.onerror=()=>res(null)})}catch{return null}}
+async function put(key,value){const db=await idb();await new Promise((res,rej)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').put(value,key);t.oncomplete=res;t.onerror=()=>rej(t.error)})}
+async function save(){await put('items',items);await put('scanned',scanned.slice(-3000));await put('me',me);render();publish()}
+
+// ── calls to other apps go through the desktop's command catalog ──
+async function call(name,input){
+  if(!naklios.experimental_commands?.call)throw new Error('Open Follow-ups inside NakliOS (naklios.dev) to read Mail.');
+  const out=await naklios.experimental_commands.call(name,input);
+  if(out&&out.ok===false)throw Object.assign(new Error(out.message||out.error||`${name} failed`),{code:out.code});
+  return out&&'result' in out?out.result:out;
+}
+
+// Read recent mail, oldest first, so a reply read after its original can close the original's promise.
+async function check(){
+  if(checking)return checking;
+  return checking=(async()=>{
+    setStatus('Reading recent mail through Mail…');
+    try{
+      const r=await rules();
+      const list=await call('mail.mail.search',{query:MAIL_QUERY,max:25});
+      const fresh=(list.messages||[]).filter(m=>!scanned.includes(m.id)).reverse();
+      let added=0,closed=0;
+      for(const m of fresh){
+        const read=await call('mail.mail.read',{id:m.id});
+        if(read.me)me=read.me;
+        const merged=F.merge(items,F.fromMail(read,Date.now()));items=merged.items;added+=merged.added;
+        if(me){const done=F.applyReply(items,read,me,r,Date.now());items=done.items;closed+=done.closed}
+        scanned.push(m.id);
+      }
+      await save();
+      setStatus(`Read ${fresh.length} new message(s): ${added} follow-up(s) found, ${closed} closed by a reply · ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`);
+      return{read:fresh.length,added,closed};
+    }catch(e){setStatus(/not connected|Connect Google/i.test(e.message)?'Connect Google in Mail first, then Check Mail again.':`Check Mail: ${e.message}`);throw e}
+    finally{checking=null}
+  })();
+}
+
+// ── drawing ──
+const fmtDay=d=>{if(!d)return'';const t=today();if(d===t)return'Today';const dt=new Date(d+'T12:00');return dt.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'})};
+function itemRow(f,late){
+  const row=document.createElement('div');row.className='item'+(late?' late':'');
+  const text=document.createElement('div');text.className='text';
+  const what=document.createElement('div');what.className='what';const dir=document.createElement('span');dir.className='dir '+f.direction;dir.textContent=f.direction==='i_owe'?'I owe':'Owed';
+  what.append(dir,document.createTextNode(F.line(f)));
+  const meta=document.createElement('div');meta.className='meta';
+  meta.textContent=[f.source.kind==='mail'?`Mail: ${f.source.subject||'(no subject)'}`:'Typed',f.inferred?'date is a guess from the words':'',f.status!=='open'?`${f.status}${f.closedBy?.kind==='mail'?' by a reply':''}`:''].filter(Boolean).join(' · ');
+  text.append(what,meta);
+  const due=document.createElement('div');due.className='due';due.textContent=fmtDay(f.due)+(f.inferred&&f.due?' ~':'');
+  const acts=document.createElement('div');acts.className='acts';
+  const btn=(label,fn,title)=>{const b=document.createElement('button');b.className='btn small';b.textContent=label;if(title)b.title=title;b.addEventListener('click',fn);acts.append(b)};
+  if(f.status==='open'){
+    btn('Done',()=>void act('followups.close',{key:f.key,how:'done'}));
+    btn('Drop',()=>void act('followups.close',{key:f.key,how:'dropped'}),'Not needed any more');
+    if(f.due)btn('To Calendar',()=>void toCalendar(f),'Add it to the Calendar on its due day');
+  }else btn('Reopen',()=>void act('followups.close',{key:f.key,how:'open'}));
+  row.append(text,due,acts);return row;
+}
+function render(){
+  const m=$('main');m.textContent='';const b=F.buckets(items,today());
+  const section=(title,list,late)=>{if(!list.length)return;const h=document.createElement('h2');h.textContent=`${title} (${list.length})`;if(late)h.className='late';m.append(h);for(const f of list)m.append(itemRow(f,late))};
+  section('Late',b.overdue,true);section('Today',b.today);section('Coming up',b.upcoming);section('No date',b.undated);
+  if(!b.overdue.length&&!b.today.length&&!b.upcoming.length&&!b.undated.length){const e=document.createElement('div');e.className='empty';e.textContent=items.length?'Nothing open. Check Mail finds new promises in the last 14 days.':'No follow-ups yet. Check Mail reads the last 14 days of your mail for dated promises, or type one above.';m.append(e)}
+  if(b.closed.length){const d=document.createElement('details');const s=document.createElement('summary');s.textContent=`Closed (${b.closed.length})`;d.append(s);for(const f of b.closed.slice(0,50))d.append(itemRow(f,false));m.append(d)}
+}
+function publish(){if(naklios.experimental_widgets)naklios.experimental_widgets.update('due',F.dueCard(items,today()),{persist:true})}
+
+async function act(name,args){try{await COMMAND_HANDLERS[name](args)}catch(e){setStatus(e.message)}}
+async function toCalendar(f){
+  try{await call('calendar.events.create',{title:F.line(f),start:f.due});setStatus(`Added to the Calendar on ${fmtDay(f.due)}.`)}
+  catch(e){setStatus(`Calendar: ${e.message}`)}
+}
+
+$('add-form').addEventListener('submit',async e=>{e.preventDefault();const text=$('add-text').value;
+  try{const out=await COMMAND_HANDLERS['followups.add']({what:text,owed:$('add-dir').value==='owed_to_me'});$('add-text').value='';
+    setStatus(out.due?`Added, due ${fmtDay(out.due)}${out.inferred?' (a guess from the words)':''}.`:'Added with no date: no day was named.')}
+  catch(err){setStatus(err.message)}});
+$('check').addEventListener('click',()=>void check().catch(()=>{}));
+
+// ── commands: the same paths the buttons use (two doors, one core) ──
+const find=key=>items.find(f=>f.key===key);
+const COMMAND_HANDLERS={
+  async 'followups.list'(args){const b=F.buckets(items,today());const want=String(args?.when||'open');
+    const pick={late:b.overdue,today:b.today,due:[...b.overdue,...b.today],upcoming:b.upcoming,undated:b.undated,closed:b.closed.slice(0,50),open:[...b.overdue,...b.today,...b.upcoming,...b.undated]}[want];
+    if(!pick)throw new Error('when must be open, due, late, today, upcoming, undated or closed.');
+    return{today:today(),when:want,count:pick.length,followups:pick.slice(0,50).map(F.view)}},
+  async 'followups.add'(args){const r=await rules();const f=F.typed(String(args?.what||''),{today:today(),now:Date.now(),rules:r,owed:!!args?.owed,who:String(args?.who||'')});
+    items=F.merge(items,[f]).items;await save();return F.view(f)},
+  async 'followups.close'(args){if(!args?.key)throw new Error('Give the key from followups.list.');const r=await rules();
+    items=F.setStatus(items,String(args.key),String(args.how||'done'),{rules:r,now:Date.now()});await save();return F.view(find(String(args.key)))},
+  async 'followups.check'(){const out=await check();return{...out,due:F.dueCard(items,today())}},
+};
+if(naklios.experimental_commands){
+  fetch('./commands.json').then(r=>r.json()).then(manifest=>naklios.experimental_commands.register(manifest.commands.map(c=>({...c,handler:COMMAND_HANDLERS[c.name]})))).catch(e=>console.warn('[followups] commands could not register',e));
+}
+
+// Start: show what is stored, then check Mail now and every 15 minutes while Follow-ups is open and visible.
+(async()=>{
+  items=(await get('items'))||[];scanned=(await get('scanned'))||[];me=(await get('me'))||'';render();publish();
+})();
+let started=false;
+naklios.onCapabilitiesChange(()=>{if(!started&&window.parent!==window){started=true;void check().catch(()=>{})}});
+naklios.requestCapabilities();naklios.ready();
+setInterval(()=>{if(document.visibilityState==='visible'&&window.parent!==window)void check().catch(()=>{})},CHECK_MS);
+setInterval(()=>{render();publish()},60*60*1000);
+</script>
+</body>
+</html>
