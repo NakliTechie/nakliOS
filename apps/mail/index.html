@@ -36,6 +36,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--act);outline-of
 .body{white-space:pre-wrap;overflow-wrap:anywhere;max-width:760px}
 .html-frame{width:100%;min-height:60vh;border:1px solid var(--line);border-radius:8px;background:#fff}
 .empty{color:var(--muted);padding:40px 22px;text-align:center}
+.tag{display:inline-block;margin-left:6px;border-radius:6px;padding:0 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;background:var(--row);color:var(--muted)}
+.tag.reply{background:color-mix(in srgb,var(--brand) 18%,var(--panel));color:var(--brand)}.tag.read{color:var(--act)}
+.reader-tools{display:flex;gap:8px;margin-bottom:10px}
+.compose{max-width:760px;margin-top:18px;padding:12px;border:1px solid var(--strong);border-radius:10px;background:var(--panel)}
+.compose form{display:flex;flex-direction:column;gap:8px}.compose .ask{display:flex;gap:8px}.compose .ask input{flex:1}
+.compose input,.compose textarea{border:1px solid var(--line);border-radius:8px;background:var(--body);padding:6px 10px}
+.compose textarea{min-height:180px;resize:vertical;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.compose .actions{display:flex;gap:8px;flex-wrap:wrap}.btn.danger{border-color:#b3261e;color:#fff;background:#b3261e}
 .status{min-height:28px;display:flex;align-items:center;gap:8px;padding:4px 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px}
 @media(max-width:760px){.main{grid-template-columns:1fr}.reader{display:none}.main.reading .list{display:none}.main.reading .reader{display:block}.brand span:last-child{display:none}}
 </style>
@@ -47,21 +55,38 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--act);outline-of
   <header class="topbar">
     <div class="brand"><span class="mark">✉</span><span>Mail</span></div>
     <form class="search" id="search-form" role="search"><input id="search" type="search" placeholder="Search Gmail (from:ravi is:unread)" aria-label="Search Gmail"></form>
+    <button class="btn" id="triage" title="Sort the listed messages into reply, read, later and skip with your AI model" hidden>Triage</button>
     <button class="btn" id="refresh" title="Check for new mail" hidden>Refresh</button>
     <button class="btn" id="google" hidden>Connect Google</button>
   </header>
   <div class="main" id="main">
     <nav class="list" id="list" aria-label="Messages"></nav>
-    <article class="reader" id="reader"><div class="empty" id="reader-empty">Pick a message to read it.</div></article>
+    <article class="reader" id="reader">
+      <div class="reader-tools" id="reader-tools" hidden>
+        <button class="btn" id="prev" title="Previous message">‹ Prev</button><button class="btn" id="next" title="Next message">Next ›</button>
+        <button class="btn" id="reply">Reply</button><button class="btn" id="forward">Forward</button>
+        <button class="btn" id="archive" title="Take it out of the inbox; it stays in All Mail">Archive</button><button class="btn" id="trash" title="Move to Gmail's Trash (kept 30 days)">Delete</button>
+      </div>
+      <div id="reader-body"><div class="empty">Pick a message to read it.</div></div>
+      <section class="compose" id="compose" aria-label="Reply" hidden>
+        <div class="meta" id="compose-head"></div>
+        <form id="compose-form">
+          <input id="compose-to" type="email" multiple placeholder="To" aria-label="To">
+          <div class="ask"><input id="compose-ask" placeholder="What should the reply say? (for Draft with AI)" aria-label="What the reply should say"><button type="button" class="btn" id="compose-ai">Draft with AI</button></div>
+          <textarea id="compose-body" aria-label="Reply text" placeholder="Write your reply"></textarea>
+          <div class="actions"><button type="button" class="btn" id="compose-save">Save draft</button><button type="button" class="btn" id="compose-send">Send…</button><button type="button" class="btn" id="compose-cancel">Cancel</button></div>
+        </form>
+      </section>
+    </article>
   </div>
-  <footer class="status"><span id="status">Mail goes from this browser straight to Google. Recent headers are kept in this browser for a quick start.</span></footer>
+  <footer class="status"><button class="btn" id="undo" hidden>Undo</button><span id="status">Mail goes from this browser straight to Google. Recent headers are kept in this browser for a quick start.</span></footer>
 </div>
 <script type="module">
 const G=window.MailGmail;
 const $=id=>document.getElementById(id);
 const GOOGLE_KEY='naklios.mail.google', DB='naklios-mail', CACHE_MS=5*60*1000;
 const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
-let googleOn=localStorage.getItem(GOOGLE_KEY)==='1', query='in:inbox', messages=[], current=null, me='', rulesPromise=null;
+let googleOn=localStorage.getItem(GOOGLE_KEY)==='1', query='in:inbox', messages=[], current=null, me='', rulesPromise=null, triaged=new Map(), reply=null;
 const googleAvailable=()=>!!naklios.experimental_auth&&naklios.experimental_auth.providers().includes('google');
 async function googleToken({fresh}={}){if(fresh)await naklios.experimental_auth.revoke('google');return(await naklios.experimental_auth.token({provider:'google',scopes:G.SCOPES})).accessToken}
 const gmail=G.createClient({getToken:googleToken});
@@ -77,7 +102,7 @@ const fmt=ms=>{const d=new Date(ms),now=new Date();return d.toDateString()===now
 const shortName=from=>{const p=G.person(from);return p.name||p.address||'(unknown)'};
 function setStatus(text){$('status').textContent=text}
 
-function renderGoogle(){const b=$('google');b.hidden=!googleAvailable();b.textContent=googleOn?'Google ✓':'Connect Google';b.setAttribute('aria-pressed',String(googleOn));b.title=googleOn?'Reading your Gmail here. Click to disconnect.':'Read your Gmail here';$('refresh').hidden=!googleOn}
+function renderGoogle(){const b=$('google');b.hidden=!googleAvailable();b.textContent=googleOn?'Google ✓':'Connect Google';b.setAttribute('aria-pressed',String(googleOn));b.title=googleOn?'Reading your Gmail here. Click to disconnect.':'Read your Gmail here';$('refresh').hidden=!googleOn;$('triage').hidden=!googleOn||!aiOn();$('compose-ai').hidden=!aiOn()}
 function renderList(){
   const list=$('list');list.textContent='';
   if(!googleOn){const e=document.createElement('div');e.className='empty';e.textContent=googleAvailable()?'Connect Google to read your Gmail here.':'Open Mail inside NakliOS (naklios.dev) to connect Gmail.';list.append(e);return}
@@ -86,7 +111,7 @@ function renderList(){
     const b=document.createElement('button');b.className='row'+(m.unread?' unread':'')+(current&&current.id===m.id?' active':'');b.dataset.id=m.id;
     const top=document.createElement('div');top.className='top';const who=document.createElement('span');who.className='who';who.textContent=shortName(m.from);
     const when=document.createElement('span');when.className='when';when.textContent=fmt(m.date);top.append(who,when);
-    const s=document.createElement('div');s.className='subj';s.textContent=m.subject;const n=document.createElement('div');n.className='snip';n.textContent=m.snippet;
+    const s=document.createElement('div');s.className='subj';s.textContent=m.subject;const t=triaged.get(m.id);if(t){const g=document.createElement('span');g.className='tag '+t.action;g.textContent=t.action;g.title=t.why;who.append(g)}const n=document.createElement('div');n.className='snip';n.textContent=m.snippet;
     b.append(top,s,n);b.addEventListener('click',()=>void openMessage(m.id,{byPerson:true}));list.append(b);
   }
 }
@@ -98,7 +123,9 @@ function htmlFrame(html){
   return f;
 }
 function renderReader(msg,found){
-  const r=$('reader');r.textContent='';
+  const r=$('reader-body');r.textContent='';$('reader-tools').hidden=!msg||msg.text==null;
+  if(msg){const i=messages.findIndex(m=>m.id===msg.id);$('prev').disabled=i<=0;$('next').disabled=i<0||i>=messages.length-1}
+  if(!reply||!msg||reply.source.id!==msg.id)closeCompose();
   if(!msg){const e=document.createElement('div');e.className='empty';e.textContent='Pick a message to read it.';r.append(e);return}
   const h=document.createElement('h1');h.textContent=msg.subject;
   const meta=document.createElement('div');meta.className='meta';meta.textContent=`${msg.from} · to ${msg.to.join(', ')||'—'} · ${new Date(msg.date).toLocaleString()}`+(msg.attachments.length?` · ${msg.attachments.length} attachment(s)`:'');
@@ -150,6 +177,76 @@ $('google').addEventListener('click',()=>void setGoogle(!googleOn));
 $('refresh').addEventListener('click',()=>void refresh());
 $('search-form').addEventListener('submit',e=>{e.preventDefault();query=$('search').value.trim()||'in:inbox';current=null;renderReader(null);void refresh()});
 
+// ── AI through the person's chosen model (Settings → AI). Mail works without it; triage and AI drafts need it. ──
+const aiOn=()=>!!naklios.capabilities?.ai;
+async function askModel(messages,max_tokens){
+  if(!aiOn())throw new Error('No AI model is available in NakliOS (Settings → AI).');
+  const out=await naklios.ai.chat.completions.create({messages,max_tokens});
+  return String(out?.choices?.[0]?.message?.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+}
+async function triageRows(rows){
+  if(!rows.length)return[];
+  const found=G.parseTriage(await askModel(G.triagePrompt(rows),40+rows.length*30),rows.map(m=>m.id));
+  for(const t of found)triaged.set(t.id,t);return found;
+}
+async function draftText(msg,instruction){if(!me)me=(await gmail.profile()).emailAddress||'';return askModel(G.draftPrompt(msg,instruction,me),700)}
+
+// ── Reply: write or draft with AI, save to Gmail Drafts, and send only after a second, confirming click ──
+let sendArmed=null;
+function closeCompose(){reply=null;$('compose').hidden=true;disarmSend()}
+function disarmSend(){clearTimeout(sendArmed);sendArmed=null;const b=$('compose-send');b.textContent='Send…';b.classList.remove('danger')}
+function openCompose(msg,mode='reply'){
+  const fwd=mode==='forward',fields=fwd?G.forwardOf(msg):G.replyTo(msg);reply={source:msg,mode,fields,draftId:null,saved:null};
+  $('compose-head').textContent=`${fwd?'Forward':'Reply'} · ${fields.subject}${fwd&&msg.attachments.length?' · attachments are not forwarded':''}`;
+  $('compose-to').value=fwd?'':fields.to;$('compose-body').value=fwd?fields.quoted:'';$('compose-ask').value='';$('compose').hidden=false;disarmSend();
+  const focus=fwd?$('compose-to'):$('compose-body');focus.focus();if(fwd)$('compose-body').setSelectionRange(0,0);
+}
+const composeFields=()=>({...reply.fields,to:$('compose-to').value.trim(),body:$('compose-body').value});
+async function saveReply(){
+  const f=composeFields();if(!f.to)throw new Error('Add who it goes to.');if(!f.body.trim())throw new Error('Write the message first.');
+  const key=f.to+'\n'+f.body;if(reply.draftId&&reply.saved===key)return reply.draftId;
+  const saved=await gmail.createDraft(f,reply.mode==='reply'?f.threadId:'');
+  if(reply.draftId&&reply.draftId!==saved.draftId)void gmail.deleteDraft(reply.draftId).catch(()=>{});
+  reply.draftId=saved.draftId;reply.saved=key;return saved.draftId;
+}
+$('reply').addEventListener('click',()=>{if(current&&current.text!=null)openCompose(current,'reply')});
+$('forward').addEventListener('click',()=>{if(current&&current.text!=null)openCompose(current,'forward')});
+$('compose-to').addEventListener('input',()=>disarmSend());
+function step(d){const i=messages.findIndex(m=>m.id===current?.id);const m=messages[i+d];if(m)void openMessage(m.id,{byPerson:true})}
+$('prev').addEventListener('click',()=>step(-1));$('next').addEventListener('click',()=>step(1));
+// Archive and Delete take the message out of the list and go back to it; Undo stays for 10 seconds.
+let undoTimer=null;
+function offerUndo(label,fn){const u=$('undo');u.hidden=false;u.onclick=async()=>{u.hidden=true;clearTimeout(undoTimer);try{await fn();setStatus(`${label} undone.`);void refresh()}catch(e){handleError(e)}};clearTimeout(undoTimer);undoTimer=setTimeout(()=>{u.hidden=true},10000)}
+async function remove(kind){
+  if(!current?.id)return;const id=current.id;
+  try{
+    if(kind==='archive'){await COMMAND_HANDLERS['mail.archive']({id});offerUndo('Archive',()=>COMMAND_HANDLERS['mail.archive']({id,undo:true}));setStatus('Archived. It stays in All Mail.')}
+    else{await COMMAND_HANDLERS['mail.trash']({id});offerUndo('Delete',()=>COMMAND_HANDLERS['mail.trash']({id,undo:true}));setStatus('Moved to Trash. Gmail keeps it 30 days.')}
+    messages=messages.filter(m=>m.id!==id);current=null;renderReader(null);renderList();$('main').classList.remove('reading');
+  }catch(e){handleError(e)}
+}
+$('archive').addEventListener('click',()=>void remove('archive'));$('trash').addEventListener('click',()=>void remove('trash'));
+$('compose-cancel').addEventListener('click',()=>closeCompose());
+$('compose-form').addEventListener('submit',e=>e.preventDefault());
+$('compose-body').addEventListener('input',()=>disarmSend());
+$('compose-ai').addEventListener('click',async()=>{if(!reply)return;const b=$('compose-ai');b.disabled=true;setStatus('Drafting with your AI model…');
+  try{$('compose-body').value=await draftText(reply.source,$('compose-ask').value.trim());disarmSend();setStatus('Draft ready. Read it and change anything before you send.')}
+  catch(e){setStatus(`Draft: ${e.message}`)}finally{b.disabled=false}});
+$('compose-save').addEventListener('click',async()=>{if(!reply)return;try{await saveReply();setStatus('Saved in Gmail Drafts.')}catch(e){handleError(e)}});
+$('compose-send').addEventListener('click',async()=>{
+  if(!reply)return;const b=$('compose-send');
+  if(!sendArmed){
+    const f=composeFields();if(!f.to||!f.body.trim()){setStatus(f.to?'Write the message first.':'Add who it goes to.');return}
+    b.textContent=`Confirm: send to ${f.to}`;b.classList.add('danger');sendArmed=setTimeout(disarmSend,10000);return;
+  }
+  disarmSend();b.disabled=true;setStatus('Sending…');
+  try{const to=composeFields().to,id=await saveReply();await gmail.sendDraft(id);setStatus(`Sent to ${to}.`);closeCompose();void refresh()}
+  catch(e){handleError(e)}finally{b.disabled=false}
+});
+$('triage').addEventListener('click',async()=>{const b=$('triage');b.disabled=true;setStatus('Sorting the list with your AI model…');
+  try{const found=await triageRows(messages.slice(0,25));renderList();setStatus(`Sorted ${found.length} of ${Math.min(25,messages.length)}: ${['reply','read','later','skip'].map(a=>`${found.filter(t=>t.action===a).length} ${a}`).join(', ')}.`)}
+  catch(e){setStatus(`Triage: ${e.message}`)}finally{b.disabled=false}});
+
 // ── Commands on the common rail: callers read mail through the desktop catalog, which checks their grant.
 // They never mark mail read. ──
 function needGmail(){if(!googleOn||!googleAvailable())throw new Error('Gmail is not connected; press Connect Google in Mail first.')}
@@ -159,6 +256,27 @@ const COMMAND_HANDLERS={
   async 'mail.search'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||10));return{query:String(args?.query||'in:inbox'),estimate:out.estimate,messages:out.messages.map(row)}},
   async 'mail.read'(args){needGmail();if(!args?.id)throw new Error('Give the message id from mail.search or mail.unread.');const msg=await gmail.read(String(args.id));if(!me)me=(await gmail.profile()).emailAddress||'';
     return{...row(msg),to:msg.to,cc:msg.cc,text:clip(msg.text,20000),attachments:msg.attachments.map(a=>a.name),promises:(await promisesOf(msg)).map(({direction,who,what,due,inferred})=>({direction,who,what,due,inferred}))}},
+  async 'mail.triage'(args){needGmail();const out=await gmail.search(String(args?.query||'in:inbox'),Math.min(25,Number(args?.max)||15));
+    const found=await triageRows(out.messages);const byId=new Map(out.messages.map(m=>[m.id,m]));renderList();
+    return{query:String(args?.query||'in:inbox'),messages:found.map(t=>({...row(byId.get(t.id)),action:t.action,why:t.why}))}},
+  // Saves a reply in Gmail Drafts and never sends. With no body, the person's AI model drafts it.
+  async 'mail.draft'(args){needGmail();if(!args?.id)throw new Error('Give the id of the message to reply to.');const msg=await gmail.read(String(args.id));
+    const body=String(args.body||'').trim()||await draftText(msg,String(args.instruction||''));const fields=G.replyTo(msg);
+    const saved=await gmail.createDraft({...fields,body},fields.threadId);return{draftId:saved.draftId,threadId:saved.threadId,to:saved.to,subject:saved.subject,body}},
+  // Destructive: the desktop shows the person the recipient and subject and asks every time. The draft must still
+  // match what the caller showed, so a changed draft is refused rather than sent.
+  async 'mail.send'(args){needGmail();if(!args?.draftId)throw new Error('Give the draftId from mail.draft.');const d=await gmail.getDraft(String(args.draftId));
+    const same=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+    if(!same(G.person(d.to).address,G.person(args.to).address)||!same(d.subject,args.subject))throw new Error(`The draft now goes to ${d.to} with subject "${d.subject}", not what this call names; nothing was sent.`);
+    const sent=await gmail.sendDraft(d.draftId);void refresh();return{sent:true,id:sent.id,threadId:sent.threadId,to:d.to,subject:d.subject}},
+  // Forwarding saves a draft too; sending it is mail.send.
+  async 'mail.forward'(args){needGmail();if(!args?.id||!args?.to)throw new Error('Give the message id and who to forward it to.');const msg=await gmail.read(String(args.id));
+    const f=G.forwardOf(msg);const body=(args.note?String(args.note):'')+f.quoted;const saved=await gmail.createDraft({to:String(args.to),subject:f.subject,body},'');
+    return{draftId:saved.draftId,to:saved.to,subject:saved.subject,attachmentsNotForwarded:msg.attachments.map(a=>a.name)}},
+  async 'mail.archive'(args){needGmail();if(!args?.id)throw new Error('Give the message id.');const id=String(args.id);
+    await(args.undo?gmail.unarchive(id):gmail.archive(id));return{id,archived:!args.undo}},
+  async 'mail.trash'(args){needGmail();if(!args?.id)throw new Error('Give the message id.');const id=String(args.id);
+    await(args.undo?gmail.untrash(id):gmail.trash(id));void publishUnread();return{id,trashed:!args.undo}},
   async 'mail.unread'(args){needGmail();const out=await gmail.search('is:unread in:inbox',Math.min(25,Number(args?.max)||10));return{count:await gmail.unreadCount(),messages:out.messages.map(row)}},
 };
 if(naklios.experimental_commands){

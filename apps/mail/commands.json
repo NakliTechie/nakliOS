@@ -56,12 +56,173 @@
           }
         }
       }
+    },
+    {
+      "name": "mail.triage",
+      "description": "Sort inbox messages into reply, read, later or skip with the person's AI model, each with a short reason. Uses Gmail's search words like mail.search. Changes nothing in Gmail and never marks mail read. Needs an AI model set up in NakliOS.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Gmail search words; leave out for the inbox"
+          },
+          "max": {
+            "type": "number",
+            "description": "How many messages, 1 to 25 (default 15)"
+          }
+        }
+      }
+    },
+    {
+      "name": "mail.draft",
+      "description": "Write a reply to one message and save it in the person's Gmail Drafts. Give the body, or leave it out and the person's AI model drafts it from the instruction. Never sends; mail.send sends the draft after the person confirms.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The message id from mail.search, mail.unread or mail.triage"
+          },
+          "body": {
+            "type": "string",
+            "description": "The reply text; leave out to have the AI model draft it"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "What the reply should say, for the AI draft"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "mail.forward",
+      "description": "Forward one message to someone: saves a draft with the original quoted below an optional note, in the person's Gmail Drafts. Attachments are not forwarded. Never sends; mail.send sends the draft after the person confirms.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The message id from mail.search, mail.unread or mail.triage"
+          },
+          "to": {
+            "type": "string",
+            "minLength": 3,
+            "description": "Who to forward it to (email address)"
+          },
+          "note": {
+            "type": "string",
+            "description": "A note above the forwarded message"
+          }
+        },
+        "required": [
+          "id",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "mail.send",
+      "description": "Send a draft saved by mail.draft or mail.forward. The desktop shows the person the recipient and subject and asks every time; the draft must still go to that recipient with that subject, or nothing is sent.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The draftId from mail.draft or mail.forward"
+          },
+          "to": {
+            "type": "string",
+            "minLength": 3,
+            "description": "The recipient the draft goes to"
+          },
+          "subject": {
+            "type": "string",
+            "description": "The draft's subject"
+          }
+        },
+        "required": [
+          "draftId",
+          "to",
+          "subject"
+        ]
+      }
+    },
+    {
+      "name": "mail.archive",
+      "description": "Take one message out of the inbox; it stays in All Mail. With undo, put it back in the inbox.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The message id from mail.search, mail.unread or mail.triage"
+          },
+          "undo": {
+            "type": "boolean",
+            "description": "Put it back in the inbox"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "mail.trash",
+      "description": "Move one message to Gmail's Trash, which Gmail empties after 30 days. With undo, bring it back from Trash.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The message id from mail.search, mail.unread or mail.triage"
+          },
+          "undo": {
+            "type": "boolean",
+            "description": "Bring it back from Trash"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
     }
   ],
   "parity": {
     "search-form": "mail.search",
     "search": "mail.search",
     "refresh": "mail.unread",
-    "google": "person: connecting a Google account needs the person's own sign-in and consent"
+    "google": "person: connecting a Google account needs the person's own sign-in and consent",
+    "triage": "mail.triage",
+    "prev": "view",
+    "next": "view",
+    "reply": "view",
+    "forward": "view",
+    "archive": "mail.archive",
+    "trash": "mail.trash",
+    "undo": "mail.trash",
+    "compose-form": "mail.draft",
+    "compose-to": "mail.forward",
+    "compose-ask": "mail.draft",
+    "compose-ai": "mail.draft",
+    "compose-body": "mail.draft",
+    "compose-save": "mail.draft",
+    "compose-send": "mail.send",
+    "compose-cancel": "view"
   }
 }
