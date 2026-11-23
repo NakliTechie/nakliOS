@@ -141,6 +141,7 @@
     fsBoundedReads: false,
     fsRangeReads: false,
     fsBoundedListing: false,
+    fsTypedRemoval: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -593,6 +594,7 @@
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.fsBoundedListing = msg.fsBoundedListing === true;
+      capabilities.fsTypedRemoval = msg.fsTypedRemoval === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -993,6 +995,7 @@
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       get supportsBoundedListing() { return capabilities.fsBoundedListing === true; },
+      get supportsTypedRemoval() { return capabilities.fsTypedRemoval === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
@@ -1009,7 +1012,12 @@
         if (options && options.cursor != null) page.cursor = options.cursor;
         return rpc('naklios:fs:list', fsPayload(Object.assign({ prefix: prefix || '' }, page)));
       },
-      delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
+      // delete(path) removes a file or a whole directory. delete(path, { kind: 'dir' }) removes only an
+      // empty directory and { kind: 'non-dir' } only a file, when supportsTypedRemoval is true.
+      delete:     function (path, options) {
+        var extra = options && options.kind !== undefined ? { kind: options.kind } : {};
+        return rpc('naklios:fs:delete', fsPayload(Object.assign({ path: path }, extra)));
+      },
       exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
       // Watch an app-relative path or directory. Crate events are immediate;
       // Folder changes are detected by a lightweight host poll. Resolves to

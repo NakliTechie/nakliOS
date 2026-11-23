@@ -347,7 +347,11 @@ Available methods:
   (`naklios.capabilities.fsBoundedListing`) first, because Crate refuses with `ENOTSUP`. A Folder page
   reports `snapshotConsistent: false`, because the folder can change between pages.
 - `exists(path)`
-- `delete(path)`
+- `delete(path)` removes a file or a whole directory. `delete(path, { kind: "dir" })` removes only an
+  empty directory and `{ kind: "non-dir" }` only a file, non-recursively; a directory that is not empty
+  refuses with `ENOTEMPTY`. Only the Folder backend offers it: check `naklios.fs.supportsTypedRemoval`
+  (`naklios.capabilities.fsTypedRemoval`). The browser removes by name, so an entry swapped in under the
+  same name between the type check and the removal is removed instead; nothing recursive ever is.
 - `useBackend("fsa" | "crate")`
 - `subscribe(path, callback)`
 - `autosave({ save, delay, onError, guard })` — see [Durability](#durability)
@@ -774,7 +778,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-134 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+136 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -796,6 +800,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.fsBoundedReads` | field | True when the active host storage backend supports a byte-limited read. |
 | `capabilities.fsRangeReads` | field | True when the active host Folder backend supports explicit bounded byte ranges. |
 | `capabilities.fsBoundedListing` | field | True when the active host Folder backend can list a directory one page at a time. |
+| `capabilities.fsTypedRemoval` | field | True when the active host Folder backend can remove only an empty directory or only a file. |
 | `capabilities.system` | field | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | Shared host inference granted. |
@@ -890,11 +895,12 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `fs.readBinary` | function | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | True when the host advertises bounded reads for the active backend. |
 | `fs.supportsBoundedListing` | getter | True when `fs.list(prefix, { maxEntries, cursor })` returns one page of entries. |
+| `fs.supportsTypedRemoval` | getter | True when `fs.delete(path, { kind })` removes only an empty directory (`dir`) or only a file (`non-dir`). |
 | `fs.stat` | function | Read path type and size without loading file bytes. |
 | `fs.write` | function | Write text or bytes. |
 | `fs.append` | function | Append. |
 | `fs.list` | function | List entries; with `{ maxEntries, cursor }`, one page `{ entries, truncated, cursor, snapshotConsistent }`. |
-| `fs.delete` | function | Delete a path. |
+| `fs.delete` | function | Delete a path; with `{ kind }`, only an empty directory or only a file. |
 | `fs.exists` | function | Existence check. |
 | `fs.subscribe` | function | Change subscription over a prefix; async — resolves to a stop function. |
 | `fs.useBackend` | function | Ask the host to switch the app's backend. |

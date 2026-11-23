@@ -175,6 +175,12 @@ test('echo supports -n, escapes, explicit escape disabling and stop escapes', as
   assert.equal(await output(run('echo', ['-e', 'a\\cb'])), 'a');
   assert.equal(await output(run('echo', ['text', '-n'])), 'text -n\n');
   assert.deepEqual(toBytes((await run('echo', ['-ne', '\\0377'])).text), Uint8Array.of(255));
+  // Bash prints anything that is not a pure -n/-e/-E cluster, so a separator never fails a chain.
+  assert.equal(await output(run('echo', ['---'])), '---\n');
+  assert.equal(await output(run('echo', ['--', 'x'])), '-- x\n');
+  assert.equal(await output(run('echo', ['-x'])), '-x\n');
+  assert.equal(await output(run('echo', ['-n', '-z'])), '-z');
+  assert.equal(await output(run('echo', ['-'])), '-\n');
 });
 
 test('printf formats strings, characters, bases, widths and precision with format reuse', async () => {
@@ -227,7 +233,8 @@ test('od concatenates every readable operand and reports missing files', async (
 
 test('every override refuses unsupported flags with exit 2 and a supported-flags list', async () => {
   const { run } = setup();
-  for (const command of ['sort', 'head', 'tail', 'wc', 'uniq', 'cut', 'tr', 'echo', 'printf', 'od']) {
+  // echo is not here: Bash's echo prints any argument that is not a pure -n/-e/-E cluster (see the echo test).
+  for (const command of ['sort', 'head', 'tail', 'wc', 'uniq', 'cut', 'tr', 'printf', 'od']) {
     await assert.rejects(() => run(command, ['--unsupported']), (error) => {
       assert.equal(error.code, 2);
       assert.match(error.message, /unsupported flag --unsupported/);

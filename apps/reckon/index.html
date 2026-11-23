@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-3o/CF/Y+MOUKjhqRQ1Fy5/QCxVboA1ViccpO1xga0+k=' 'sha256-WW/up4iYKoXntCqksrSQuWgun4rvhlA6+oXQ3mQBWdk=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-rndrN9OxsZxi4+OlrcrZXBps91czWNrlJoP4AqK6CLk=' 'sha256-WW/up4iYKoXntCqksrSQuWgun4rvhlA6+oXQ3mQBWdk=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Reckon</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -12048,7 +12048,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
      fresh by .github/workflows/vendor-sdk.yml. Never edit it here; a change
      the app needs goes into sdk/naklios.js in NakliTechie/nakliOS. -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=a0d94dd9af9ff853b3fbdffc1c30f1b314788afcdc169da7ff3da21d9ace980e */
+/* naklios-sdk:begin ver=2 sha256=a9978e9491ada07e62cd23a95813fcaecceadd953473587f0d034c567ad86fed */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -12192,6 +12192,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     fsBoundedReads: false,
     fsRangeReads: false,
     fsBoundedListing: false,
+    fsTypedRemoval: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -12644,6 +12645,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.fsBoundedListing = msg.fsBoundedListing === true;
+      capabilities.fsTypedRemoval = msg.fsTypedRemoval === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -13044,6 +13046,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       get supportsBoundedListing() { return capabilities.fsBoundedListing === true; },
+      get supportsTypedRemoval() { return capabilities.fsTypedRemoval === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
@@ -13060,7 +13063,12 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
         if (options && options.cursor != null) page.cursor = options.cursor;
         return rpc('naklios:fs:list', fsPayload(Object.assign({ prefix: prefix || '' }, page)));
       },
-      delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
+      // delete(path) removes a file or a whole directory. delete(path, { kind: 'dir' }) removes only an
+      // empty directory and { kind: 'non-dir' } only a file, when supportsTypedRemoval is true.
+      delete:     function (path, options) {
+        var extra = options && options.kind !== undefined ? { kind: options.kind } : {};
+        return rpc('naklios:fs:delete', fsPayload(Object.assign({ path: path }, extra)));
+      },
       exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
       // Watch an app-relative path or directory. Crate events are immediate;
       // Folder changes are detected by a lightweight host poll. Resolves to

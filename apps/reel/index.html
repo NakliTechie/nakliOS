@@ -10,7 +10,7 @@
      wasm instantiation); 'wasm-unsafe-eval' lets the software audio rung (AC-3, E-AC-3, DTS) compile
      its WebAssembly, which is that one exception. -->
 <!-- frame-ancestors must be delivered as an HTTP response header; browsers ignore it in meta CSP. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-EHLIkamGeaSjW5QN0RToFOuaM0tsbG5KxDyjto/HPQ4=' 'sha256-qV1cEoiB7ufgNOuszjTmY4sx7zqHWAqCgzUDEezGsZY=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jX9jw+jCHwuYhSF/KRqWde6RuXTWECQcYHOStQjoH8I=' 'sha256-qV1cEoiB7ufgNOuszjTmY4sx7zqHWAqCgzUDEezGsZY=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="reel-version" content="0.0.11-m0">
 <meta name="description" content="Play MKV, MP4, and WebM videos privately in your browser. Files stay on your device.">
 <meta name="theme-color" content="#000000">
@@ -284,7 +284,7 @@
 <script>
 /* The NakliOS SDK, inlined so Reel runs the same standalone and hosted; every call is a no-op outside NakliOS.
    scripts/vendor-naklios-sdk.mjs refreshes it from https://naklios.dev/sdk/naklios.js (daily: .github/workflows/vendor-sdk.yml). */
-/* naklios-sdk:begin ver=2 sha256=a0d94dd9af9ff853b3fbdffc1c30f1b314788afcdc169da7ff3da21d9ace980e */
+/* naklios-sdk:begin ver=2 sha256=a9978e9491ada07e62cd23a95813fcaecceadd953473587f0d034c567ad86fed */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -428,6 +428,7 @@
     fsBoundedReads: false,
     fsRangeReads: false,
     fsBoundedListing: false,
+    fsTypedRemoval: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -880,6 +881,7 @@
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.fsBoundedListing = msg.fsBoundedListing === true;
+      capabilities.fsTypedRemoval = msg.fsTypedRemoval === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -1280,6 +1282,7 @@
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       get supportsBoundedListing() { return capabilities.fsBoundedListing === true; },
+      get supportsTypedRemoval() { return capabilities.fsTypedRemoval === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
@@ -1296,7 +1299,12 @@
         if (options && options.cursor != null) page.cursor = options.cursor;
         return rpc('naklios:fs:list', fsPayload(Object.assign({ prefix: prefix || '' }, page)));
       },
-      delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
+      // delete(path) removes a file or a whole directory. delete(path, { kind: 'dir' }) removes only an
+      // empty directory and { kind: 'non-dir' } only a file, when supportsTypedRemoval is true.
+      delete:     function (path, options) {
+        var extra = options && options.kind !== undefined ? { kind: options.kind } : {};
+        return rpc('naklios:fs:delete', fsPayload(Object.assign({ path: path }, extra)));
+      },
       exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
       // Watch an app-relative path or directory. Crate events are immediate;
       // Folder changes are detected by a lightweight host poll. Resolves to

@@ -2386,8 +2386,13 @@ async function fsListPage(prefix, maxEntries, cursor, owner){
   }
   return { entries: entries.sort(), truncated: !done, cursor: token, snapshotConsistent: false };
 }
-async function fsDelete(path){
+async function fsDelete(path, kind){
   const { dir, name } = await fsGetDir(path);
+  // kind 'dir' | 'non-dir' is rmdir/unlink: checked, non-recursive (sys/rig/fileops/handle-remove.mjs).
+  if (kind !== undefined){
+    const { removeHandleTyped } = await import('./sys/rig/fileops/handle-remove.mjs');
+    return await removeHandleTyped(dir, name, kind, path);
+  }
   await dir.removeEntry(name, { recursive: true });
 }
 async function fsExists(path){
@@ -5094,7 +5099,8 @@ const BACKENDS = {
     async readBinary(safePath, maxBytes, offset){ return await fsReadBinary(safePath, maxBytes, offset); },
     async write(safePath, data){ await fsWrite(safePath, data); },
     async append(safePath, line){ await fsAppend(safePath, line); },
-    async delete(safePath){ await fsDelete(safePath); },
+    get supportsTypedRemoval(){ return typeof FileSystemHandle === 'function' && typeof FileSystemHandle.prototype.remove === 'function'; },
+    async delete(safePath, kind){ await fsDelete(safePath, kind); },
     async exists(safePath){ return await fsExists(safePath); },
     supportsBoundedListing: true,
     async list(prefix){ return await fsList(prefix); },
@@ -5441,7 +5447,13 @@ async function fsHostHandleNow(msg, type, appId){
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
-    case 'delete':     await backend.delete(safe); return null;
+    case 'delete':
+      if (msg.kind !== undefined){
+        if (msg.kind !== 'dir' && msg.kind !== 'non-dir') throw Object.assign(new Error('EINVAL: invalid removal kind'), { code: 'EINVAL' });
+        if (backend.supportsTypedRemoval !== true) throw Object.assign(new Error('ENOTSUP: this storage backend has no typed removal'), { code: 'ENOTSUP' });
+        await backend.delete(safe, msg.kind); return null;
+      }
+      await backend.delete(safe); return null;
     case 'exists':     return await backend.exists(safe);
   }
   throw new Error('Unknown fs op: ' + type);
@@ -5503,7 +5515,13 @@ async function fsHostSysHandle(msg, op, appId){
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
-    case 'delete':     await backend.delete(safe); return null;
+    case 'delete':
+      if (msg.kind !== undefined){
+        if (msg.kind !== 'dir' && msg.kind !== 'non-dir') throw Object.assign(new Error('EINVAL: invalid removal kind'), { code: 'EINVAL' });
+        if (backend.supportsTypedRemoval !== true) throw Object.assign(new Error('ENOTSUP: this storage backend has no typed removal'), { code: 'ENOTSUP' });
+        await backend.delete(safe, msg.kind); return null;
+      }
+      await backend.delete(safe); return null;
     case 'exists':     return await backend.exists(safe);
   }
   throw new Error('Unknown system fs op: ' + op);
@@ -9113,6 +9131,7 @@ function capabilitySnapshot(appId){
     fsBoundedReads: fsCap && (fsBackend === 'fsa' || (fsBackend === 'crate' && state.crate?.supportsBoundedReads === true)),
     fsRangeReads: fsCap && fsBackend === 'fsa',
     fsBoundedListing: fsCap && fsBackend === 'fsa',
+    fsTypedRemoval: fsCap && fsBackend === 'fsa' && BACKENDS.fsa.supportsTypedRemoval === true,
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,

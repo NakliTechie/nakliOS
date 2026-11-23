@@ -67,7 +67,22 @@ export class CrateBackend {
     this._dirs.delete(safePath);
   }
 
-  async delete(safePath) {
+  // Typed removal (rmdir/unlink) is a host promise (naklios.fs.supportsTypedRemoval): the host removes
+  // only an empty directory or only a file, non-recursively.
+  get supportsTypedRemoval() {
+    return this.host.supportsTypedRemoval === true;
+  }
+
+  async delete(safePath, { kind } = {}) {
+    if (kind !== undefined) {
+      if (!this.supportsTypedRemoval) throw Object.assign(new Error('host does not support typed removal'), { code: 'ENOTSUP' });
+      if (!safePath) throw Object.assign(new Error('cannot remove the filesystem root'), { code: 'EBUSY' });
+      // A session-only directory marker has nothing on the host to remove.
+      if (kind === 'dir' && this._dirs.has(safePath) && !(await this.host.exists(safePath))) { this._dirs.delete(safePath); return; }
+      await this.host.delete(safePath, { kind });
+      this._dirs.delete(safePath);
+      return;
+    }
     if (!safePath) return; // never remove the root
     await this.host.delete(safePath);
     this._dirs.delete(safePath);
