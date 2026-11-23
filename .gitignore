@@ -83,3 +83,5 @@ gemini.mcp.json
 opencode.json
 windsurf.mcp.json
 .worktrees/
+
+sys/emergic-rules/crate/target/

@@ -1,0 +1,342 @@
+{
+ "about": "Deadline words and the day they name. meeting: emergic-rules dates::due, from the Meetings plugin's dates.rs tests (day = the meeting's date). mail: dates::due_in_mail, from Vaak's tests/test_dates.py (day = the day the mail was sent, India time). due null = no deadline. has_time_words: words that do or do not speak of when.",
+ "meeting": [
+  {
+   "words": "by Friday",
+   "day": "2026-11-19",
+   "due": "2026-11-20",
+   "inferred": false
+  },
+  {
+   "words": "on Thursday",
+   "day": "2026-11-19",
+   "due": "2026-11-19",
+   "inferred": false
+  },
+  {
+   "words": "next Monday",
+   "day": "2026-11-19",
+   "due": "2026-11-23",
+   "inferred": true
+  },
+  {
+   "words": "tomorrow",
+   "day": "2026-11-19",
+   "due": "2026-11-20",
+   "inferred": false
+  },
+  {
+   "words": "day after tomorrow",
+   "day": "2026-11-19",
+   "due": "2026-11-21",
+   "inferred": false
+  },
+  {
+   "words": "by EOD",
+   "day": "2026-11-19",
+   "due": "2026-11-19",
+   "inferred": false
+  },
+  {
+   "words": "next week",
+   "day": "2026-11-19",
+   "due": "2026-11-27",
+   "inferred": true
+  },
+  {
+   "words": "by the end of the month",
+   "day": "2026-11-19",
+   "due": "2026-11-30",
+   "inferred": true
+  },
+  {
+   "words": "by the 5th",
+   "day": "2026-11-19",
+   "due": "2026-12-05",
+   "inferred": false
+  },
+  {
+   "words": "on 2 December",
+   "day": "2026-11-19",
+   "due": "2026-12-02",
+   "inferred": false
+  },
+  {
+   "words": "Jan 10",
+   "day": "2026-11-19",
+   "due": "2027-01-10",
+   "inferred": false
+  },
+  {
+   "words": "15/12",
+   "day": "2026-11-19",
+   "due": "2026-12-15",
+   "inferred": false
+  },
+  {
+   "words": "within two weeks",
+   "day": "2026-11-19",
+   "due": "2026-12-03",
+   "inferred": true
+  },
+  {
+   "words": "2026-12-01",
+   "day": "2026-11-19",
+   "due": "2026-12-01",
+   "inferred": false
+  },
+  {
+   "words": "EOD Friday",
+   "day": "2026-11-19",
+   "due": "2026-11-20",
+   "inferred": false
+  },
+  {
+   "words": "end of day tomorrow",
+   "day": "2026-11-19",
+   "due": "2026-11-20",
+   "inferred": false
+  },
+  {
+   "words": "by the 31st",
+   "day": "2026-04-30",
+   "due": "2026-05-31",
+   "inferred": false
+  },
+  {
+   "words": "on 29 February",
+   "day": "2026-03-10",
+   "due": "2028-02-29",
+   "inferred": false
+  },
+  {
+   "words": "this week",
+   "day": "2026-11-21",
+   "due": "2026-11-22",
+   "inferred": true
+  },
+  {
+   "words": "by end of week",
+   "day": "2026-11-22",
+   "due": "2026-11-22",
+   "inferred": true
+  },
+  {
+   "words": "this week",
+   "day": "2026-11-16",
+   "due": "2026-11-20",
+   "inferred": true
+  },
+  {
+   "words": "next sprint",
+   "day": "2026-11-19",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "soon",
+   "day": "2026-11-19",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "later",
+   "day": "2026-11-19",
+   "due": null,
+   "inferred": null
+  }
+ ],
+ "mail": [
+  {
+   "words": "I'll send it by EOD",
+   "day": "2026-10-14",
+   "due": "2026-10-14",
+   "inferred": false
+  },
+  {
+   "words": "will revert tomorrow",
+   "day": "2026-10-14",
+   "due": "2026-10-15",
+   "inferred": false
+  },
+  {
+   "words": "we'll get back to you by Friday",
+   "day": "2026-10-14",
+   "due": "2026-10-16",
+   "inferred": false
+  },
+  {
+   "words": "I can share it on Monday",
+   "day": "2026-10-14",
+   "due": "2026-10-19",
+   "inferred": false
+  },
+  {
+   "words": "by next Friday",
+   "day": "2026-10-14",
+   "due": "2026-10-23",
+   "inferred": true
+  },
+  {
+   "words": "invoice to follow next week",
+   "day": "2026-10-14",
+   "due": "2026-10-23",
+   "inferred": true
+  },
+  {
+   "words": "by end of the week",
+   "day": "2026-10-14",
+   "due": "2026-10-16",
+   "inferred": true
+  },
+  {
+   "words": "by the 20th",
+   "day": "2026-10-14",
+   "due": "2026-10-20",
+   "inferred": false
+  },
+  {
+   "words": "on the 5th",
+   "day": "2026-10-14",
+   "due": "2026-11-05",
+   "inferred": false
+  },
+  {
+   "words": "by 3 Nov",
+   "day": "2026-10-14",
+   "due": "2026-11-03",
+   "inferred": false
+  },
+  {
+   "words": "before October 30th",
+   "day": "2026-10-14",
+   "due": "2026-10-30",
+   "inferred": false
+  },
+  {
+   "words": "by 2026-12-01",
+   "day": "2026-10-14",
+   "due": "2026-12-01",
+   "inferred": false
+  },
+  {
+   "words": "within a week",
+   "day": "2026-10-14",
+   "due": "2026-10-21",
+   "inferred": true
+  },
+  {
+   "words": "in 3 days",
+   "day": "2026-10-14",
+   "due": "2026-10-17",
+   "inferred": true
+  },
+  {
+   "words": "by month end",
+   "day": "2026-10-14",
+   "due": "2026-10-31",
+   "inferred": true
+  },
+  {
+   "words": "thanks, noted",
+   "day": "2026-10-14",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "by 31 Feb",
+   "day": "2026-10-14",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "by the 2nd",
+   "day": "2026-09-15",
+   "due": "2026-10-02",
+   "inferred": false
+  },
+  {
+   "words": "by the 1st",
+   "day": "2026-10-31",
+   "due": "2026-11-01",
+   "inferred": false
+  },
+  {
+   "words": "by the 3rd",
+   "day": "2026-12-10",
+   "due": "2027-01-03",
+   "inferred": false
+  },
+  {
+   "words": "on Friday, the 23rd",
+   "day": "2026-10-14",
+   "due": "2026-10-23",
+   "inferred": false
+  },
+  {
+   "words": "next week",
+   "day": "2026-10-18",
+   "due": "2026-10-23",
+   "inferred": true
+  },
+  {
+   "words": "by 15/10",
+   "day": "2026-10-14",
+   "due": "2026-10-15",
+   "inferred": false
+  },
+  {
+   "words": "before 20.10.2026",
+   "day": "2026-10-14",
+   "due": "2026-10-20",
+   "inferred": false
+  },
+  {
+   "words": "by 31/2",
+   "day": "2026-10-14",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "will send 2.5 lakh by Friday",
+   "day": "2026-10-14",
+   "due": "2026-10-16",
+   "inferred": false
+  },
+  {
+   "words": "please share your Form 16 declaration",
+   "day": "2026-10-14",
+   "due": null,
+   "inferred": null
+  },
+  {
+   "words": "by 3 Sept",
+   "day": "2026-08-01",
+   "due": "2026-09-03",
+   "inferred": false
+  },
+  {
+   "words": "our invoice 7781 dated 1 Sep was due on 1 October and remains unpaid",
+   "day": "2026-10-14",
+   "due": "2026-10-01",
+   "inferred": false
+  },
+  {
+   "words": "your bill of 599 was due on 10 Oct 2026",
+   "day": "2026-10-14",
+   "due": "2026-10-10",
+   "inferred": false
+  }
+ ],
+ "has_time_words": {
+  "yes": [
+   "soon on Slack",
+   "by the 5th",
+   "next sprint"
+  ],
+  "no": [
+   "to work on email tracking",
+   "once stable"
+  ]
+ }
+}

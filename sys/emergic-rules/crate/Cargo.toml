@@ -1,0 +1,25 @@
+[package]
+name = "emergic-rules-wasm"
+version = "0.1.0"
+description = "NakliOS's WebAssembly door onto Emergic's common rules (emergic-rules): JSON in, JSON out."
+license = "MIT"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Emergic owns the rules (decided 2026-11-22). NakliOS pins the newest crate commit on emergic-app main
+# that it was checked against (bc07e55ea adds `when` to 7ca6b84b3; the corpus is unchanged).
+emergic-rules = { git = "https://github.com/atrium-solutions/emergic-app.git", rev = "bc07e55ea" }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
