@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://naklios.dev/apps/rivulina/social.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://naklios.dev/apps/rivulina/social.png">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-72frOvu/WzeXmWy0Z+3oPMB3zz0GDPPjPWsc2DySQNw=' 'sha256-5IQIdjAgnRE86oSI+FxBdoiz6WeUpMlN6buwVR/v7uA=' 'sha256-056Qgz9jWERzxA7IQmDmtsNOd2Itp0IB+XltZ7FrmKM=' 'sha256-66iVKabMEJjzJJjPP6cesjZLofY10FJO1ib9GdPO7Co=' blob: https://cdn.jsdelivr.net/npm/@huggingface/ https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.jsdelivr.net/npm/onnxruntime-common/ 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'; img-src https: data: blob:; media-src https: blob:; font-src data:; connect-src https: blob: data:; worker-src blob: 'self'; frame-src blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-72frOvu/WzeXmWy0Z+3oPMB3zz0GDPPjPWsc2DySQNw=' 'sha256-5IQIdjAgnRE86oSI+FxBdoiz6WeUpMlN6buwVR/v7uA=' 'sha256-2XEsywDz4IoqI/hR8QUv4IYL8GIJHbSzt0n3eVUnW3U=' 'sha256-66iVKabMEJjzJJjPP6cesjZLofY10FJO1ib9GdPO7Co=' blob: https://cdn.jsdelivr.net/npm/@huggingface/ https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.jsdelivr.net/npm/onnxruntime-common/ 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'; img-src https: data: blob:; media-src https: blob:; font-src data:; connect-src https: blob: data:; worker-src blob: 'self'; frame-src blob:">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23eef4f3'/%3E%3Cpath d='M6 11c5-3 8 3 13 0s7-2 7-2M6 17c5-3 8 3 13 0s7-2 7-2M6 23c5-3 8 3 13 0s7-2 7-2' fill='none' stroke='%230f766e' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <!--
 Rivulina, AGPL-3.0-or-later, (c) 2026 Chirag Patnaik. Source: https://github.com/NakliTechie/rivulina
@@ -530,7 +530,7 @@ addEventListener('error', (e) => { if (/ResizeObserver loop/.test(e.message || '
 addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reason));
 </script>
 <script>
-/* naklios-sdk:begin ver=2 sha256=a0d94dd9af9ff853b3fbdffc1c30f1b314788afcdc169da7ff3da21d9ace980e */
+/* naklios-sdk:begin ver=2 sha256=a9978e9491ada07e62cd23a95813fcaecceadd953473587f0d034c567ad86fed */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -674,6 +674,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
     fsBoundedReads: false,
     fsRangeReads: false,
     fsBoundedListing: false,
+    fsTypedRemoval: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -1126,6 +1127,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.fsBoundedListing = msg.fsBoundedListing === true;
+      capabilities.fsTypedRemoval = msg.fsTypedRemoval === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -1526,6 +1528,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       get supportsBoundedListing() { return capabilities.fsBoundedListing === true; },
+      get supportsTypedRemoval() { return capabilities.fsTypedRemoval === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
@@ -1542,7 +1545,12 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
         if (options && options.cursor != null) page.cursor = options.cursor;
         return rpc('naklios:fs:list', fsPayload(Object.assign({ prefix: prefix || '' }, page)));
       },
-      delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
+      // delete(path) removes a file or a whole directory. delete(path, { kind: 'dir' }) removes only an
+      // empty directory and { kind: 'non-dir' } only a file, when supportsTypedRemoval is true.
+      delete:     function (path, options) {
+        var extra = options && options.kind !== undefined ? { kind: options.kind } : {};
+        return rpc('naklios:fs:delete', fsPayload(Object.assign({ path: path }, extra)));
+      },
       exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
       // Watch an app-relative path or directory. Crate events are immediate;
       // Folder changes are detected by a lightweight host poll. Resolves to

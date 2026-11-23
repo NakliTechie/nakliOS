@@ -12,6 +12,7 @@
 // it runs against a mock handle in tests (fsa-backend.test.mjs) and a real
 // showDirectoryPicker() handle in the browser — no branching between them.
 
+import { handleRemovalSupported, removeHandleTyped } from './handle-remove.mjs';
 import { checkReadLimit, checkReadSize } from './read-limit.mjs';
 import { mutationError, checkTruncateOptions, truncateSize } from './mutation-limit.mjs';
 
@@ -43,8 +44,13 @@ export class FsaBackend {
     // Only the OPFS factory supplies this provenance. A picked native folder's
     // handle API does not expose an atomic no-follow path-resolution contract.
     this.supportsNoFollowMutation = symlinkFree === true;
-    // FSA has no exclusive name creation or atomic type-constrained removal.
-    // Even handle.remove() can remove a differently typed replacement by name.
+    // FSA has no exclusive name creation or fully atomic type-constrained removal.
+    // Typed removal (rmdir/unlink) is checked, not atomic: handle.remove() refuses a
+    // non-empty directory, but it removes by name, so an entry swapped in under the
+    // same name between the type check and the removal is removed instead. Refusing
+    // rmdir pushed agents to `rm -r`, which removes non-empty directories, so the
+    // checked form is the safer one (sys/rig/fileops/handle-remove.mjs).
+    this.supportsTypedRemoval = handleRemovalSupported(rootHandle);
     // Truncation additionally feature-detects the transactional writable handle.
     this.supportsAtomicTruncate = true;
   }
@@ -88,8 +94,14 @@ export class FsaBackend {
   }
 
   async delete(safePath, { metadataOnly, kind } = {}) {
-    if (kind !== undefined) throw mutationError('ENOTSUP', 'provider lacks atomic type-constrained removal');
     const { parts, name } = this._split(safePath);
+    if (kind !== undefined) {
+      if (!this.supportsTypedRemoval) throw mutationError('ENOTSUP', 'provider lacks type-constrained removal');
+      let parent;
+      try { parent = await this._dirHandle(parts, false); }
+      catch (error) { throw metadataError(error, 'remove', safePath); }
+      return removeHandleTyped(parent, name, kind, safePath);
+    }
     if (!name) {
       if (metadataOnly) throw metadataError(Object.assign(new Error('cannot remove the filesystem root'), { code: 'EBUSY' }), 'remove', '/');
       return; // never remove the root

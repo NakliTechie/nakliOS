@@ -38,6 +38,7 @@ prefix today.
 | `capabilities.fsBoundedReads` | field | stable | — | True when the active host storage backend supports a byte-limited read. |
 | `capabilities.fsRangeReads` | field | stable | — | True when the active host Folder backend supports explicit bounded byte ranges. |
 | `capabilities.fsBoundedListing` | field | stable | — | True when the active host Folder backend can list a directory one page at a time. |
+| `capabilities.fsTypedRemoval` | field | stable | — | True when the active host Folder backend can remove only an empty directory or only a file. |
 | `capabilities.system` | field | stable | — | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | stable | — | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | stable | — | Shared host inference granted. |
@@ -82,11 +83,12 @@ prefix today.
 | `fs.readBinary` | function | stable | — | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | stable | — | True when the host advertises bounded reads for the active backend. |
 | `fs.supportsBoundedListing` | getter | stable | — | True when `fs.list(prefix, { maxEntries, cursor })` returns one page of entries. |
+| `fs.supportsTypedRemoval` | getter | stable | — | True when `fs.delete(path, { kind })` removes only an empty directory (`dir`) or only a file (`non-dir`). |
 | `fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `fs.write` | function | stable | — | Write text or bytes. |
 | `fs.append` | function | stable | — | Append. |
 | `fs.list` | function | stable | — | List entries; with `{ maxEntries, cursor }`, one page `{ entries, truncated, cursor, snapshotConsistent }`. |
-| `fs.delete` | function | stable | — | Delete a path. |
+| `fs.delete` | function | stable | — | Delete a path; with `{ kind }`, only an empty directory or only a file. |
 | `fs.exists` | function | stable | — | Existence check. |
 | `fs.subscribe` | function | stable | — | Change subscription over a prefix; async — resolves to a stop function. |
 | `fs.useBackend` | function | stable | — | Ask the host to switch the app's backend. |

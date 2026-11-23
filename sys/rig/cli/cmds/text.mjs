@@ -484,10 +484,16 @@ export function createTextCommands(io) {
       return raw(autoData(Uint8Array.from(output)));
     },
     echo(argv) {
-      const { options, operands, occurrences } = parseArgs(argv, flags('neE'), { command: 'echo', stopAtOperand: true });
-      const mode = occurrences.filter(({ key }) => key === 'e' || key === 'E').at(-1)?.key;
-      const expanded = mode === 'e' ? escapes(operands.join(' '), true) : { data: operands.join(' '), stopped: false };
-      return raw(autoData(concatData([expanded.data, options.n || expanded.stopped ? '' : '\n'])));
+      // Bash's echo: a leading argument is options only when it is "-" plus n, e and E letters. Anything
+      // else, "--" and "---" included, is printed as text, so `echo '---'` prints --- (2026-11-23: the
+      // generic parser refused it with exit 2, which broke `cmd && echo '---' && cmd` chains).
+      let n = false, mode, i = 0;
+      for (; i < argv.length && /^-[neE]+$/.test(argv[i]); i++) {
+        for (const letter of argv[i].slice(1)) { if (letter === 'n') n = true; else mode = letter; }
+      }
+      const text = argv.slice(i).join(' ');
+      const expanded = mode === 'e' ? escapes(text, true) : { data: text, stopped: false };
+      return raw(autoData(concatData([expanded.data, n || expanded.stopped ? '' : '\n'])));
     },
     printf: printfCommand,
     async od(argv, stdin = '') {

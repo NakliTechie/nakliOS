@@ -278,6 +278,8 @@ jobs:
 
       - name: Verify the File System Access backend
         run: node sys/rig/fileops/test/fsa-backend.test.mjs
+      - name: Verify rmdir and unlink on picked folders and hosted projects (typed removal)
+        run: node sys/rig/fileops/test/typed-removal.test.mjs
 
       - name: Verify the Crate backend
         run: node sys/rig/fileops/test/crate-backend.test.mjs
