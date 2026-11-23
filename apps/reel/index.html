@@ -10,7 +10,7 @@
      wasm instantiation); 'wasm-unsafe-eval' lets the software audio rung (AC-3, E-AC-3, DTS) compile
      its WebAssembly, which is that one exception. -->
 <!-- frame-ancestors must be delivered as an HTTP response header; browsers ignore it in meta CSP. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jX9jw+jCHwuYhSF/KRqWde6RuXTWECQcYHOStQjoH8I=' 'sha256-qV1cEoiB7ufgNOuszjTmY4sx7zqHWAqCgzUDEezGsZY=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-8ESeH3gjZwPt6pfTnxDXVn0UrseOnFVUx7YIfgqkxG0=' 'sha256-qV1cEoiB7ufgNOuszjTmY4sx7zqHWAqCgzUDEezGsZY=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="reel-version" content="0.0.11-m0">
 <meta name="description" content="Play MKV, MP4, and WebM videos privately in your browser. Files stay on your device.">
 <meta name="theme-color" content="#000000">
@@ -284,7 +284,7 @@
 <script>
 /* The NakliOS SDK, inlined so Reel runs the same standalone and hosted; every call is a no-op outside NakliOS.
    scripts/vendor-naklios-sdk.mjs refreshes it from https://naklios.dev/sdk/naklios.js (daily: .github/workflows/vendor-sdk.yml). */
-/* naklios-sdk:begin ver=2 sha256=a9978e9491ada07e62cd23a95813fcaecceadd953473587f0d034c567ad86fed */
+/* naklios-sdk:begin ver=2 sha256=52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1547,7 +1547,9 @@
       // token({ provider, scopes }) -> { accessToken, expiresAt, scopes }. Call it from a click handler: Google's
       // window needs the person's click, and without one the host shows a "Continue to Google" dialog first.
       // Errors carry .code: ENOAUTH (not available), ENOGRANT (person declined), EDENIED (Google or the person
-      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE.
+      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE, ENOSIGNIN (prompt:false and no
+      // token held). prompt:false asks only for a token the host already holds and never opens a window: use it in
+      // command handlers and background checks.
       token: function (opts) {
         opts = opts || {};
         var provider = opts.provider || 'google';
@@ -1557,7 +1559,9 @@
           return Promise.reject(e);
         }
         // The person may take minutes on Google's screen; the host also stops this clock while its prompt is open.
-        return rpc('naklios:auth:token', { provider: provider, scopes: opts.scopes || [] }, 300000);
+        var payload = { provider: provider, scopes: opts.scopes || [] };
+        if (opts.prompt === false) payload.prompt = false;
+        return rpc('naklios:auth:token', payload, 300000);
       },
       // Drop the tokens this app holds for the provider (a token only this app held is revoked at the provider).
       revoke: function (provider) {

@@ -105,9 +105,15 @@ export function createAuthService(deps) {
     providers: PROVIDERS,
 
     // → { accessToken, expiresAt, scopes } for exactly the requested scope set.
-    async token(appId, { provider = 'google', scopes } = {}) {
+    // prompt: false → only a token the host already holds; with none it throws ENOSIGNIN and shows nothing, so a
+    // command another app runs in the background never opens a sign-in window.
+    async token(appId, { provider = 'google', scopes, prompt = true } = {}) {
       const list = normaliseScopes(provider, scopes);
       const scopeKey = list.join(' ');
+      if (prompt === false) {
+        const held = tokens.get(provider + '\0' + scopeKey);
+        if (!held || held.expiresAt - now() <= REUSE_MARGIN_MS) throw err('ENOSIGNIN', `${provider} sign-in is needed; the person signs in from the app`);
+      }
       let grantId;
       try {
         grantId = await deps.authorize(appId, provider, scopeKey, describeScopes(list));

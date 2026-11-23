@@ -61,6 +61,21 @@ test('token: reused while more than a minute is left, refetched after', async ()
   assert.equal(requests.length, 2);
 });
 
+test('token: prompt:false returns only a held token and never asks, opens Google or continues', async () => {
+  const { service, asked, requests, continued, tick } = bed();
+  await assert.rejects(service.token('mail', { scopes: ['gmail.modify'], prompt: false }), e => e.code === 'ENOSIGNIN');
+  assert.equal(asked.length + requests.length + continued.length, 0);
+  await service.token('mail', { scopes: ['gmail.modify'] });
+  const quiet = await service.token('mail', { scopes: ['gmail.modify'], prompt: false });
+  assert.equal(quiet.accessToken, 'tok1');
+  assert.equal(requests.length, 1);
+  tick(3550_000); // 50 s left: too close to expiry to hand out, and no window may open to renew it
+  await assert.rejects(service.token('mail', { scopes: ['gmail.modify'], prompt: false }), e => e.code === 'ENOSIGNIN');
+  assert.equal(requests.length, 1);
+  // A held token for a different scope set does not count.
+  await assert.rejects(service.token('mail', { scopes: ['calendar.events'], prompt: false }), e => e.code === 'ENOSIGNIN');
+});
+
 test('token: a different scope set gets its own token, so one app never receives another set\'s scopes', async () => {
   const { service, requests } = bed();
   const mail = await service.token('mail', { scopes: ['gmail.modify'] });

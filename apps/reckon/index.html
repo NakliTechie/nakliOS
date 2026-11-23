@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-rndrN9OxsZxi4+OlrcrZXBps91czWNrlJoP4AqK6CLk=' 'sha256-WW/up4iYKoXntCqksrSQuWgun4rvhlA6+oXQ3mQBWdk=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-2dF1U1kb1CJ9Znru9JvKEtJPzKqyKC2HsFsex63vcNQ=' 'sha256-WW/up4iYKoXntCqksrSQuWgun4rvhlA6+oXQ3mQBWdk=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Reckon</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -12048,7 +12048,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
      fresh by .github/workflows/vendor-sdk.yml. Never edit it here; a change
      the app needs goes into sdk/naklios.js in NakliTechie/nakliOS. -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=a9978e9491ada07e62cd23a95813fcaecceadd953473587f0d034c567ad86fed */
+/* naklios-sdk:begin ver=2 sha256=52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -13311,7 +13311,9 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
       // token({ provider, scopes }) -> { accessToken, expiresAt, scopes }. Call it from a click handler: Google's
       // window needs the person's click, and without one the host shows a "Continue to Google" dialog first.
       // Errors carry .code: ENOAUTH (not available), ENOGRANT (person declined), EDENIED (Google or the person
-      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE.
+      // refused a scope), ECANCELLED, EINVAL (unknown provider or scope), EGOOGLE, ENOSIGNIN (prompt:false and no
+      // token held). prompt:false asks only for a token the host already holds and never opens a window: use it in
+      // command handlers and background checks.
       token: function (opts) {
         opts = opts || {};
         var provider = opts.provider || 'google';
@@ -13321,7 +13323,9 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
           return Promise.reject(e);
         }
         // The person may take minutes on Google's screen; the host also stops this clock while its prompt is open.
-        return rpc('naklios:auth:token', { provider: provider, scopes: opts.scopes || [] }, 300000);
+        var payload = { provider: provider, scopes: opts.scopes || [] };
+        if (opts.prompt === false) payload.prompt = false;
+        return rpc('naklios:auth:token', payload, 300000);
       },
       // Drop the tokens this app holds for the provider (a token only this app held is revoked at the provider).
       revoke: function (provider) {

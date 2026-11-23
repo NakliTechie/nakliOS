@@ -140,6 +140,13 @@ test('wiring: the page asks only gmail.modify, shows HTML only in a sandboxed fr
   const handlers = html.slice(html.indexOf('const COMMAND_HANDLERS={'), html.indexOf('if(naklios.experimental_commands)'));
   assert.ok(handlers.length > 100, 'the command handlers were found');
   assert.doesNotMatch(handlers, /markRead/);
+  // Commands never open Google's window: every Gmail call in them uses the quiet client (prompt:false).
+  assert.doesNotMatch(handlers, /\bgmail\./);
+  assert.match(html, /const gmailQuiet=G\.createClient\(\{getToken:o=>googleToken\(\{\.\.\.o,prompt:false\}\)/);
+  // Automatic refreshes are quiet; only the person's clicks may prompt.
+  assert.match(html, /const g=byPerson\?gmail:gmailQuiet;/);
+  assert.match(html, /\$\('refresh'\)\.addEventListener\('click',\(\)=>void refresh\(\{byPerson:true\}\)\)/);
+  assert.match(html, /setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)void refresh\(\)\},CACHE_MS\)/);
   // Only mail.send sends among the commands; drafting and forwarding save drafts.
   const sendCalls = handlers.split('sendDraft(').length - 1;
   assert.equal(sendCalls, 1);

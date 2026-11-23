@@ -9933,7 +9933,7 @@ window.addEventListener('message', async e => {
       if (!authAllowed(appId)) throw Object.assign(new Error('Sign-in is available to same-origin system apps and mirrors granted auth'), { code:'ENOAUTH' });
       const auth = await authService();
       const releaseHold = rpcHold(appId, fsWaitNotice(e.source, msg.requestId, replyTo));
-      try { reply.result = msg.type === 'naklios:auth:token' ? await auth.token(appId, { provider: msg.provider, scopes: msg.scopes }) : await auth.revoke(appId, msg.provider); }
+      try { reply.result = msg.type === 'naklios:auth:token' ? await auth.token(appId, { provider: msg.provider, scopes: msg.scopes, prompt: msg.prompt !== false }) : await auth.revoke(appId, msg.provider); }
       finally { releaseHold(); }
     } catch(err){ reply.error = String(err?.message || err); if (err?.code) reply.code = err.code; }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
