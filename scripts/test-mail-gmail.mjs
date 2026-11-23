@@ -145,9 +145,12 @@ test('wiring: the page asks only gmail.modify, shows HTML only in a sandboxed fr
   assert.equal(sendCalls, 1);
   const sendHandler = handlers.slice(handlers.indexOf("'mail.send'"), handlers.indexOf("'mail.unread'"));
   assert.match(sendHandler.slice(0, sendHandler.indexOf("'mail.archive'") > 0 ? sendHandler.indexOf("'mail.archive'") : undefined), /sendDraft/);
-  // In the page, Send needs a second click that names the recipient.
-  assert.match(html, /Confirm: send to \$\{f\.to\}/);
-  assert.match(html, /if\(!sendArmed\)/);
+  // In the page, the person's click on Send sends (Chirag, 2026-11-23: no second confirmation); it never sends
+  // without a recipient and a body.
+  const sendButton = html.slice(html.indexOf("$('compose-send').addEventListener"), html.indexOf("$('triage').addEventListener"));
+  assert.match(sendButton, /if\(!f\.to\|\|!f\.body\.trim\(\)\)/);
+  assert.match(sendButton, /gmail\.sendDraft/);
+  assert.doesNotMatch(html, /sendArmed|Confirm: send/);
   assert.match(host, /\{ id:'mail', name:'Mail', kind:'system',/);
 });
 

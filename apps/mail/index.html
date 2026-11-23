@@ -74,7 +74,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--act);outline-of
           <input id="compose-to" type="email" multiple placeholder="To" aria-label="To">
           <div class="ask"><input id="compose-ask" placeholder="What should the reply say? (for Draft with AI)" aria-label="What the reply should say"><button type="button" class="btn" id="compose-ai">Draft with AI</button></div>
           <textarea id="compose-body" aria-label="Reply text" placeholder="Write your reply"></textarea>
-          <div class="actions"><button type="button" class="btn" id="compose-save">Save draft</button><button type="button" class="btn" id="compose-send">Send…</button><button type="button" class="btn" id="compose-cancel">Cancel</button></div>
+          <div class="actions"><button type="button" class="btn" id="compose-save">Save draft</button><button type="button" class="btn" id="compose-send">Send</button><button type="button" class="btn" id="compose-cancel">Cancel</button></div>
         </form>
       </section>
     </article>
@@ -191,14 +191,12 @@ async function triageRows(rows){
 }
 async function draftText(msg,instruction){if(!me)me=(await gmail.profile()).emailAddress||'';return askModel(G.draftPrompt(msg,instruction,me),700)}
 
-// ── Reply: write or draft with AI, save to Gmail Drafts, and send only after a second, confirming click ──
-let sendArmed=null;
-function closeCompose(){reply=null;$('compose').hidden=true;disarmSend()}
-function disarmSend(){clearTimeout(sendArmed);sendArmed=null;const b=$('compose-send');b.textContent='Send…';b.classList.remove('danger')}
+// ── Reply or forward: write or draft with AI, save to Gmail Drafts; the person's click on Send sends it ──
+function closeCompose(){reply=null;$('compose').hidden=true}
 function openCompose(msg,mode='reply'){
   const fwd=mode==='forward',fields=fwd?G.forwardOf(msg):G.replyTo(msg);reply={source:msg,mode,fields,draftId:null,saved:null};
   $('compose-head').textContent=`${fwd?'Forward':'Reply'} · ${fields.subject}${fwd&&msg.attachments.length?' · attachments are not forwarded':''}`;
-  $('compose-to').value=fwd?'':fields.to;$('compose-body').value=fwd?fields.quoted:'';$('compose-ask').value='';$('compose').hidden=false;disarmSend();
+  $('compose-to').value=fwd?'':fields.to;$('compose-body').value=fwd?fields.quoted:'';$('compose-ask').value='';$('compose').hidden=false;
   const focus=fwd?$('compose-to'):$('compose-body');focus.focus();if(fwd)$('compose-body').setSelectionRange(0,0);
 }
 const composeFields=()=>({...reply.fields,to:$('compose-to').value.trim(),body:$('compose-body').value});
@@ -211,7 +209,6 @@ async function saveReply(){
 }
 $('reply').addEventListener('click',()=>{if(current&&current.text!=null)openCompose(current,'reply')});
 $('forward').addEventListener('click',()=>{if(current&&current.text!=null)openCompose(current,'forward')});
-$('compose-to').addEventListener('input',()=>disarmSend());
 function step(d){const i=messages.findIndex(m=>m.id===current?.id);const m=messages[i+d];if(m)void openMessage(m.id,{byPerson:true})}
 $('prev').addEventListener('click',()=>step(-1));$('next').addEventListener('click',()=>step(1));
 // Archive and Delete take the message out of the list and go back to it; Undo stays for 10 seconds.
@@ -228,18 +225,14 @@ async function remove(kind){
 $('archive').addEventListener('click',()=>void remove('archive'));$('trash').addEventListener('click',()=>void remove('trash'));
 $('compose-cancel').addEventListener('click',()=>closeCompose());
 $('compose-form').addEventListener('submit',e=>e.preventDefault());
-$('compose-body').addEventListener('input',()=>disarmSend());
 $('compose-ai').addEventListener('click',async()=>{if(!reply)return;const b=$('compose-ai');b.disabled=true;setStatus('Drafting with your AI model…');
-  try{$('compose-body').value=await draftText(reply.source,$('compose-ask').value.trim());disarmSend();setStatus('Draft ready. Read it and change anything before you send.')}
+  try{$('compose-body').value=await draftText(reply.source,$('compose-ask').value.trim());setStatus('Draft ready. Read it and change anything before you send.')}
   catch(e){setStatus(`Draft: ${e.message}`)}finally{b.disabled=false}});
 $('compose-save').addEventListener('click',async()=>{if(!reply)return;try{await saveReply();setStatus('Saved in Gmail Drafts.')}catch(e){handleError(e)}});
 $('compose-send').addEventListener('click',async()=>{
   if(!reply)return;const b=$('compose-send');
-  if(!sendArmed){
-    const f=composeFields();if(!f.to||!f.body.trim()){setStatus(f.to?'Write the message first.':'Add who it goes to.');return}
-    b.textContent=`Confirm: send to ${f.to}`;b.classList.add('danger');sendArmed=setTimeout(disarmSend,10000);return;
-  }
-  disarmSend();b.disabled=true;setStatus('Sending…');
+  const f=composeFields();if(!f.to||!f.body.trim()){setStatus(f.to?'Write the message first.':'Add who it goes to.');return}
+  b.disabled=true;setStatus(`Sending to ${f.to}…`);
   try{const to=composeFields().to,id=await saveReply();await gmail.sendDraft(id);setStatus(`Sent to ${to}.`);closeCompose();void refresh()}
   catch(e){handleError(e)}finally{b.disabled=false}
 });
