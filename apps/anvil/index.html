@@ -4310,6 +4310,8 @@
           // B2: the owner sees the wait and each completion as it steers the run
           else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
           else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
+          // the once-per-run finish check: the files this run created that the ask did not name
+          else if(e.type==='finish-check'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'Finish check: '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
           else if(e.type==='compacted'){ clearThinking(); t.log.push({k:'system',text: /^(every-action|context above)/.test(String(e.reason||'')) ? '↺ compacted the transcript ('+String(e.method||'shake')+'; '+e.reason+')' : '↺ the model refused the request as too long — the transcript was compacted ('+String(e.method||'shake')+') and the turn retried'}); renderLog(); } // C1
           // D1: a missed prediction is visible as it happens — three in a row stop the run
           else if(e.type==='expect-miss'){ t.log.push({k:'system',text:expectMissText(e)}); renderLog(); }
@@ -4410,6 +4412,7 @@
         verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, lesson, compact: (m, o)=>compactForOverflow(m, o, runCompaction, abortController && abortController.signal), compactAbove: runCompaction ? runCompaction.compactAbove : null,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
+        createdFiles: ()=>runCapture.created(), // the finish check asks about new files the ask did not name
       });
       // B2: the run is over the moment its loops return — abort the signal NOW, before the record is
       // settled and saved, so a straggler completing in that window takes the hold path and never

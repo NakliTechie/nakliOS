@@ -181,6 +181,13 @@ export function createWorkspaceCapture(fs, run, options = {}) {
       }
       current = next;
     },
+    // Files present at the last observation and absent from the baseline — the run's new files, for the
+    // finish check (sys/ai/scratch-check.mjs). An incomplete baseline listing cannot certify absence,
+    // so it reports none rather than call an existing file new.
+    created() {
+      if (!baseline || !current || !baseline.listed) return [];
+      return [...current.files].filter(([path, row]) => !baseline.files.has(path) && !row?.directory).map(([path]) => path).sort();
+    },
     async finish() {
       if (!baseline) return { rows: [], touched: [], complete: false, problems: ['capture never started'] };
       await this.observe();

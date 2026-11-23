@@ -379,6 +379,10 @@ export async function runAgentLoop({
   // this many tokens, call compact(messages, { reason: 'threshold' }) and continue on the result.
   // 0 compacts before every request. null keeps the old behaviour: compact only after an overflow.
   compactAbove = null,
+  // Once per run, before the run finishes: async () => string | null. A string goes to the model as a
+  // `[coordination]` turn and the run continues (sys/ai/scratch-check.mjs: files the run created that
+  // the ask did not name). null, a throw, or no step left to act on it lets the run finish as before.
+  finishCheck = null,
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
@@ -400,6 +404,24 @@ export async function runAgentLoop({
   let repetitionStops = 0; // replies the host's repeat guard stopped this run (finishReason 'repetition')
   let expectMisses = 0, expectStreak = 0; // D1: missed predictions this run, and in a row
   const startedAt = now();
+  // The finish check runs at most once, and only while a step is left for the model to act on its note:
+  // a note on the last step would turn a finished run into a max-steps stop.
+  let finishChecked = false;
+  const checkFinish = async (step) => {
+    if (!finishCheck || finishChecked) return false;
+    const last = Math.min(maxSteps, budget && Number.isFinite(budget.turns) ? budget.turns : Infinity);
+    if (step + 1 >= last) return false;
+    finishChecked = true;
+    let text = null;
+    try { text = await finishCheck(); } catch (_) { text = null; }
+    if (typeof text !== 'string' || !text.trim()) return false;
+    const note = { role: 'user', content: '[coordination] ' + text.trim() };
+    loopAuthored.add(note);
+    convo.push(note);
+    // The content rides the event, so the record's fold replays these bytes (as run.nudged does).
+    onEvent({ type: 'finish-check', step, content: note.content });
+    return true;
+  };
 
   // Cooperative stop: the caller aborts the signal (a Stop button). We check it
   // between turns, right after inference, and before each tool call, then return
@@ -583,6 +605,7 @@ export async function runAgentLoop({
         const { verdict, ran } = await runGate();
         if (verdict && verdict.ok) {
           onEvent({ type: 'verify-pass', verdict, step, via: null });
+          if (await checkFinish(step)) continue; // the gate runs again when the model next stops
           onEvent({ type: 'done', reason: 'verified', step });
           return { messages: convo, steps: step + 1, stop: 'done', verified: true, text: lastText };
         }
@@ -610,6 +633,7 @@ export async function runAgentLoop({
         onEvent({ type: 'done', reason: 'truncated', step });
         return { messages: convo, steps: step + 1, stop: 'truncated', reason, text: lastText };
       }
+      if (await checkFinish(step)) continue;
       onEvent({ type: 'done', reason: reply?.finishReason || 'stop', step });
       return { messages: convo, steps: step + 1, stop: 'done', text: lastText };
     }
@@ -876,7 +900,7 @@ export async function runAgentLoop({
       pendingNudge = null;
     }
 
-    if (gateGreen) {
+    if (gateGreen && !(await checkFinish(step))) {
       onEvent({ type: 'done', reason: 'verified', step });
       return { messages: convo, steps: step + 1, stop: 'done', verified: true, text: lastText };
     }
