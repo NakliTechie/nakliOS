@@ -88,6 +88,8 @@ jobs:
 
       - name: Verify bounded Folder byte ranges and filesystem authority
         run: node scripts/test-fs-binary-ranges.mjs
+      - name: Verify paged Folder listing and the hosted Anvil change capture it enables
+        run: node scripts/test-fs-paged-listing.mjs
 
       - name: Verify Dish provider, storage and packaged runtime provenance
         run: node scripts/test-dish.mjs

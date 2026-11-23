@@ -340,7 +340,12 @@ Available methods:
   This SDK option does not change Rig shell archive or search limits.
 - `write(path, stringOrBytes)`
 - `append(path, line)`
-- `list(prefix)`
+- `list(prefix)` returns every child name. `list(prefix, { maxEntries, cursor })` returns one page,
+  `{ entries, truncated, cursor, snapshotConsistent }`, with `maxEntries` from 1 to 1000. Pass the
+  returned `cursor` with the same prefix and page size for the next page; a cursor expires after two
+  minutes. Only the Folder backend pages: check `naklios.fs.supportsBoundedListing`
+  (`naklios.capabilities.fsBoundedListing`) first, because Crate refuses with `ENOTSUP`. A Folder page
+  reports `snapshotConsistent: false`, because the folder can change between pages.
 - `exists(path)`
 - `delete(path)`
 - `useBackend("fsa" | "crate")`
@@ -769,7 +774,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-132 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+134 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -790,6 +795,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.fsBackend` | field | The backend in use. |
 | `capabilities.fsBoundedReads` | field | True when the active host storage backend supports a byte-limited read. |
 | `capabilities.fsRangeReads` | field | True when the active host Folder backend supports explicit bounded byte ranges. |
+| `capabilities.fsBoundedListing` | field | True when the active host Folder backend can list a directory one page at a time. |
 | `capabilities.system` | field | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | Shared host inference granted. |
@@ -883,10 +889,11 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `fs.read` | function | Read text. |
 | `fs.readBinary` | function | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | True when the host advertises bounded reads for the active backend. |
+| `fs.supportsBoundedListing` | getter | True when `fs.list(prefix, { maxEntries, cursor })` returns one page of entries. |
 | `fs.stat` | function | Read path type and size without loading file bytes. |
 | `fs.write` | function | Write text or bytes. |
 | `fs.append` | function | Append. |
-| `fs.list` | function | List entries. |
+| `fs.list` | function | List entries; with `{ maxEntries, cursor }`, one page `{ entries, truncated, cursor, snapshotConsistent }`. |
 | `fs.delete` | function | Delete a path. |
 | `fs.exists` | function | Existence check. |
 | `fs.subscribe` | function | Change subscription over a prefix; async — resolves to a stop function. |
