@@ -1638,6 +1638,14 @@ const APPS = [
     description:'Read and search your Gmail. Mail goes from this browser straight to Google, and dated promises in a message are found by Emergic\'s rules.',
     tags:['tool','mail','gmail','emergic','productivity'],
     svg:`<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>` },
+  { id:'followups', name:'Follow-ups', kind:'system',
+    url:'./apps/followups/',
+    embedUrl:'./apps/followups/',
+    commands:'./apps/followups/commands.json',
+    glyph:'↻', bg:'ok',
+    description:'Dated promises you owe and are owed, found in your mail by Emergic\'s rules and closed when the thread answers them.',
+    tags:['tool','follow-ups','reminders','emergic','productivity'],
+    svg:`<path d="M20 12a8 8 0 1 1-2.3-5.6"/><polyline points="20 4 20 9 15 9"/><polyline points="9 12 11 14 15 10"/>` },
   { id:'editor', name:'Editor', kind:'system', commands:'./apps/editor/commands.json',
     url:'./apps/editor/',
     embedUrl:'./apps/editor/',
@@ -1982,7 +1990,7 @@ APPS.push(...THIRD_PARTY_CATALOG_APPS);
 // ════════════════════════════════════════════════════════════════════
 const FOLDERS = [
   { id:'fld-essentials', kind:'folder', name:'Essentials', glyph:'✦', bg:'brand',
-    apps:['files','notes','calendar','mail','notepad','books','calculator'] },
+    apps:['files','notes','calendar','mail','followups','notepad','books','calculator'] },
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','ductella','atelier','paginella','sonella','montella','chartella','pellucia','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',

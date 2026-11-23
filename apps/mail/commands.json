@@ -27,7 +27,7 @@
     },
     {
       "name": "mail.read",
-      "description": "Read one Gmail message by the id that mail.search or mail.unread gave: sender, recipients, subject, date, plain text (up to 20,000 characters), attachment names, and the dated promises found in it by Emergic's rules. Never marks mail read.",
+      "description": "Read one Gmail message by the id that mail.search or mail.unread gave: its thread id, the mailbox's own address (me), sender, recipients, subject, date, plain text (up to 20,000 characters), attachment names, and the dated promises found in it by Emergic's rules. Never marks mail read.",
       "scope": "read",
       "input": {
         "type": "object",
