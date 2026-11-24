@@ -64,6 +64,8 @@ jobs:
         run: node scripts/test-mail-gmail.mjs
       - name: Follow-ups on Emergic's follow-ups corpus with a fixed clock (found, deduped, closed by reply, typed, due card) (B6)
         run: node scripts/test-followups.mjs
+      - name: Meetings (cut points, silence, Markdown file, notes prompt and parser, wiring) (B8)
+        run: node scripts/test-meetings.mjs
 
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs
