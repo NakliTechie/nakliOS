@@ -215,6 +215,7 @@
     "forward": "view",
     "archive": "mail.archive",
     "trash": "mail.trash",
+    "ask-chat": "view",
     "undo": "mail.trash",
     "compose-form": "mail.draft",
     "compose-to": "mail.forward",

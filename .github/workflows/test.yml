@@ -66,6 +66,8 @@ jobs:
         run: node scripts/test-followups.mjs
       - name: Meetings (cut points, silence, Markdown file, notes prompt and parser, wiring) (B8)
         run: node scripts/test-meetings.mjs
+      - name: Chat (tools from the Emergic apps' commands, no send or delete, prompt, Ask buttons, wiring) (B7)
+        run: node scripts/test-chat.mjs
 
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs

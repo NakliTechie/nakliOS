@@ -65,7 +65,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--act);outline-of
       <div class="reader-tools" id="reader-tools" hidden>
         <button class="btn" id="prev" title="Previous message">‹ Prev</button><button class="btn" id="next" title="Next message">Next ›</button>
         <button class="btn" id="reply">Reply</button><button class="btn" id="forward">Forward</button>
-        <button class="btn" id="archive" title="Take it out of the inbox; it stays in All Mail">Archive</button><button class="btn" id="trash" title="Move to Gmail's Trash (kept 30 days)">Delete</button>
+        <button class="btn" id="archive" title="Take it out of the inbox; it stays in All Mail">Archive</button><button class="btn" id="trash" title="Move to Gmail's Trash (kept 30 days)">Delete</button><button class="btn" id="ask-chat" title="Ask Chat about this mail">Ask</button>
       </div>
       <div id="reader-body"><div class="empty">Pick a message to read it.</div></div>
       <section class="compose" id="compose" aria-label="Reply" hidden>
@@ -194,6 +194,14 @@ async function triageRows(rows){
   for(const t of found)triaged.set(t.id,t);return found;
 }
 async function draftText(msg,instruction){if(!me)me=(await gmail.profile()).emailAddress||'';return askModel(G.draftPrompt(msg,instruction,me),700)}
+
+// Ask: Chat opens with a new chat whose question box starts with one line about this item (chat.open).
+async function askChat(about){
+  if(!naklios.experimental_commands?.call)throw new Error('Open this app inside NakliOS to ask Chat.');
+  const out=await naklios.experimental_commands.call('chat.chat.open',{about});
+  if(out&&out.ok===false)throw new Error(out.message||'Chat refused it');
+}
+$('ask-chat').addEventListener('click',()=>{const m=current;if(!m?.subject&&!m?.id)return;void askChat(`About this mail [${m.id}]: "${m.subject||'(no subject)'}" from ${m.from||'unknown'}, ${new Date(m.date||Date.now()).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}.`).catch(e=>setStatus(`Chat: ${e.message}`))});
 
 // ── Reply or forward: write or draft with AI, save to Gmail Drafts; the person's click on Send sends it ──
 function closeCompose(){reply=null;$('compose').hidden=true}

@@ -100,6 +100,13 @@ async function check(){
   })();
 }
 
+// Ask: Chat opens with a new chat whose question box starts with one line about this item (chat.open).
+async function askChat(about){
+  if(!naklios.experimental_commands?.call)throw new Error('Open this app inside NakliOS to ask Chat.');
+  const out=await naklios.experimental_commands.call('chat.chat.open',{about});
+  if(out&&out.ok===false)throw new Error(out.message||'Chat refused it');
+}
+
 // ── drawing ──
 const fmtDay=d=>{if(!d)return'';const t=today();if(d===t)return'Today';const dt=new Date(d+'T12:00');return dt.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'})};
 function itemRow(f,late){
@@ -118,6 +125,7 @@ function itemRow(f,late){
     btn('Drop',()=>void act('followups.close',{key:f.key,how:'dropped'}),'Not needed any more');
     if(f.due)btn('To Calendar',()=>void toCalendar(f),'Add it to the Calendar on its due day');
   }else btn('Reopen',()=>void act('followups.close',{key:f.key,how:'open'}));
+  btn('Ask',()=>void askChat(`About this follow-up [${f.key}]: "${F.line(f)}"${f.due?`, due ${f.due}`:''}.`).catch(e=>setStatus(`Chat: ${e.message}`)),'Ask Chat about this follow-up');
   row.append(text,due,acts);return row;
 }
 function render(){

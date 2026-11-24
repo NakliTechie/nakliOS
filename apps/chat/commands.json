@@ -1,0 +1,60 @@
+{
+  "commands": [
+    {
+      "name": "chat.list",
+      "description": "List the person's chats in Chat, newest first: id, title, when it started and last changed, and how many messages it holds.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "How many to list (default 20)" }
+        }
+      }
+    },
+    {
+      "name": "chat.read",
+      "description": "Read one chat by the id from chat.list: each question and answer, with the lookups Chat made for each answer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "The id from chat.list" }
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "chat.open",
+      "description": "Bring Chat to the front with a new, empty chat. When `about` is given, the question box starts with that line (for example 'About this meeting [m1]: Vendor call, 24 Nov.') and the person types the question after it. Sends nothing to the model.",
+      "scope": "read",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "about": { "type": "string", "maxLength": 500, "description": "One line naming the mail, event, follow-up or meeting the question is about, with its id" }
+        }
+      }
+    },
+    {
+      "name": "chat.ask",
+      "description": "Ask Chat a question in a new chat and get its answer. Chat looks things up in the person's Mail, Calendar, Follow-ups and Meetings with their commands and may save a draft, add or change an event, or add or close a follow-up when the question asks for that; it never sends or deletes. Needs an AI model on in NakliOS.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string", "minLength": 1, "maxLength": 4000, "description": "The question, in the person's words" },
+          "about": { "type": "string", "maxLength": 500, "description": "Optional line naming the item the question is about" }
+        },
+        "required": ["question"]
+      }
+    }
+  ],
+  "parity": {
+    "new": "chat.open",
+    "compose": "chat.ask",
+    "draft": "chat.ask",
+    "send": "chat.ask",
+    "stop": "person: the person who started an answer stops it"
+  }
+}
