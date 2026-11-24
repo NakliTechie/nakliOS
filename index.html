@@ -1646,6 +1646,14 @@ const APPS = [
     description:'Dated promises you owe and are owed, found in your mail by Emergic\'s rules and closed when the thread answers them.',
     tags:['tool','follow-ups','reminders','emergic','productivity'],
     svg:`<path d="M20 12a8 8 0 1 1-2.3-5.6"/><polyline points="20 4 20 9 15 9"/><polyline points="9 12 11 14 15 10"/>` },
+  { id:'meetings', name:'Meetings', kind:'system',
+    url:'./apps/meetings/',
+    embedUrl:'./apps/meetings/',
+    commands:'./apps/meetings/commands.json',
+    glyph:'◉', bg:'brand', iframeAllow:'microphone',
+    description:'Record a meeting from your microphone, transcribed in this browser by Whisper; notes and actions from your NakliOS model.',
+    tags:['tool','meetings','transcription','emergic','productivity'],
+    svg:`<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11v1c0 3.3 2.7 6 6 6s6-2.7 6-6v-1"/><line x1="12" y1="18" x2="12" y2="21"/>` },
   { id:'editor', name:'Editor', kind:'system', commands:'./apps/editor/commands.json',
     url:'./apps/editor/',
     embedUrl:'./apps/editor/',
@@ -1990,7 +1998,7 @@ APPS.push(...THIRD_PARTY_CATALOG_APPS);
 // ════════════════════════════════════════════════════════════════════
 const FOLDERS = [
   { id:'fld-essentials', kind:'folder', name:'Essentials', glyph:'✦', bg:'brand',
-    apps:['files','notes','calendar','mail','followups','notepad','books','calculator'] },
+    apps:['files','notes','calendar','mail','followups','meetings','notepad','books','calculator'] },
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','ductella','atelier','paginella','sonella','montella','chartella','pellucia','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',

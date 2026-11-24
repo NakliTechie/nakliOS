@@ -112,12 +112,13 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'fld-essentials'[\s\S]*?apps:\['files','notes','calendar','mail','followups','notepad','books','calculator'\]/,
+  /id:'fld-essentials'[\s\S]*?apps:\['files','notes','calendar','mail','followups','meetings','notepad','books','calculator'\]/,
   'Calendar, Mail and Follow-ups have one predictable home in Essentials',
 );
 assert.match(
   html,
   /id:'followups'[\s\S]*?kind:'system'[\s\S]*?url:'\.\/apps\/followups\/'[\s\S]*?embedUrl:'\.\/apps\/followups\/'/,
+  /id:'meetings'[\s\S]*?kind:'system'[\s\S]*?url:'\.\/apps\/meetings\/'[\s\S]*?embedUrl:'\.\/apps\/meetings\/'[\s\S]*?iframeAllow:'microphone'/,
   'Follow-ups is a bundled system app',
 );
 assert.match(

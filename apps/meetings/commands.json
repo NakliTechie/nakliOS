@@ -1,0 +1,44 @@
+{
+  "commands": [
+    {
+      "name": "meetings.list",
+      "description": "List the person's recorded meetings, newest first: id, title, start time, length in minutes, how many transcript lines, whether notes exist, and the file it is kept in. Transcripts come from Whisper running in this browser.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "How many to list (default 20)" }
+        }
+      }
+    },
+    {
+      "name": "meetings.read",
+      "description": "Read one meeting by the id from meetings.list: its transcript with [m:ss] times (at most 60,000 characters) and its notes (summary, decisions, actions) if written. The transcript is speech recognition output and holds recognition mistakes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "The id from meetings.list" }
+        },
+        "required": ["id"]
+      }
+    },
+    {
+      "name": "meetings.summarise",
+      "description": "Write or rewrite a meeting's notes with the person's NakliOS model: a summary, the decisions and the actions with who and when. Long meetings are summarised in parts. Saves the notes into the meeting and its file. Needs an AI model on in NakliOS.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "The id from meetings.list" }
+        },
+        "required": ["id"]
+      }
+    }
+  ],
+  "parity": {
+    "lang": "person: the spoken language is set by the person before they record",
+    "record": "person: the microphone starts only from the person's own click",
+    "stop": "person: the person who started the recording stops it"
+  }
+}
