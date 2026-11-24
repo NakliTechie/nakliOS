@@ -173,6 +173,13 @@ async function toFollowups(a){
   const f=out?.result??out;setStatus(`Added to Follow-ups${f?.due?`, due ${f.due}`:' with no date'}.`);
 }
 
+// Ask: Chat opens with a new chat whose question box starts with one line about this item (chat.open).
+async function askChat(about){
+  if(!naklios.experimental_commands?.call)throw new Error('Open this app inside NakliOS to ask Chat.');
+  const out=await naklios.experimental_commands.call('chat.chat.open',{about});
+  if(out&&out.ok===false)throw new Error(out.message||'Chat refused it');
+}
+
 // ── drawing ──
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 function renderList(){
@@ -192,6 +199,7 @@ function render(){
   const btn=(id,label,fn,title)=>{const b=el('button','btn',label);b.id=id;if(title)b.title=title;b.addEventListener('click',async()=>{b.disabled=true;try{await fn()}catch(e){setStatus(e.message)}finally{b.disabled=false}});return b};
   head.append(title,
     btn('summarise',m.summary?'Rewrite notes':'Write notes',()=>summarise(m),'Your NakliOS model writes a summary, decisions and actions from the transcript'),
+    btn('ask','Ask',()=>askChat(`About this meeting [${m.id}]: "${m.title}", ${new Date(m.startedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}.`),'Ask Chat about this meeting'),
     btn('copy','Copy',async()=>{await navigator.clipboard.writeText(M.toMarkdown(m));setStatus('Copied the meeting as Markdown.')},'Copy the notes and transcript as Markdown'),
     btn('download','Download',async()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([M.toMarkdown(m)],{type:'text/markdown'}));a.download=M.filePath(m).slice(9);a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)},'Save the meeting as a Markdown file'),
     btn('delete',deleteArmed===m.id?'Confirm delete':'Delete',async()=>{

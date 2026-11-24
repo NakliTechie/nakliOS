@@ -27,7 +27,7 @@ function manifestOf(id) {
   return manifest;
 }
 
-for (const id of ['notes', 'calendar', 'mail', 'followups', 'meetings']) {
+for (const id of ['notes', 'calendar', 'mail', 'followups', 'meetings', 'chat']) {
   const manifest = manifestOf(id);
   const html = read(`apps/${id}/index.html`);
   const parity = manifest.parity || {};
@@ -55,4 +55,4 @@ for (const id of mirrored) {
 
 assert.deepEqual(controlIds('<button class="a" id="x">X</button><div id="y"></div><input id="z">'), ['x', 'z']);
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-console.log(`command parity: every Notes, Calendar, Mail, Follow-ups and Meetings control is accounted for, and ${mirrored.length + 2} manifests are valid (${mirrored.join(', ')}): PASS`);
+console.log(`command parity: every Notes, Calendar, Mail, Follow-ups, Meetings and Chat control is accounted for, and ${mirrored.length + 2} manifests are valid (${mirrored.join(', ')}): PASS`);
