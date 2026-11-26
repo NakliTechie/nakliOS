@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-uR6ij7uQsQK7svXxeM7aRRfzz1sA6qml/GllE0vcOgY=' 'sha256-lzxraNUjxweIcvuCn4adfDt+VrH3zJ4Caq0JLFLcrS4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-EJiSeN+KOCNu56H4dqvUoiPtw0LKQ+L3pum7rueoW7Q=' 'sha256-lzxraNUjxweIcvuCn4adfDt+VrH3zJ4Caq0JLFLcrS4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>nSheet</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -13371,7 +13371,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
 })();
 
 /* naklios-sdk:end */
-/* naklios-app-shell:begin ver=3 sha256=0ea02b0e356b6093a0c99d7f10de158d3de06d813f91dda8cebde309469f2445 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
+/* naklios-app-shell:begin ver=3 sha256=5412cf785946f7f6c933c3611ef66e22b813ef4cc74c9e8f38c6e94efaaf8bd6 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
 /*
  * app-shell.js — the NakliOS app shell, layers 1, 2 and 4. @naklios-app-shell-version 3 (spec: docs/specs/app-shell-001.md).
  *
@@ -13550,6 +13550,9 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     '.nsh-tiles{display:flex;flex-wrap:wrap;gap:12px}',
     '.nsh-tile{width:150px;height:96px;display:flex;align-items:flex-end;padding:10px;border:1px solid var(--shell-line,rgba(0,0,0,.12));border-radius:8px;background:var(--shell-canvas,#fff);cursor:pointer;text-align:left}',
     '.nsh-tile:hover{border-color:var(--shell-accent,#2563eb)}',
+    // a template with a preview: the picture above its name (doc.templates[].thumb)
+    '.nsh-tile.nsh-has-thumb{height:auto;min-height:96px;flex-direction:column;align-items:stretch;gap:6px;padding:8px}',
+    '.nsh-tile-thumb{height:76px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:4px;background:var(--shell-hover,rgba(0,0,0,.04))}',
     '.nsh-cmd{display:inline-flex;align-items:center;height:32px;padding:0 14px;border:1px solid var(--shell-line,rgba(0,0,0,.18));border-radius:6px;background:var(--shell-canvas,#fff);cursor:pointer}',
     '.nsh-cmd:hover{background:var(--shell-hover,rgba(0,0,0,.06))}',
     '.nsh-primary{background:var(--shell-accent,#2563eb);border-color:var(--shell-accent,#2563eb);color:var(--shell-on-accent,#fff)}',
@@ -14874,7 +14877,24 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     function pageNew() {
       bsPage.append(h('h2', { text: 'New' }));
       var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(); } }, [h('b', { text: 'Blank ' + app.docNoun })])]);
-      (doc.templates || []).forEach(function (t) { tiles.append(h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(t); } }, [h('span', { text: t.label })])); });
+      // A template's thumb({ width, height }) returns an element: its preview, drawn one tile per tick so the page
+      // opens at once. A thumb that throws, or a template without one, keeps the plain tile.
+      var queue = [];
+      (doc.templates || []).forEach(function (t) {
+        var has = typeof t.thumb === 'function';
+        var box = has ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
+        tiles.append(h('button', { class: 'nsh-tile' + (has ? ' nsh-has-thumb' : ''), type: 'button', 'aria-label': t.label, 'data-template': t.id, onclick: function () { newDoc(t); } }, [box, h('span', { text: t.label })]));
+        if (has) queue.push({ t: t, box: box });
+      });
+      function next() {
+        if (!queue.length || bs.hidden || !bsPage.contains(tiles)) return;
+        var q = queue.shift();
+        var el = null;
+        try { el = q.t.thumb({ width: 134, height: 76 }); } catch (_) { el = null; }
+        if (el) q.box.append(el); else { q.box.parentNode.classList.remove('nsh-has-thumb'); q.box.remove(); }
+        setTimeout(next, 0);
+      }
+      setTimeout(next, 0);
       bsPage.append(tiles);
     }
     function pageOpen() {
