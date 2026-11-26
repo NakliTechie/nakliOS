@@ -9,6 +9,9 @@ const ran = [];
 const shell = naklishell.mount({
   app: { id: 'ribbontest', name: 'Ribbon test', ext: '.rt', docNoun: 'note' },
   doc: { blank() {}, serialize() { return '{}'; }, load() {},
+    // templates with a preview (thumb) and one whose preview fails
+    templates: [{ id: 'report', label: 'Report', make() {}, thumb: ({ width }) => { const i = document.createElement('i'); i.id = 'thumb-report'; i.dataset.width = width; return i; } },
+      { id: 'broken', label: 'Broken', make() {}, thumb: () => { throw new Error('no preview'); } }, { id: 'plain', label: 'Plain', make() {} }],
     // the app's own File page entries (spec 6.2): an action after Open, and a page of its own at the end
     pages: [{ id: 'recover', label: 'Recover', after: 'open', command: 'note.recover', run: () => ran.push('recover') },
       { id: 'about', label: 'About', render: (el) => { const p = document.createElement('p'); p.id = 'about-body'; p.textContent = 'About this note'; el.append(p); } }] },
@@ -100,6 +103,15 @@ window.__result = (async () => {
   shell.showFile('about'); await wait(10);
   r.filePageOwn = !!document.querySelector('.nsh-bs-page #about-body') && document.querySelector('.nsh-bs-page h2').textContent === 'About'
     && document.querySelector('.nsh-bs-nav [aria-current=page]').dataset.page === 'about';
+  shell.closeFile();
+  // Template tiles draw their previews after the page opens; a failing preview leaves a plain tile.
+  shell.showFile('new');
+  const tile = (id) => document.querySelector(`.nsh-bs-page [data-template=${id}]`);
+  // previews draw one per tick, and a background tab runs at most one timer a second: wait until both are done
+  for (let i = 0; i < 60 && (!tile('report')?.querySelector('#thumb-report') || tile('broken')?.querySelector('.nsh-tile-thumb')); i++) await wait(50);
+  r.thumbDrawn = !!tile('report')?.querySelector('.nsh-tile-thumb #thumb-report') && document.getElementById('thumb-report').dataset.width === '134';
+  r.thumbFailsPlain = !!tile('broken') && !tile('broken').querySelector('.nsh-tile-thumb') && !tile('broken').classList.contains('nsh-has-thumb') && tile('broken').textContent === 'Broken';
+  r.thumbNone = !!tile('plain') && !tile('plain').classList.contains('nsh-has-thumb');
   shell.closeFile();
   r.version = naklishell.version === 3;
   return r;
