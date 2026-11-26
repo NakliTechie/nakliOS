@@ -1,6 +1,6 @@
 # NakliOS app shell standard (app-shell-001)
 
-Status: APPROVED by Chirag on 2026-11-17 with the recommended answers to D1-D6. Layer 1 in build. Owner: the office-shell session.
+Status: APPROVED by Chirag on 2026-11-17 with the recommended answers to D1-D6. Layers 1 and 4 built (shell v2); layer 2 engine built in shell v3 (2026-11-26), first adopter Draft. Owner: the office-shell session. Audit and workplan: `plan/2026-11-26-office-shell-audit.md`.
 First adopters: Pellucia (slides, `~/Code/pellucia`), Reckon (spreadsheet, `naklios-universe/Reckon`),
 Draft (documents, `naklios-universe/Draft`).
 
@@ -249,6 +249,19 @@ const shell = naklishell.mount({
 shell.changed();               // after every edit: unsaved dot, autosave timer, recovery copy
 shell.refresh();               // after a selection change: re-read state() for toggles and values
 ```
+
+Layer 2 as built (shell v3, 2026-11-26). An app that passes `tabs` gets the command row and the ribbon; one that
+does not keeps the v2 layout, so the daily vendor job changes nothing for it. An item is
+`{ id, label, kind, icon | glyph | text, command, args, run(), pressed(state), value(state), disabled(state),
+options, choose(value), key, el, parity }`, with `kind` one of `button` (default), `toggle`, `select`, `menu` and
+`element`. `element` places the app's own control in a group, so an app with rich popovers (Reckon's number formats,
+Pellucia's colour pickers) moves them into the ribbon without rewriting them; the shell still owns the row, the
+group order, collapse (`Mod+F1`, remembered per app) and the keys. `key` names a row of section 5.2 (`bold`,
+`italic`, `underline`, `link`, `grow`, `shrink`, `clear`, `align-left`, `align-centre`, `align-right`,
+`align-justify`, `bullets`, `numbering`, `subscript`, `superscript`); the shell binds that key only for an app that
+gives an item for it, and never inside a plain text field. The shell sets `--shell-top-h` (title row, command row and
+ribbon, measured) for apps whose panes are fixed. Under 600 px the ribbon scrolls sideways; the "More" sheet comes
+with layer 3.
 
 ### 6.3 Commands and the agent surface
 
