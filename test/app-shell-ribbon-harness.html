@@ -10,6 +10,7 @@ const shell = naklishell.mount({
   app: { id: 'ribbontest', name: 'Ribbon test', ext: '.rt', docNoun: 'note' },
   doc: { blank() {}, serialize() { return '{}'; }, load() {},
     // templates with a preview (thumb) and one whose preview fails
+    blankThumb: () => { const i = document.createElement('i'); i.id = 'thumb-blank'; return i; },
     templates: [{ id: 'report', label: 'Report', make() {}, thumb: ({ width }) => { const i = document.createElement('i'); i.id = 'thumb-report'; i.dataset.width = width; return i; } },
       { id: 'broken', label: 'Broken', make() {}, thumb: () => { throw new Error('no preview'); } }, { id: 'plain', label: 'Plain', make() {} }],
     // the app's own File page entries (spec 6.2): an action after Open, and a page of its own at the end
@@ -112,6 +113,7 @@ window.__result = (async () => {
   r.thumbDrawn = !!tile('report')?.querySelector('.nsh-tile-thumb #thumb-report') && document.getElementById('thumb-report').dataset.width === '134';
   r.thumbFailsPlain = !!tile('broken') && !tile('broken').querySelector('.nsh-tile-thumb') && !tile('broken').classList.contains('nsh-has-thumb') && tile('broken').textContent === 'Broken';
   r.thumbNone = !!tile('plain') && !tile('plain').classList.contains('nsh-has-thumb');
+  r.thumbBlank = !!tile('blank')?.querySelector('.nsh-tile-thumb #thumb-blank');
   shell.closeFile();
   r.version = naklishell.version === 3;
   return r;

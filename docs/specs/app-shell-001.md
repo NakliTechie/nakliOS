@@ -269,7 +269,8 @@ still scrolls sideways (D-B). `shell.ribbon.folded()`, `fit()` and `more()` serv
 
 A template's optional `thumb({ width, height })` returns an element that the New page shows above the template's name
 (134 by 76 px). The shell draws the previews one tile per tick after the page opens, so the page opens at once; a
-preview that throws leaves a plain tile (2026-11-26, for Pellucia's per-template thumbnails).
+preview that throws leaves a plain tile (2026-11-26, for Pellucia's per-template thumbnails). `doc.blankThumb({ width, height })`
+previews the Blank tile the same way.
 
 `doc.pages` (shell v3, 2026-11-26) puts an app's own entries on the File page, so the app needs no File menu of its
 own. An entry is `{ id, label, after, command, run() | render(el, close) }`. `after` names the built-in page it

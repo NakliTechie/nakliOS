@@ -448,7 +448,7 @@
       var fixed = [
         { name: 'find_command', description: 'Search the commands of this app that are not in the tool list (including hard-to-undo ones). Returns names, descriptions and inputs.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
         { name: 'run_command', description: 'Run a command of this app by its dotted name, for example one that find_command returned. Hard-to-undo commands ask the person first.', parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] } },
-        { name: 'other_apps_search', description: 'Find commands in other NakliOS apps (for example Reckon sheets for data, Pellucia decks). Returns command names such as reckon.range.read. An app the person has not yet allowed shows nothing: call other_apps_call with "<app>.doc.describe" first.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+        { name: 'other_apps_search', description: 'Find commands in other NakliOS apps (for example nSheet sheets for data, nSlides decks). Returns command names such as reckon.range.read. An app the person has not yet allowed shows nothing: call other_apps_call with "<app>.doc.describe" first.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
         { name: 'other_apps_call', description: 'Call another app\'s command by its full name from other_apps_search. NakliOS may ask the person to allow it.', parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] } },
         { name: 'finish', description: 'End the job. summary: one or two plain sentences for the person saying what you did, and anything you could not do.', parameters: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'] } },
       ];
@@ -466,7 +466,7 @@
         describe ? '- Call ' + describe + ' first to learn what is in the ' + app.docNoun + ' and the ids you need.' : '',
         hasCmd(list, 'script.run') ? '- Work in few calls. Put many steps in one script__run call: {"steps":[{"command":"<dotted name>","input":{...}}]}. Steps use dotted command names.' : '',
         '- A command that is not in your tool list may still exist: call find_command, then run_command.',
-        '- For data or content in other apps (numbers in a Reckon sheet, a Draft document), use other_apps_search then other_apps_call.',
+        '- For data or content in other apps (numbers in an nSheet sheet, an nDoc document), use other_apps_search then other_apps_call.',
         hasCmd(list, 'view.snapshot') ? '- Before you finish, call view__snapshot once and check that what the person sees matches the request. Fix what is wrong.' : '',
         '- When done, call finish with one or two plain sentences for the person. If the request is unclear, call finish and ask.',
         '- Do not delete the ' + app.docNoun + ', open another one or save under a new name unless the request says so.',
@@ -1502,10 +1502,13 @@
     }
     function pageNew() {
       bsPage.append(h('h2', { text: 'New' }));
-      var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(); } }, [h('b', { text: 'Blank ' + app.docNoun })])]);
+      // doc.blankThumb({ width, height }), optional, previews the blank document the same way a template's thumb does.
+      var hasBlank = typeof doc.blankThumb === 'function';
+      var blankBox = hasBlank ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
+      var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile' + (hasBlank ? ' nsh-has-thumb' : ''), type: 'button', 'data-template': 'blank', onclick: function () { newDoc(); } }, [blankBox, h('b', { text: 'Blank ' + app.docNoun })])]);
       // A template's thumb({ width, height }) returns an element: its preview, drawn one tile per tick so the page
       // opens at once. A thumb that throws, or a template without one, keeps the plain tile.
-      var queue = [];
+      var queue = hasBlank ? [{ t: { thumb: doc.blankThumb }, box: blankBox }] : [];
       (doc.templates || []).forEach(function (t) {
         var has = typeof t.thumb === 'function';
         var box = has ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
