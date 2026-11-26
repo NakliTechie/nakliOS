@@ -199,14 +199,14 @@
       "id": "draft",
       "repo": "NakliTechie/draft",
       "requestedRef": "main",
-      "resolvedCommit": "0731d3e098fdf57ae00e04da1515b3a3ffddb2b7",
+      "resolvedCommit": "6657a237d7ed7d1a0c018e5349db4065c7ad0808",
       "files": [
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "31e7445813c14ffac526747881384716bd616e764070730350c6a54303af84cd",
-          "bytes": 1792108,
-          "originalSourceSha256": "d7ee73dff4cbccfb3f4bb5b4fd80e5878fecd49fc51c0d08123109bba8a4fbfa",
+          "sha256": "95b77e3734307c65b66343f4cdff8b116f03233c28042f5b34e1d2fcc71922e2",
+          "bytes": 1798030,
+          "originalSourceSha256": "7f799570ce370d97ec3d1a061be19807f73fe17da70dd46b5aadcfddd2cfa413",
           "sdkSha256": "52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d"
         },
         {
@@ -875,7 +875,7 @@
       "id": "naklidata",
       "repo": "NakliTechie/NakliData",
       "requestedRef": "naklios-dist",
-      "resolvedCommit": "f38ae4c65f22ac7aa8f424f2e8b51653420217bb",
+      "resolvedCommit": "4b511dea649abea4ce90841e5c72791e5beb29db",
       "files": [
         {
           "source": "chunks/_demo.js",
@@ -886,8 +886,8 @@
         {
           "source": "chunks/agent-surface.js",
           "destination": "chunks/agent-surface.js",
-          "sha256": "34ccd0a3f4fc100d171a9d065f55f6d342e46093a5de664c2bc53b68b25554fa",
-          "bytes": 87738
+          "sha256": "d96880d1d922948d20440a86dfd2ab3a67ecc412fca390a8a2587cd7fd7af445",
+          "bytes": 95331
         },
         {
           "source": "chunks/arrow-reader.js",
@@ -898,7 +898,7 @@
         {
           "source": "chunks/bridge-client.js",
           "destination": "chunks/bridge-client.js",
-          "sha256": "484a3cf476ad9aae4bb316d442610f9069bec59d0bb97d25e5629884a87808dc",
+          "sha256": "6f8a73fd6744c7a3d52f25e70bfef54baba9d1483e89d45a05e1b09eb15a42e6",
           "bytes": 14846
         },
         {
@@ -910,14 +910,14 @@
         {
           "source": "chunks/codemirror.js",
           "destination": "chunks/codemirror.js",
-          "sha256": "b66ffbbdf26a2ed44f465207b8e7f6013a428b367971aa2fe6266d4a9be8614b",
-          "bytes": 433278
+          "sha256": "1d3dcf07bab3cb03bde2c5422724f281ec584ff27e232e912388cb80b82ddef2",
+          "bytes": 433332
         },
         {
           "source": "chunks/compare-tables.js",
           "destination": "chunks/compare-tables.js",
-          "sha256": "efcd51658cc255a5aa4e76a41bd6385885b2f095137fbb1d2924c9502a958a66",
-          "bytes": 26836
+          "sha256": "2b86b4b37d83d5ea96a67581c78ec7c3bdcf482e42c552223b2d6a92112393c3",
+          "bytes": 27035
         },
         {
           "source": "chunks/contract-export.js",
@@ -940,8 +940,8 @@
         {
           "source": "chunks/deckgl.js",
           "destination": "chunks/deckgl.js",
-          "sha256": "5ed759a5f7813bcfcd29cd3950623ec17f52b730a3f387506fdc50cb27806e36",
-          "bytes": 831548
+          "sha256": "31d077baea7dc779676f268063e2b336fc14f67464a6c196712c488c15e1694f",
+          "bytes": 832538
         },
         {
           "source": "chunks/demo-workbook.js",
@@ -958,8 +958,8 @@
         {
           "source": "chunks/facet-network.js",
           "destination": "chunks/facet-network.js",
-          "sha256": "518855d91509bc6451e8f0ed2118f59195b78444cd5ea8d53e75fee104c3c71a",
-          "bytes": 12044
+          "sha256": "16426fee655fdd693dd6101ffd49e03a9c973fe88355e80f1913cc029b99a310",
+          "bytes": 12547
         },
         {
           "source": "chunks/iceberg-catalog-mount.js",
@@ -1024,8 +1024,8 @@
         {
           "source": "chunks/pyodide-runtime.js",
           "destination": "chunks/pyodide-runtime.js",
-          "sha256": "4d67d02f0f10a69be75a0d653d9ff054ad38d8f7815c1f1bb57e00a8a0d4a275",
-          "bytes": 5065
+          "sha256": "1e8e24a2bc621b89534bc9a0090d0af9a9e369482151724b559e33ef3efcb6a2",
+          "bytes": 5148
         },
         {
           "source": "chunks/query-builder.js",
@@ -1066,7 +1066,7 @@
         {
           "source": "chunks/review-tray.js",
           "destination": "chunks/review-tray.js",
-          "sha256": "e37f79554357d3429bc3b2f1895cbf166278dc80eb165bc53f7f85b1636de088",
+          "sha256": "2177aadb454311a2facf3782171ca242ac2cb08c3ec3f28896b1d5b3db6c7812",
           "bytes": 8905
         },
         {
@@ -1090,8 +1090,8 @@
         {
           "source": "chunks/semantic-model.js",
           "destination": "chunks/semantic-model.js",
-          "sha256": "4964b2bd1d1941ae6808c7305bbbca979b1851a83a0846c450925094af7cd849",
-          "bytes": 57505
+          "sha256": "58a84fd3444d3b6bc05684731d5a0c5833445dd18a314d6c0b9e11c7fdc99ce5",
+          "bytes": 57525
         },
         {
           "source": "chunks/sheetjs.js",
@@ -1192,7 +1192,7 @@
         {
           "source": "chunks/xlsx-export.js",
           "destination": "chunks/xlsx-export.js",
-          "sha256": "b2bf98a9900f12a527705766f7e34ff97a13525aaf778d581f6aeeca679d2a20",
+          "sha256": "0c4aa0f17751f9eca7748c63fc415bd0720027a2aa80cad3fff2c3eb97c2800a",
           "bytes": 49632
         },
         {
@@ -1456,8 +1456,8 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "0492a74252cd2fa5c0d4569f5d1f6a72e4621bc942f0aeb25a0d8352eeed4aed",
-          "bytes": 935950
+          "sha256": "185db8af5825f1a3ac85fb4c98a8b1385d8b3dbfc8accdbdcbfa76c2c1384a05",
+          "bytes": 944138
         },
         {
           "source": "manifest.webmanifest",
@@ -1594,7 +1594,7 @@
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "e618d95ffc2cd290bfe8ff489bb2a867399e607ea9d9105368d376b0241a5b8c",
+          "sha256": "f1b3e226747c70319d776cca0401bcc92b07603bc5d0559f8ea2088b12b77e05",
           "bytes": 14100
         },
         {

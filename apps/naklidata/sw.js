@@ -20,7 +20,7 @@
 // app keeps booting (engine boot will then either use the CDN if back
 // online, or surface its own error). See DECISIONS 2026-05-17 11:50.
 
-const CACHE_VERSION = 'bX2iQ3X6ycV8R';
+const CACHE_VERSION = 'bO7ZNaToqLQqK';
 // Policy version deliberately rotates the cache when eligibility rules change,
 // even if the inlined application hash stays the same.
 const CACHE_POLICY_VERSION = 'p3';

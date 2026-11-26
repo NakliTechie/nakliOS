@@ -185,10 +185,17 @@ details[open] > .rail-popover:is(:empty, :not([data-placed])) { visibility: hidd
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 8px;
 }
-.schema-col-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.schema-col-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
 .col-name {
   font-family: var(--font-mono);
   font-size: 12px;
+  max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .col-sql-type {
@@ -197,17 +204,28 @@ details[open] > .rail-popover:is(:empty, :not([data-placed])) { visibility: hidd
   text-transform: lowercase;
 }
 .sensitivity-badge {
+  display: inline-block;
+  align-self: flex-start;
+  width: max-content;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 1px 5px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  opacity: 0.75;
+  opacity: 0.82;
   white-space: nowrap;
   cursor: help;
 }
-.schema-col-type { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.schema-col-type {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 1;
+  min-width: 0;
+}
 .type-pill {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 6px;
