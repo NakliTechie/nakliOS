@@ -72,6 +72,23 @@ window.__result = (async () => {
   r.narrowCmdrow = row.scrollWidth <= row.clientWidth + 1
     && bar.querySelector('.nsh-cmdrow-end').getBoundingClientRect().right <= row.getBoundingClientRect().right + 1;
   row.style.width = '';
+  // The More sheet (layer 3): a bar too narrow for both groups folds Font under More; its controls and keys still work.
+  bar.querySelector('[data-tab=home]').click(); await wait(10);
+  const fullW = bar.querySelector('.nsh-ribbon').clientWidth;
+  r.fitsWide = shell.ribbon.folded().length === 0 && bar.querySelector('.nsh-more').hidden;
+  bar.style.width = '150px'; shell.ribbon.fit(); await wait(20);
+  const more = bar.querySelector('.nsh-more');
+  r.foldsLastGroup = shell.ribbon.folded().join() === 'font' && !more.hidden && !bar.querySelector('.nsh-ribbon [data-group=font]');
+  const boldBefore = st.bold;
+  r.keyWhileFolded = key('b') && st.bold === !boldBefore;
+  r.sheetOpens = shell.ribbon.more() && !!document.querySelector('.nsh-sheet [data-group=font] [data-shell-item=bold]') && more.getAttribute('aria-expanded') === 'true';
+  const sheetBold = document.querySelector('.nsh-sheet [data-shell-item=bold]'); const b0 = st.bold;
+  sheetBold.click(); await wait(10);
+  r.sheetItemRuns = st.bold === !b0 && sheetBold.getAttribute('aria-pressed') === String(st.bold);
+  document.querySelector('.nsh-sheet').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(10);
+  r.sheetEscapes = !document.querySelector('.nsh-sheet') && more.getAttribute('aria-expanded') === 'false';
+  bar.style.width = ''; shell.ribbon.fit(); await wait(20);
+  r.unfoldsWide = shell.ribbon.folded().length === 0 && more.hidden && !!bar.querySelector('.nsh-ribbon [data-group=font] [data-shell-item=bold]') && bar.querySelector('.nsh-ribbon').clientWidth === fullW;
   try { localStorage.removeItem('naklishell:ribbon:ribbontest'); } catch (_) {}
   // The File page carries the app's entries where they asked to be: an action closes the page and runs; a page draws itself.
   shell.showFile('open'); await wait(10);
