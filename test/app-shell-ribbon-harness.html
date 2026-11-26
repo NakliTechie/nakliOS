@@ -1,0 +1,69 @@
+<!doctype html><meta charset="utf-8"><title>App shell ribbon harness</title>
+<!-- Layer 2 checks (docs/specs/app-shell-001.md sections 2, 3.2 and 5.2). Serve the repo (scripts/serve-coi.mjs), open
+     /test/app-shell-ribbon-harness.html in Chrome, read window.__result: every check true means pass. -->
+<body><main id="doc" contenteditable="true">Some text</main><input id="plain" type="text">
+<script src="/sdk/app-shell.js"></script>
+<script>
+const st = { bold: false, size: '12', colour: null, canUndo: false, canRedo: false };
+const ran = [];
+const shell = naklishell.mount({
+  app: { id: 'ribbontest', name: 'Ribbon test', ext: '.rt', docNoun: 'note' },
+  doc: { blank() {}, serialize() { return '{}'; }, load() {} },
+  state: () => st,
+  commands: { 'edit.undo': () => ran.push('undo'), 'edit.redo': () => ran.push('redo') },
+  run: (name, args) => { ran.push(name + ' ' + JSON.stringify(args)); if (name === 'format.mark' && args.mark === 'bold') st.bold = !st.bold; return true; },
+  tabs: [
+    { id: 'home', label: 'Home', groups: [
+      { id: 'clipboard', label: 'Clipboard', items: [{ id: 'copy', label: 'Copy', icon: 'copy', run: () => ran.push('copy'), parity: 'person: the clipboard is the person\'s' }] },
+      { id: 'font', label: 'Font', items: [
+        { id: 'size', label: 'Font size', kind: 'select', command: 'format.text', options: [{ value: '12', label: '12' }, { value: '18', label: '18' }], value: (s) => s.size, choose: (v) => { st.size = v; ran.push('size ' + v); } },
+        { id: 'bold', label: 'Bold', kind: 'toggle', glyph: 'B', key: 'bold', command: 'format.mark', args: { mark: 'bold' }, pressed: (s) => s.bold },
+        { id: 'colour', label: 'Font colour', kind: 'menu', icon: 'alignLeft', command: 'format.text', options: [{ value: 'red', label: 'Red', swatch: '#c00' }, { value: 'none', label: 'Automatic' }], value: (s) => s.colour, choose: (v) => { st.colour = v; } },
+      ] },
+    ] },
+    { id: 'insert', label: 'Insert', groups: [{ id: 'tables', label: 'Tables', items: [{ id: 'table', label: 'Table', text: 'Table', command: 'table.insert' }] }] },
+  ],
+});
+</script>
+<script>
+window.__result = (async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const key = (k, o = {}) => { const ev = new KeyboardEvent('keydown', Object.assign({ bubbles: true, cancelable: true, key: k, code: o.code || ('Key' + k.toUpperCase()) }, naklishell.isMac ? { metaKey: true } : { ctrlKey: true }, o)); (o.target || document.getElementById('doc')).dispatchEvent(ev); return ev.defaultPrevented; };
+  const r = {};
+  const title = document.querySelector('.nsh-title'), bar = document.querySelector('.nsh-bar');
+  r.barAfterTitle = !!bar && title.nextElementSibling === bar;
+  r.oneFile = document.querySelectorAll('.nsh-file').length === 1 && !!bar.querySelector('.nsh-cmdrow .nsh-file') && !title.querySelector('.nsh-file');
+  r.tabs = [...bar.querySelectorAll('[role=tab]')].map(t => t.textContent).join() === 'Home,Insert';
+  r.homeActive = shell.ribbon.tab() === 'home' && bar.querySelector('[data-tab=home]').getAttribute('aria-selected') === 'true';
+  r.groups = [...bar.querySelectorAll('.nsh-grp')].map(g => g.getAttribute('aria-label')).join() === 'Clipboard,Font';
+  const bold = shell.ribbon.item('bold');
+  r.boldTip = /^Bold \((Cmd|Ctrl)\+B\)$/.test(bold.title);
+  r.boldParity = bold.getAttribute('data-command') === 'format.mark';
+  r.copyParity = /^person:/.test(shell.ribbon.item('copy').getAttribute('data-parity'));
+  r.boldOff = bold.getAttribute('aria-pressed') === 'false';
+  bold.click(); await wait(10);
+  r.boldClick = st.bold === true && bold.getAttribute('aria-pressed') === 'true' && ran.includes('format.mark {"mark":"bold"}');
+  const modBPrevented = key('b'); await wait(10);
+  r.modB = modBPrevented && st.bold === false && bold.getAttribute('aria-pressed') === 'false';
+  r.modBInPlainField = key('b', { target: document.getElementById('plain') }) === false && st.bold === false;
+  st.size = '18'; shell.refresh(); r.selectValue = shell.ribbon.item('size').value === '18';
+  const sel = shell.ribbon.item('size'); sel.value = '12'; sel.dispatchEvent(new Event('change')); await wait(10);
+  r.selectChoose = st.size === '12' && ran.includes('size 12');
+  const colour = shell.ribbon.item('colour'); colour.click(); await wait(10);
+  const rows = [...document.querySelectorAll('.nsh-menu [role=menuitemradio]')];
+  r.menuOpen = rows.length === 2 && colour.getAttribute('aria-expanded') === 'true';
+  rows[0].click(); await wait(10);
+  r.menuChoose = st.colour === 'red' && !document.querySelector('.nsh-menu');
+  const before = getComputedStyle(document.documentElement).getPropertyValue('--shell-top-h').trim();
+  r.topH = before === (title.offsetHeight + bar.offsetHeight) + 'px';
+  r.collapse = key('F1', { code: 'F1' }) && shell.ribbon.collapsed() && document.querySelector('.nsh-ribbon').hidden;
+  r.topHCollapsed = getComputedStyle(document.documentElement).getPropertyValue('--shell-top-h').trim() === (title.offsetHeight + bar.offsetHeight) + 'px' && before !== getComputedStyle(document.documentElement).getPropertyValue('--shell-top-h').trim();
+  bar.querySelector('[data-tab=insert]').click(); await wait(10);
+  r.tabExpands = !shell.ribbon.collapsed() && shell.ribbon.tab() === 'insert' && !!shell.ribbon.item('table');
+  r.keysLiveOnOtherTab = key('b') && st.bold === true;
+  r.core = key('z', { code: 'KeyZ' }) && ran.includes('undo');
+  try { localStorage.removeItem('naklishell:ribbon:ribbontest'); } catch (_) {}
+  r.version = naklishell.version === 3;
+  return r;
+})();
+</script>
