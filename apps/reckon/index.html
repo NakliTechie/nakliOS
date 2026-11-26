@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-EJiSeN+KOCNu56H4dqvUoiPtw0LKQ+L3pum7rueoW7Q=' 'sha256-lzxraNUjxweIcvuCn4adfDt+VrH3zJ4Caq0JLFLcrS4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-hyCn8wkLrEXCZVpnKcKuRs84F8tmnSECfwGnq+D/bGs=' 'sha256-lzxraNUjxweIcvuCn4adfDt+VrH3zJ4Caq0JLFLcrS4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>nSheet</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -13371,7 +13371,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
 })();
 
 /* naklios-sdk:end */
-/* naklios-app-shell:begin ver=3 sha256=5412cf785946f7f6c933c3611ef66e22b813ef4cc74c9e8f38c6e94efaaf8bd6 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
+/* naklios-app-shell:begin ver=3 sha256=d335c01632d0d58917f153ce1d0d622d79b6fd966b7ce806173a29030588f629 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
 /*
  * app-shell.js — the NakliOS app shell, layers 1, 2 and 4. @naklios-app-shell-version 3 (spec: docs/specs/app-shell-001.md).
  *
@@ -13822,7 +13822,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
       var fixed = [
         { name: 'find_command', description: 'Search the commands of this app that are not in the tool list (including hard-to-undo ones). Returns names, descriptions and inputs.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
         { name: 'run_command', description: 'Run a command of this app by its dotted name, for example one that find_command returned. Hard-to-undo commands ask the person first.', parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] } },
-        { name: 'other_apps_search', description: 'Find commands in other NakliOS apps (for example Reckon sheets for data, Pellucia decks). Returns command names such as reckon.range.read. An app the person has not yet allowed shows nothing: call other_apps_call with "<app>.doc.describe" first.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+        { name: 'other_apps_search', description: 'Find commands in other NakliOS apps (for example nSheet sheets for data, nSlides decks). Returns command names such as reckon.range.read. An app the person has not yet allowed shows nothing: call other_apps_call with "<app>.doc.describe" first.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
         { name: 'other_apps_call', description: 'Call another app\'s command by its full name from other_apps_search. NakliOS may ask the person to allow it.', parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] } },
         { name: 'finish', description: 'End the job. summary: one or two plain sentences for the person saying what you did, and anything you could not do.', parameters: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'] } },
       ];
@@ -13840,7 +13840,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
         describe ? '- Call ' + describe + ' first to learn what is in the ' + app.docNoun + ' and the ids you need.' : '',
         hasCmd(list, 'script.run') ? '- Work in few calls. Put many steps in one script__run call: {"steps":[{"command":"<dotted name>","input":{...}}]}. Steps use dotted command names.' : '',
         '- A command that is not in your tool list may still exist: call find_command, then run_command.',
-        '- For data or content in other apps (numbers in a Reckon sheet, a Draft document), use other_apps_search then other_apps_call.',
+        '- For data or content in other apps (numbers in an nSheet sheet, an nDoc document), use other_apps_search then other_apps_call.',
         hasCmd(list, 'view.snapshot') ? '- Before you finish, call view__snapshot once and check that what the person sees matches the request. Fix what is wrong.' : '',
         '- When done, call finish with one or two plain sentences for the person. If the request is unclear, call finish and ask.',
         '- Do not delete the ' + app.docNoun + ', open another one or save under a new name unless the request says so.',
@@ -14876,10 +14876,13 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     }
     function pageNew() {
       bsPage.append(h('h2', { text: 'New' }));
-      var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(); } }, [h('b', { text: 'Blank ' + app.docNoun })])]);
+      // doc.blankThumb({ width, height }), optional, previews the blank document the same way a template's thumb does.
+      var hasBlank = typeof doc.blankThumb === 'function';
+      var blankBox = hasBlank ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
+      var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile' + (hasBlank ? ' nsh-has-thumb' : ''), type: 'button', 'data-template': 'blank', onclick: function () { newDoc(); } }, [blankBox, h('b', { text: 'Blank ' + app.docNoun })])]);
       // A template's thumb({ width, height }) returns an element: its preview, drawn one tile per tick so the page
       // opens at once. A thumb that throws, or a template without one, keeps the plain tile.
-      var queue = [];
+      var queue = hasBlank ? [{ t: { thumb: doc.blankThumb }, box: blankBox }] : [];
       (doc.templates || []).forEach(function (t) {
         var has = typeof t.thumb === 'function';
         var box = has ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
