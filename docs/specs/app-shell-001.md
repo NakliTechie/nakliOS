@@ -231,7 +231,7 @@ const shell = naklishell.mount({
          opens: ['.draft.json', '.md', '.txt', '.docx'] },
   doc: {
     blank(),                    // replace the editor contents with a new document
-    templates: [{ id, label, make() }],
+    templates: [{ id, label, make(), thumb({ width, height }) }],   // thumb: optional preview element
     serialize(),                // → Blob in the native format
     load(file, info),           // open a File; info.home says where it came from
     exports: [{ id: 'docx', label: 'Word document (.docx)', ext: '.docx', make() }],
@@ -266,6 +266,10 @@ into a sheet under a More button at the ribbon's end until the rest fit (layer 3
 groups keep their elements, so handlers, pressed states and keys work unchanged; the shell refits on a window or
 row resize, a tab change and when the ribbon is shown again. One group always stays; below its width the ribbon
 still scrolls sideways (D-B). `shell.ribbon.folded()`, `fit()` and `more()` serve harnesses.
+
+A template's optional `thumb({ width, height })` returns an element that the New page shows above the template's name
+(134 by 76 px). The shell draws the previews one tile per tick after the page opens, so the page opens at once; a
+preview that throws leaves a plain tile (2026-11-26, for Pellucia's per-template thumbnails).
 
 `doc.pages` (shell v3, 2026-11-26) puts an app's own entries on the File page, so the app needs no File menu of its
 own. An entry is `{ id, label, after, command, run() | render(el, close) }`. `after` names the built-in page it

@@ -176,6 +176,9 @@
     '.nsh-tiles{display:flex;flex-wrap:wrap;gap:12px}',
     '.nsh-tile{width:150px;height:96px;display:flex;align-items:flex-end;padding:10px;border:1px solid var(--shell-line,rgba(0,0,0,.12));border-radius:8px;background:var(--shell-canvas,#fff);cursor:pointer;text-align:left}',
     '.nsh-tile:hover{border-color:var(--shell-accent,#2563eb)}',
+    // a template with a preview: the picture above its name (doc.templates[].thumb)
+    '.nsh-tile.nsh-has-thumb{height:auto;min-height:96px;flex-direction:column;align-items:stretch;gap:6px;padding:8px}',
+    '.nsh-tile-thumb{height:76px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:4px;background:var(--shell-hover,rgba(0,0,0,.04))}',
     '.nsh-cmd{display:inline-flex;align-items:center;height:32px;padding:0 14px;border:1px solid var(--shell-line,rgba(0,0,0,.18));border-radius:6px;background:var(--shell-canvas,#fff);cursor:pointer}',
     '.nsh-cmd:hover{background:var(--shell-hover,rgba(0,0,0,.06))}',
     '.nsh-primary{background:var(--shell-accent,#2563eb);border-color:var(--shell-accent,#2563eb);color:var(--shell-on-accent,#fff)}',
@@ -1500,7 +1503,24 @@
     function pageNew() {
       bsPage.append(h('h2', { text: 'New' }));
       var tiles = h('div', { class: 'nsh-tiles' }, [h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(); } }, [h('b', { text: 'Blank ' + app.docNoun })])]);
-      (doc.templates || []).forEach(function (t) { tiles.append(h('button', { class: 'nsh-tile', type: 'button', onclick: function () { newDoc(t); } }, [h('span', { text: t.label })])); });
+      // A template's thumb({ width, height }) returns an element: its preview, drawn one tile per tick so the page
+      // opens at once. A thumb that throws, or a template without one, keeps the plain tile.
+      var queue = [];
+      (doc.templates || []).forEach(function (t) {
+        var has = typeof t.thumb === 'function';
+        var box = has ? h('span', { class: 'nsh-tile-thumb', 'aria-hidden': 'true' }) : null;
+        tiles.append(h('button', { class: 'nsh-tile' + (has ? ' nsh-has-thumb' : ''), type: 'button', 'aria-label': t.label, 'data-template': t.id, onclick: function () { newDoc(t); } }, [box, h('span', { text: t.label })]));
+        if (has) queue.push({ t: t, box: box });
+      });
+      function next() {
+        if (!queue.length || bs.hidden || !bsPage.contains(tiles)) return;
+        var q = queue.shift();
+        var el = null;
+        try { el = q.t.thumb({ width: 134, height: 76 }); } catch (_) { el = null; }
+        if (el) q.box.append(el); else { q.box.parentNode.classList.remove('nsh-has-thumb'); q.box.remove(); }
+        setTimeout(next, 0);
+      }
+      setTimeout(next, 0);
       bsPage.append(tiles);
     }
     function pageOpen() {
