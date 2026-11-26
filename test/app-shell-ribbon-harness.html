@@ -62,6 +62,13 @@ window.__result = (async () => {
   r.tabExpands = !shell.ribbon.collapsed() && shell.ribbon.tab() === 'insert' && !!shell.ribbon.item('table');
   r.keysLiveOnOtherTab = key('b') && st.bold === true;
   r.core = key('z', { code: 'KeyZ' }) && ran.includes('undo');
+  // A narrow window: at 120 px (under the two tabs' natural 174 px) the command row never grows wider than itself; its tabs scroll sideways (D-B), and
+  // the collapse button stays inside the row.
+  const row = bar.querySelector('.nsh-cmdrow');
+  row.style.width = '120px'; await wait(30);
+  r.narrowCmdrow = row.scrollWidth <= row.clientWidth + 1
+    && bar.querySelector('.nsh-cmdrow-end').getBoundingClientRect().right <= row.getBoundingClientRect().right + 1;
+  row.style.width = '';
   try { localStorage.removeItem('naklishell:ribbon:ribbontest'); } catch (_) {}
   r.version = naklishell.version === 3;
   return r;
