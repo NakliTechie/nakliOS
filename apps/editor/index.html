@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Editor — NakliOS</title>
+<title>nCode — NakliOS</title>
 <meta name="description" content="A private developer workspace for NakliOS Folder, Crate, or Browser storage.">
 <style>
 :root{--body:#15100c;--panel:#1e1813;--panel2:#251d16;--ink:#f5e6c8;--muted:#ae9d84;--brand:#c8512a;--ok:#7cab78;--line:color-mix(in srgb,var(--ink) 14%,transparent);--danger:#e07575}
@@ -26,8 +26,8 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
 <script src="../../sdk/naklios.js?v=2026-08-22-rag-v1"></script>
 <script src="core.js"></script>
 <header>
-  <div class="brand"><b>&lt;/&gt;</b> Editor</div>
-  <div class="locations" id="locations" aria-label="Editor storage location"></div>
+  <div class="brand"><b>&lt;/&gt;</b> nCode</div>
+  <div class="locations" id="locations" aria-label="nCode storage location"></div>
   <div class="spacer"></div>
   <button id="new-file">＋ File</button>
   <button id="save-all">Save all</button>
@@ -71,7 +71,7 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
       <pre class="line-numbers" id="line-numbers" aria-hidden="true">1</pre>
       <textarea class="editor" id="editor" aria-label="Code editor" spellcheck="false" disabled></textarea>
       <div class="reader" id="reader" hidden tabindex="0" aria-label="Read-only file viewer"><div class="reader-canvas" id="reader-canvas"><div class="reader-window" id="reader-window"></div></div></div>
-      <div class="welcome" id="welcome"><div><h2>Private project workspace</h2><p>Create a file here, or use <strong>Edit in Editor</strong> from Files for a one-file grant.</p></div></div>
+      <div class="welcome" id="welcome"><div><h2>Private project workspace</h2><p>Create a file here, or use <strong>Edit in nCode</strong> from Files for a one-file grant.</p></div></div>
       <div class="recovery" id="recovery" role="status"><span>A newer crash-recovery copy exists for this file.</span><button id="discard-recovery">Discard</button><button class="primary" id="restore-recovery">Restore</button></div>
     </div>
   </section>
@@ -79,7 +79,7 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
 <footer><span id="location-status">Browser</span><span id="language">Plain text</span><span id="cursor">Ln 1, Col 1</span><span class="spacer"></span><span class="save-state" id="save-state">Ready</span></footer>
 
 <dialog id="new-dialog" aria-labelledby="new-title"><form id="new-form" method="dialog"><div class="dialog-body"><h2 id="new-title">New project file</h2><label class="field">Relative path<input id="new-path" value="src/main.js" autocomplete="off"></label><label class="field">Contents<textarea id="new-content"></textarea></label><div class="dialog-error" id="new-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="new-cancel">Cancel</button><button class="primary" type="submit">Create</button></div></form></dialog>
-<dialog id="baseline-dialog" aria-labelledby="baseline-title"><form id="baseline-form"><div class="dialog-body"><h2 id="baseline-title">Start Editor review history</h2><p>Editor can use only its own workspace inside this Folder. Create a local Git baseline for the current file there. A repository at the Folder root stays separate.</p><label class="field">Commit name<input id="baseline-name" autocomplete="name" required></label><label class="field">Commit email<input id="baseline-email" type="email" autocomplete="email" required></label><div class="dialog-error" id="baseline-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="baseline-cancel">Cancel</button><button class="primary" type="submit">Create baseline</button></div></form></dialog>
+<dialog id="baseline-dialog" aria-labelledby="baseline-title"><form id="baseline-form"><div class="dialog-body"><h2 id="baseline-title">Start nCode review history</h2><p>nCode can use only its own workspace inside this Folder. Create a local Git baseline for the current file there. A repository at the Folder root stays separate.</p><label class="field">Commit name<input id="baseline-name" autocomplete="name" required></label><label class="field">Commit email<input id="baseline-email" type="email" autocomplete="email" required></label><div class="dialog-error" id="baseline-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="baseline-cancel">Cancel</button><button class="primary" type="submit">Create baseline</button></div></form></dialog>
 <dialog id="anvil-dialog" aria-labelledby="anvil-title"><form id="anvil-form"><div class="dialog-body"><h2 id="anvil-title">Edit selected lines in Anvil</h2><p id="anvil-selection"></p><label class="field">Instruction<textarea id="anvil-instruction" maxlength="4000" required></textarea></label><div class="dialog-error" id="anvil-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="anvil-cancel">Cancel</button><button class="primary" type="submit">Send selection</button></div></form></dialog>
 <dialog id="palette" aria-labelledby="palette-title"><div class="dialog-body"><h2 id="palette-title">Commands</h2><div class="palette-list"><button data-command="new">New file</button><button data-command="save">Save all</button><button data-command="find">Find / replace</button><button data-command="search">Search project contents</button><button data-command="ask">Ask AI about this project</button><button data-command="read">Read file</button><button data-command="review">Review changes</button><button data-command="format-json">Format JSON</button></div></div><div class="dialog-actions"><button id="palette-close">Close</button></div></dialog>
 <script type="module">
@@ -95,8 +95,8 @@ let readerMode='edit',readerModel=null,reviewData=null,readerSelection=null,read
 const saveTimers=new Map();
 const pendingRangeEdits=new Map();
 let rangeDialogResolve=null;
-window.addEventListener('error',event=>setSave('Editor error: '+event.message,false));
-window.addEventListener('unhandledrejection',event=>setSave('Editor error: '+(event.reason?.message||event.reason),false));
+window.addEventListener('error',event=>setSave('nCode error: '+event.message,false));
+window.addEventListener('unhandledrejection',event=>setSave('nCode error: '+(event.reason?.message||event.reason),false));
 
 function toast(message){document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.setAttribute('role','status');el.textContent=message;document.body.append(el);setTimeout(()=>el.remove(),5000)}
 function setSave(message,ok=true){$('save-state').textContent=message;$('save-state').style.color=ok?'var(--ok)':'var(--danger)'}
@@ -120,7 +120,7 @@ async function recoveryDelete(key){await idbAction('naklios-editor-recovery','re
 
 function renderLocations(){const root=$('locations');root.replaceChildren();for(const item of[{id:'browser',label:'Browser',ok:true},{id:'fsa',label:'Folder',ok:available().includes('fsa')},{id:'crate',label:'Crate',ok:available().includes('crate')}]){const button=document.createElement('button');button.textContent=item.ok?item.label:`Connect ${item.label}`;button.classList.toggle('active',activeLocation===item.id);button.classList.toggle('disabled',!item.ok);button.setAttribute('aria-pressed',String(activeLocation===item.id));button.onclick=()=>item.ok?void activate(item.id):naklios.openSettings?.('storage');root.append(button)}$('location-status').textContent=activeLocation==='browser'?'Browser workspace':`${locationLabel(activeLocation)} · apps/editor/`}
 
-async function activate(id){if(tabs.some(tab=>tab.rangeBusy)){toast('Wait for the file operation to finish.');return}if(id===activeLocation&&adapter)return;await saveAll();if(id!=='browser'&&naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))return}unsubscribe?.();unsubscribe=null;activeLocation=id;adapter=id==='browser'?browserAdapter:hostAdapter;localStorage.setItem(LOCATION_KEY,id);tabs=tabs.filter(tab=>tab.kind==='grant');activeId=tabs[0]?.id||null;renderLocations();await loadWorkspace();await ensureSubscription();naklios.title(`Editor — ${locationLabel(id)}`)}
+async function activate(id){if(tabs.some(tab=>tab.rangeBusy)){toast('Wait for the file operation to finish.');return}if(id===activeLocation&&adapter)return;await saveAll();if(id!=='browser'&&naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))return}unsubscribe?.();unsubscribe=null;activeLocation=id;adapter=id==='browser'?browserAdapter:hostAdapter;localStorage.setItem(LOCATION_KEY,id);tabs=tabs.filter(tab=>tab.kind==='grant');activeId=tabs[0]?.id||null;renderLocations();await loadWorkspace();await ensureSubscription();naklios.title(`nCode — ${locationLabel(id)}`)}
 
 async function chooseInitial(){const choices=available(),stored=localStorage.getItem(LOCATION_KEY);let preferred=stored==='browser'||choices.includes(stored)?stored:(choices.includes(naklios.capabilities.fsBackend)?naklios.capabilities.fsBackend:'browser');try{await activate(preferred)}catch(error){toast(`${locationLabel(preferred)} was not opened: ${error.message}`);if(preferred!=='browser')await activate('browser')}}
 
@@ -178,7 +178,7 @@ function renderRangeActions(){
 }
 async function sendSelectionToAnvil(){
   const tab=activeTab();
-  if(!tab||tab.kind!=='project'){toast('This handoff needs a file in Editor’s own workspace.');return}
+  if(!tab||tab.kind!=='project'){toast('This handoff needs a file in nCode’s own workspace.');return}
   if(tab.rangeEdit){toast('Discard the current proposal before sending another selection. Revert an applied proposal first.');return}
   if(tab.rangeRecordConflict){toast('The saved proposal conflicts with current bytes. Restore the matching file before reopening its review.');return}
   if(tab.dirty||tab.rangeBusy||tab.rangeClosing){toast('Save this file before sending a selection.');return}
@@ -407,7 +407,7 @@ async function projectAsk(){
       if(run!==askRun)return;
       if(res.hits.length)context=res.hits.map(hit=>`[${hit.path}]\n${hit.text}`).join('\n\n');
     }
-    if(!naklios.capabilities.ai)throw new Error('NakliOS AI is unavailable or not permitted for Editor');
+    if(!naklios.capabilities.ai)throw new Error('NakliOS AI is unavailable or not permitted for nCode');
     const messages=[{role:'user',content:context
       ?`You are helping with a small code/notes workspace. Relevant excerpts follow.\n\n${context}\n\nQuestion: ${question}`
       :question}];
@@ -470,14 +470,14 @@ async function createReviewBaseline(tab,rigFs,git,backendId){
   if(!stillHere())throw new Error('Storage changed after Git init; baseline was not committed');
   const add=await git.add({filepath:tab.path});if(!add.ok)throw new Error(add.message||'Git add failed');
   if(!stillHere())throw new Error('Storage changed after Git add; baseline was not committed');
-  const commit=await git.commit({message:`Editor review baseline: ${tab.path}`,actor:'operator',identity});
+  const commit=await git.commit({message:`nCode review baseline: ${tab.path}`,actor:'operator',identity});
   if(!commit.ok)throw new Error(commit.message||'Git commit failed');
   if(!stillHere())throw new Error('Storage changed while the baseline committed. Reopen the workspace before reviewing');
-  toast('Review baseline committed in Editor’s Folder workspace. Edit and save this file, then review changes.');
+  toast('Review baseline committed in nCode’s Folder workspace. Edit and save this file, then review changes.');
 }
 async function openGitReview(){
   const tab=activeTab();if(!tab)return;
-  if(tab.kind!=='project'||activeLocation!=='fsa'){toast('Git review needs an Editor Folder workspace repository. Browser, Crate, and exact-file grants lack bounded repository access.');return}
+  if(tab.kind!=='project'||activeLocation!=='fsa'){toast('Git review needs an nCode Folder workspace repository. Browser, Crate, and exact-file grants lack bounded repository access.');return}
   if(naklios.capabilities.fsBoundedReads!==true){toast('This Folder does not advertise bounded reads for Git review.');return}
   if(tab.dirty){toast('Save this file before reviewing its working-tree bytes.');return}
   const backendId=naklios.capabilities.fsBackend;
@@ -504,7 +504,7 @@ async function openGitReview(){
     if(tab.dirty){toast('The file changed while Git review opened. Save it and try again.');return}
     if(diff.kind==='deleted'||diff.kind==='absent'){toast('The file is no longer in this workspace. Reopen the project tree.');return}
     if(diff.state!=='text'){toast(diff.state==='binary'?'Binary files have no line review.':'The file exceeds the bounded line review.');return}
-    if(diff.afterVersion!==reviewVersion(tab.saved)){toast('The file changed outside Editor. Reopen it before reviewing.');return}
+    if(diff.afterVersion!==reviewVersion(tab.saved)){toast('The file changed outside nCode. Reopen it before reviewing.');return}
     const rows=diff.hunks.flatMap(hunk=>hunk.rows);
     if(!rows.length){toast('No working-tree line changes against HEAD.');return}
     reviewData={tabId:tab.id,rows,diff};readerMode='diff';$('reader').scrollTop=0;render();

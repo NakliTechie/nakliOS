@@ -11,7 +11,7 @@ const test = async (name, fn) => { await fn(); pass++; console.log('ok', name); 
 
 const opened = [];
 const host = {
-  listApps: async () => [{ id: 'notes', name: 'Notes' }, { id: 'files', name: 'Files' }, { id: 'calendar', name: 'Calendar' }],
+  listApps: async () => [{ id: 'notes', name: 'Notes' }, { id: 'files', name: 'Files' }, { id: 'calendar', name: 'Calendar' }, { id: 'pellucia', name: 'nSlides' }, { id: 'draft', name: 'nDoc' }],
   openApp: async (id) => { opened.push(id); },
 };
 const fakeNav = { onLine: true, connection: { effectiveType: '4g' }, getBattery: async () => ({ level: 0.42, charging: true }) };
@@ -44,6 +44,9 @@ await test('built-in tools answer from the injected browser and host', async () 
   assert.equal((await t.run('get_time')).result.iso, '2026-10-30T10:15:00.000Z');
   assert.deepEqual((await t.run('open_app', { name: 'cal' })).result, { id: 'calendar', name: 'Calendar' });
   assert.equal((await t.run('open_app', { name: 'zzz' })).error, 'No app called zzz');
+  // Familiar names as speech writes them: "n slides", "en doc".
+  assert.equal((await t.run('open_app', { name: 'n slides' })).result.id, 'pellucia');
+  assert.equal((await t.run('open_app', { name: 'en doc' })).result.id, 'draft');
   assert.equal((await t.run('set_timer', { seconds: 5 })).result.seconds, 5);
   const noBattery = createToolRegistry(builtinTools({ host, timers: createTimers(), nav: {} }));
   assert.deepEqual((await noBattery.run('get_battery')).result, { available: false });
@@ -540,6 +543,10 @@ await test('ask_app hands a whole job to an app assistant (app-shell layer 4)', 
   assert.equal(out.job, 'j1'); assert.equal(out.app, 'pellucia'); assert.match(out.say, /working on it/);
   assert.equal((await reg.run('app_job_status', { app: 'reckon' })).result.state, 'done');
   assert.match((await reg.run('ask_app', { app: 'paint', request: 'x' })).error, /no app assistant/);
+  // The familiar names reach the same app: nSlides, and "en sheet" as speech writes nSheet.
+  assert.equal((await reg.run('ask_app', { app: 'nSlides', request: 'one more slide' })).result.app, 'pellucia');
+  assert.equal((await reg.run('app_job_status', { app: 'en sheet' })).result.state, 'done');
+  calls.splice(2);
   assert.deepEqual(calls.map((c) => c[0]), ['pellucia.assistant.ask', 'reckon.assistant.status']);
   assert.deepEqual(calls[0][1], { request: 'make a five-slide deck about solar power' });
 });

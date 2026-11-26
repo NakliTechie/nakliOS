@@ -1810,7 +1810,7 @@
       '('+workspaceLabel+')\n\n'+
       'Anvil can keep a workspace in three places:\n\n'+
       '• Browser — a private store inside this browser (OPFS). Zero setup; the default. Survives reload, but lives only on this device/browser.\n\n'+
-      '• Folder — a real folder on your disk, via "Open folder". The agent edits your actual files. Source proposals need Editor review. Folder cannot atomically protect against external writes. Automatic source apply and revert stay unavailable.\n\n'+
+      '• Folder — a real folder on your disk, via "Open folder". The agent edits your actual files. Source proposals need nCode review. Folder cannot atomically protect against external writes. Automatic source apply and revert stay unavailable.\n\n'+
       '• Crate — the NakliOS host store (Folder or Crate). Files, tasks, and transcripts ROAM across your devices on the same Crate. Available when Anvil runs inside NakliOS. Bounded reads may refuse compressed or unsupported objects. Automatic revert requires an advertised atomic operation.\n\n'+
       'Switch to a disk folder anytime with "Open folder" (top right).';
     globalPreview={ type:'text', file:'Storage', label:'Storage', content };
@@ -2837,7 +2837,7 @@
   }
   async function revertTurn(run){
     const t=activeTask(); if(!t) return;
-    if(t.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in Editor. The source remains outside this task’s grant.'); return; }
+    if(t.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in nCode. The source remains outside this task’s grant.'); return; }
     const tc=turnChanges(t.log, run); const contents={};
     for(const f of tc.files) f.revertUnavailable ||= !atomicRevertAvailable(f);
     for(const f of tc.files) contents[f.file]=await readRevertState(f.file);
@@ -2858,7 +2858,7 @@
   // since — your own edit, a later turn, a subagent merge, a second tab (AC-6).
   async function revertChange(pv){
     if(!pv) return;
-    if(activeTask()?.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in Editor.'); return; }
+    if(activeTask()?.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in nCode.'); return; }
     const current=await readRevertState(pv.file);
     const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable, created:pv.created, deleted:pv.deleted, captureIncomplete:pv.captureIncomplete, revertUnavailable:pv.revertUnavailable||!atomicRevertAvailable(pv) }, current);
     if(!plan.ok){ pushSystem('↶ Not reverted — '+plan.message); return; }

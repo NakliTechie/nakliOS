@@ -7,7 +7,7 @@ const RESULT_MAX_CHARS = 8000;
 export function appCommandTool() {
   return { type: 'function', function: {
     name: 'app_command',
-    description: 'Use another NakliOS app: read a Reckon sheet, add a KanZen card, list Calendar events. '
+    description: 'Use another NakliOS app: read an nSheet sheet, add an nTasks card, list Calendar events. '
       + 'Call with `query` to find commands and their inputs, then with `name` and `input` to run one. '
       + 'The person is asked before a command changes an app.',
     parameters: { type: 'object', properties: {

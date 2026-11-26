@@ -5,7 +5,7 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const booksEntry = html.match(/\{\s*id:'books'[\s\S]*?svg:`[\s\S]*?`\s*\},/);
 
 assert.ok(booksEntry, 'Lorewell app entry exists under the stable books id');
-assert.match(booksEntry[0], /name:'Lorewell'/, 'the launcher uses the Lorewell product name');
+assert.match(booksEntry[0], /name:'nBooks'/, 'the launcher uses the familiar name nBooks');
 // Since 2026-11-12 Lorewell is a same-origin NakliOS mirror (lorewell.naklitechie.com is retired). It is not
 // kind:'system', so it stays clamped to its own namespace; every app opens in a window since Basic mode retired.
 assert.match(booksEntry[0], /url:'\.\/apps\/books\/'/, 'Lorewell opens from its NakliOS mirror');
