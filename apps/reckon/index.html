@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-2dF1U1kb1CJ9Znru9JvKEtJPzKqyKC2HsFsex63vcNQ=' 'sha256-WW/up4iYKoXntCqksrSQuWgun4rvhlA6+oXQ3mQBWdk=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-Otz8uk1ooeQK52eTi0GaCgSKfk+0zPMTVhO7fCE/Tw8=' 'sha256-rTuttgmkJiqamaK38ZGZskOSkBNDO+nrrwOPHZeo/20=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Reckon</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -13371,13 +13371,14 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
 })();
 
 /* naklios-sdk:end */
-/* naklios-app-shell:begin ver=2 sha256=e2e98ea8ec460005b1c25d8a536c7f45fbb7fc58f05e0a4e3bb5f2ff6a8a7606 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
+/* naklios-app-shell:begin ver=3 sha256=b2a2f9b7d0df6a95d82cc82d00fe7782616f5168f12848e225d0a95dd254b687 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs --name app-shell` */
 /*
- * app-shell.js — the NakliOS app shell, layers 1 and 4. @naklios-app-shell-version 2 (spec: docs/specs/app-shell-001.md).
+ * app-shell.js — the NakliOS app shell, layers 1, 2 and 4. @naklios-app-shell-version 3 (spec: docs/specs/app-shell-001.md).
  *
  * One title row (AutoSave, Quick Access: Save, Undo, Redo; the document name, its unsaved dot and where it is
  * saved; an app slot), the File page (New, Open with Recent, Save, Save as, Export, Print), one save and open
- * model, the core keymap, and (layer 4, spec section 10) the assistant: an Ask pane and one agent loop that runs the
+ * model, the core keymap, (layer 2, spec sections 2, 3.2 and 5.2) the command row with File and the app's tabs, a
+ * one-line ribbon drawn from the app's tab groups and the formatting keys, and (layer 4, spec section 10) the assistant: an Ask pane and one agent loop that runs the
  * app's own commands on the model in NakliOS Settings → AI. Apps inline this file between markers, the way they inline the SDK:
  *
  *   /* naklios-app-shell:begin ver=N sha256=… *\/  …  /* naklios-app-shell:end *\/
@@ -13396,7 +13397,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
   'use strict';
   if (typeof window === 'undefined' || window.naklishell) return;
 
-  var VERSION = 2;
+  var VERSION = 3;
   var isMac = /mac|iphone|ipad|ipod/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent);
   var MOD = isMac ? 'Cmd' : 'Ctrl';
   var nak = function () { return window.naklios; };
@@ -13420,6 +13421,21 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     { name: 'app.ask', keys: ['Mod+Shift+Y'], label: 'Ask' },
   ];
   var FILE_COMMANDS = { 'file.save': 1, 'file.save_as': 1, 'file.open': 1, 'file.new': 1, 'file.print': 1 };
+  // Formatting keys (spec 5.2). The shell owns them only for an app that names the matching ribbon item (item.key);
+  // an app that formats nothing keeps the browser's keys. Apps opt out of a row per spec (Reckon keeps Excel's
+  // Mod+E and Mod+Space) by not giving that item a key.
+  var FORMAT_KEYS = [
+    { name: 'bold', keys: ['Mod+B'] }, { name: 'italic', keys: ['Mod+I'] }, { name: 'underline', keys: ['Mod+U'] },
+    { name: 'link', keys: ['Mod+K'] },
+    { name: 'grow', keys: ['Mod+Shift+.'] }, { name: 'shrink', keys: ['Mod+Shift+,'] },
+    { name: 'clear', keys: ['Mod+Space'] },
+    { name: 'align-left', keys: ['Mod+L'] }, { name: 'align-centre', keys: ['Mod+E'] },
+    { name: 'align-right', keys: ['Mod+R'] }, { name: 'align-justify', keys: ['Mod+J'] },
+    { name: 'bullets', keys: ['Mod+Shift+L'] }, { name: 'numbering', keys: ['Mod+Shift+7'] },
+    { name: 'subscript', keys: ['Mod+='] }, { name: 'superscript', keys: ['Mod+Shift+='] },
+  ];
+  var RIBBON_KEY = 'Mod+F1';
+  var CODE_OF = { '.': 'Period', ',': 'Comma', '=': 'Equal', 'Space': 'Space' };
 
   function parseKey(spec) {
     var parts = spec.split('+'), k = { mod: false, ctrl: false, shift: false, alt: false, key: parts.pop() };
@@ -13432,12 +13448,15 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     if (!!e.metaKey !== wantMeta || !!e.ctrlKey !== wantCtrl || !!e.shiftKey !== k.shift || !!e.altKey !== k.alt) return false;
     if (/^[A-Z]$/.test(k.key)) return e.code === 'Key' + k.key;
     if (/^[0-9]$/.test(k.key)) return e.code === 'Digit' + k.key;
+    if (CODE_OF[k.key]) return e.code === CODE_OF[k.key];
     return e.key === k.key;
   }
   function keyLabel(spec) {
+    if (/\+$/.test(spec)) spec = spec.slice(0, -1) + 'Plus';
     return spec.split('+').map(function (p) { return p === 'Mod' ? MOD : (isMac && p === 'Alt' ? 'Option' : p); }).join('+');
   }
   function shortcutOf(name) { var c = CORE_KEYS.filter(function (x) { return x.name === name; })[0]; return c ? c.keys[0] : ''; }
+  function formatKeyOf(name) { var c = FORMAT_KEYS.filter(function (x) { return x.name === name; })[0]; return c ? c.keys[0] : ''; }
   function tip(label, name) { var s = shortcutOf(name); return s ? label + ' (' + keyLabel(s) + ')' : label; }
 
   // ---------------------------------------------------------------- small DOM helper (no innerHTML with styles)
@@ -13466,11 +13485,25 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     redo: 'M11 4l3.5 3.5L11 11V8.5H6a2.5 2.5 0 0 0 0 5h2v1.5H6a4 4 0 0 1 0-8h5V4z',
     help: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 10.2a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zM8 3.8c1.5 0 2.6.9 2.6 2.2 0 1-.6 1.5-1.2 1.9-.5.3-.7.5-.7 1v.4H7.3v-.5c0-.9.4-1.4 1.1-1.8.5-.3.8-.5.8-.9 0-.5-.5-.8-1.1-.8-.7 0-1.2.4-1.3 1H5.4C5.5 4.8 6.5 3.8 8 3.8z',
     back: 'M7 3 2 8l5 5V9h7V7H7V3z',
+    chevronUp: 'M8 5l5 5-1.1 1.1L8 7.2l-3.9 3.9L3 10z',
+    chevronDown: 'M8 11 3 6l1.1-1.1L8 8.8l3.9-3.9L13 6z',
+    caret: 'M4 6h8l-4 4.5z',
+    cut: 'M5 2.5l3 5.2 3-5.2h1.3L8.8 8.6l1.1 1.9a2.2 2.2 0 1 1-1.1.6L8 9.8l-.8 1.3a2.2 2.2 0 1 1-1.1-.6l1.1-1.9L3.7 2.5H5zM5 11.6a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm6 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z',
+    copy: 'M5 1.5h7.5V12H5V1.5zm1.3 1.3v7.9h4.9V2.8H6.3zM2.5 4.5h1.3v9.2h6.4V15H2.5V4.5z',
+    paste: 'M6 1.5h4v1.3h2.5V15h-9V2.8H6V1.5zm-1.2 2.6v9.6h6.4V4.1H10v1.2H6V4.1H4.8zM7.3 2.8v1.2h1.4V2.8H7.3z',
+    alignLeft: 'M2 3h12v1.4H2zM2 6.3h8v1.4H2zM2 9.6h12V11H2zM2 12.9h8v1.4H2z',
+    alignCentre: 'M2 3h12v1.4H2zM4 6.3h8v1.4H4zM2 9.6h12V11H2zM4 12.9h8v1.4H4z',
+    alignRight: 'M2 3h12v1.4H2zM6 6.3h8v1.4H6zM2 9.6h12V11H2zM6 12.9h8v1.4H6z',
+    alignJustify: 'M2 3h12v1.4H2zM2 6.3h12v1.4H2zM2 9.6h12V11H2zM2 12.9h12v1.4H2z',
+    bullets: 'M2.2 3.2a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM5.5 3.7H14v1.4H5.5zM2.2 7.3a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM5.5 7.8H14v1.4H5.5zM2.2 11.4a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4zM5.5 11.9H14v1.4H5.5z',
+    numbering: 'M1.6 2.6h1.6v3.6H2.2V3.5h-.6zM5.5 3.7H14v1.4H5.5zM1.4 7.2h2.4v.9l-1.3 1.2h1.3v.9H1.3v-.8l1.4-1.3H1.4zM5.5 7.8H14v1.4H5.5zM1.4 11.2h2.4v3.4H1.4v-.8h1.4v-.5h-1v-.7h1v-.5H1.4zM5.5 11.9H14v1.4H5.5z',
+    find: 'M7 2a5 5 0 0 1 4 8l3.2 3.2-1 1L10 11a5 5 0 1 1-3-9zm0 1.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2z',
+    link: 'M6.6 9.4 9.4 6.6l.9.9-2.8 2.8zM8.2 4.2l1.2-1.2a3 3 0 0 1 4.2 4.2l-1.2 1.2-.9-.9 1.2-1.2a1.7 1.7 0 0 0-2.4-2.4L9.1 5.1zM7.8 11.8l-1.2 1.2a3 3 0 0 1-4.2-4.2l1.2-1.2.9.9-1.2 1.2a1.7 1.7 0 0 0 2.4 2.4l1.2-1.2z',
   };
 
   // ---------------------------------------------------------------- styles
   var CSS = [
-    ':root{--shell-title-h:36px}',
+    ':root{--shell-title-h:36px;--shell-top-h:var(--shell-title-h)}',
     '.nsh-title{position:relative;z-index:40;display:flex;align-items:center;gap:4px;height:var(--shell-title-h);padding:0 8px;box-sizing:border-box;',
     'background:var(--shell-chrome,var(--shell-canvas,#fff));color:var(--shell-ink,#1d1d1f);border-bottom:1px solid var(--shell-line,rgba(0,0,0,.12));',
     'font:13px/1.2 var(--shell-font,system-ui,-apple-system,"Segoe UI",sans-serif);user-select:none;flex:none}',
@@ -13534,7 +13567,40 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     '.nsh-dlg legend{padding:0;margin-bottom:4px;font-weight:600}',
     '.nsh-dlg fieldset label{display:flex;gap:8px;align-items:center;margin:4px 0}',
     '.nsh-dlg .nsh-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}',
-    '@media print{.nsh-title,.nsh-bs{display:none!important}}',
+    // layer 2: command row (File and tabs) and the one-line ribbon (spec 2 and D1)
+    '.nsh-bar{position:relative;z-index:39;flex:none;background:var(--shell-chrome,var(--shell-canvas,#fff));color:var(--shell-ink,#1d1d1f);',
+    'border-bottom:1px solid var(--shell-line,rgba(0,0,0,.12));font:13px/1.2 var(--shell-font,system-ui,-apple-system,"Segoe UI",sans-serif);user-select:none}',
+    '.nsh-bar button,.nsh-bar select,.nsh-menu button{font:inherit;color:inherit}',
+    '.nsh-cmdrow{display:flex;align-items:stretch;height:32px;padding:0 8px;box-sizing:border-box;gap:2px}',
+    '.nsh-cmdrow .nsh-file{align-self:center;height:26px;margin-right:6px;flex:none}',
+    '.nsh-tab{border:0;border-bottom:2px solid transparent;background:transparent;padding:0 12px;cursor:pointer}',
+    '.nsh-tab:hover{background:var(--shell-hover,rgba(0,0,0,.06))}',
+    '.nsh-tab[aria-selected="true"]{border-bottom-color:var(--shell-accent,#2563eb);font-weight:600}',
+    '.nsh-tab:focus-visible,.nsh-rb:focus-visible,.nsh-sel:focus-visible,.nsh-menu button:focus-visible{outline:2px solid var(--shell-accent,#2563eb);outline-offset:-2px}',
+    '.nsh-cmdrow-end{margin-left:auto;display:flex;align-items:center;flex:none}',
+    // A narrow window: the tabs shrink and scroll sideways, as the ribbon does (D-B), so the row never widens the page
+    '.nsh-tablist{display:flex;align-items:stretch;min-width:0;flex:0 1 auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}',
+    '.nsh-tablist::-webkit-scrollbar{display:none}',
+    '.nsh-cmdrow .nsh-tab{flex:none}',
+    '.nsh-ribbon{display:flex;align-items:center;height:40px;padding:0 8px;box-sizing:border-box;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}',
+    '.nsh-ribbon[hidden]{display:none}',
+    '.nsh-grp{display:flex;align-items:center;gap:2px;flex:none}',
+    '.nsh-grp+.nsh-grp{margin-left:6px;padding-left:6px;border-left:1px solid var(--shell-line,rgba(0,0,0,.12))}',
+    '.nsh-rb{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:28px;height:28px;padding:0 6px;border:0;border-radius:6px;background:transparent;cursor:pointer;white-space:nowrap}',
+    '.nsh-rb:hover:not(:disabled){background:var(--shell-hover,rgba(0,0,0,.06))}',
+    '.nsh-rb:disabled{opacity:.38;cursor:default}',
+    '.nsh-rb[aria-pressed="true"]{background:var(--shell-selected,rgba(37,99,235,.16));color:var(--shell-accent,#2563eb)}',
+    '.nsh-rb svg{fill:currentColor;flex:none}',
+    '.nsh-rb .nsh-caret{width:10px;height:10px;opacity:.7}',
+    '.nsh-glyph{font-weight:600;min-width:12px;text-align:center}',
+    '.nsh-sel{height:26px;max-width:16ch;padding:0 4px;border:1px solid var(--shell-line,rgba(0,0,0,.18));border-radius:6px;background:var(--shell-canvas,#fff)}',
+    '.nsh-menu{position:fixed;z-index:1001;display:flex;flex-direction:column;min-width:160px;max-height:60vh;overflow:auto;padding:4px;border:1px solid var(--shell-line,rgba(0,0,0,.12));',
+    'border-radius:8px;background:var(--shell-canvas,#fff);color:var(--shell-ink,#1d1d1f);box-shadow:0 8px 24px rgba(0,0,0,.16);font:13px/1.2 var(--shell-font,system-ui,-apple-system,"Segoe UI",sans-serif)}',
+    '.nsh-menu button{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:0;border-radius:6px;background:transparent;cursor:pointer;text-align:left}',
+    '.nsh-menu button:hover{background:var(--shell-hover,rgba(0,0,0,.06))}',
+    '.nsh-menu button[aria-checked="true"]{font-weight:600}',
+    '.nsh-swatch{width:12px;height:12px;border-radius:3px;border:1px solid var(--shell-line,rgba(0,0,0,.2))}',
+    '@media print{.nsh-title,.nsh-bs,.nsh-bar,.nsh-menu{display:none!important}}',
   ].join('\n');
 
   function installCss() {
@@ -13675,7 +13741,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     '.nsh-ask{gap:6px;padding:0 10px;border:1px solid var(--shell-line,rgba(0,0,0,.18))!important}',
     '.nsh-ask[hidden]{display:none}',
     '.nsh-ask-state{color:var(--shell-muted,rgba(0,0,0,.6));white-space:nowrap;font-size:12px}',
-    '.nsh-pane{position:fixed;right:0;top:var(--shell-title-h);bottom:0;width:360px;max-width:100vw;z-index:900;display:flex;flex-direction:column;box-sizing:border-box;',
+    '.nsh-pane{position:fixed;right:0;top:var(--shell-top-h);bottom:0;width:360px;max-width:100vw;z-index:900;display:flex;flex-direction:column;box-sizing:border-box;',
     'background:var(--shell-canvas,#fff);color:var(--shell-ink,#1d1d1f);border-left:1px solid var(--shell-line,rgba(0,0,0,.12));box-shadow:-8px 0 24px rgba(0,0,0,.08);',
     'font:13px/1.45 var(--shell-font,system-ui,-apple-system,"Segoe UI",sans-serif)}',
     '.nsh-pane[hidden]{display:none}',
@@ -14173,6 +14239,191 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
       slot, helpBtn,
     ]);
     if (opts.slot) [].concat(opts.slot).forEach(function (n) { slot.append(n); });
+
+    // ---- layer 2: command row and ribbon (spec 2, 3.1, 3.2, 5.2)
+    // opts.tabs: [{ id, label, groups: [{ id, label, items: [item] }] }]. An item is
+    //   { id, label, kind: 'button' | 'toggle' | 'select' | 'menu' | 'element', icon (a 16 px path or an ICON name),
+    //     glyph (short text such as 'B'), command, args, run(), pressed(state), value(state), disabled(state),
+    //     options ([{ value, label, swatch }] or a function; select and menu), choose(value) (select and menu),
+    //     key (a FORMAT_KEYS name: bold, italic, …), el (element: the app's own control) }.
+    // A button runs item.run() or the app command item.command with item.args. The shell reads state() after every
+    // refresh() to set pressed toggles and select values, so the ribbon always shows the selection's formatting.
+    var bar = null, ribbon = null, tabBtns = [], ribbonItems = [], keyItems = {}, activeTab = null, openMenu = null;
+    var ribbonKey = 'naklishell:ribbon:' + app.id;
+    var ribbonCollapsed = false;
+    try { ribbonCollapsed = localStorage.getItem(ribbonKey) === 'collapsed'; } catch (_) {}
+    var tabs = Array.isArray(opts.tabs) ? opts.tabs.filter(function (t) { return t && t.id && Array.isArray(t.groups); }) : [];
+    function readState() { try { return typeof opts.state === 'function' ? (opts.state() || {}) : {}; } catch (_) { return {}; } }
+    function runItem(item, value) {
+      closeMenu();
+      try {
+        if (typeof item.choose === 'function' && arguments.length > 1) return Promise.resolve(item.choose(value)).then(after, after);
+        if (typeof item.run === 'function') return Promise.resolve(item.run()).then(after, after);
+        if (item.command) return Promise.resolve(runAppCommand(item.command, item.args)).then(after, after);
+      } catch (e) { after(); throw e; }
+      return Promise.resolve();
+      function after() { refreshRibbon(); }
+    }
+    function runAppCommand(name, args) {
+      if (typeof opts.run === 'function') return opts.run(name, args || {});
+      if (typeof commands[name] === 'function') return commands[name](args || {});
+      return runCmd(name, args);
+    }
+    function itemTip(item) {
+      var k = item.key ? formatKeyOf(item.key) : (item.command ? shortcutOf(item.command) : '');
+      return k ? item.label + ' (' + keyLabel(k) + ')' : item.label;
+    }
+    function parityOf(el, item) {
+      if (item.parity) el.setAttribute('data-parity', item.parity);
+      else if (item.command) el.setAttribute('data-command', item.command);
+      else el.setAttribute('data-parity', 'view');
+    }
+    function optionsOf(item) { try { return (typeof item.options === 'function' ? item.options() : item.options) || []; } catch (_) { return []; } }
+    function closeMenu() {
+      if (!openMenu) return;
+      var m = openMenu; openMenu = null;
+      m.el.remove();
+      document.removeEventListener('pointerdown', m.outside, true);
+      if (m.anchor) m.anchor.setAttribute('aria-expanded', 'false');
+    }
+    function showMenu(anchor, item) {
+      var wasOpen = openMenu && openMenu.anchor === anchor;
+      closeMenu();
+      if (wasOpen) return;
+      var cur = typeof item.value === 'function' ? item.value(readState()) : undefined;
+      var menu = h('div', { class: 'nsh-menu', role: 'menu', 'aria-label': item.label });
+      optionsOf(item).forEach(function (o) {
+        var row = h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(cur !== undefined && String(cur) === String(o.value)),
+          onmousedown: function (e) { e.preventDefault(); }, onclick: function () { runItem(item, o.value); } },
+          [o.swatch ? swatch(o.swatch) : null, h('span', { text: o.label })]);
+        parityOf(row, item);
+        menu.append(row);
+      });
+      document.body.append(menu);
+      var r = anchor.getBoundingClientRect();
+      menu.style.left = Math.max(2, Math.min(r.left, document.documentElement.clientWidth - menu.offsetWidth - 2)) + 'px';
+      menu.style.top = (r.bottom + 2) + 'px';
+      var outside = function (e) { if (!menu.contains(e.target) && !anchor.contains(e.target)) closeMenu(); };
+      document.addEventListener('pointerdown', outside, true);
+      anchor.setAttribute('aria-expanded', 'true');
+      openMenu = { el: menu, anchor: anchor, outside: outside };
+      var first = menu.querySelector('[aria-checked="true"]') || menu.querySelector('button');
+      if (first) first.focus();
+      menu.addEventListener('keydown', function (e) {
+        var rows = [].slice.call(menu.querySelectorAll('button')), i = rows.indexOf(document.activeElement);
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(); anchor.focus(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); (rows[i + 1] || rows[0]).focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); (rows[i - 1] || rows[rows.length - 1]).focus(); }
+      });
+    }
+    // A colour chip. The colour goes through the CSSOM, never a style attribute, so a hash-only style-src CSP
+    // (Draft, Reckon) allows it.
+    function swatch(colour) { var sw = h('span', { class: 'nsh-swatch' }); sw.style.background = colour; return sw; }
+    function iconOf(item) {
+      var d = item.icon ? (ICON[item.icon] || item.icon) : '';
+      return d ? icon(d) : null;
+    }
+    function buildItem(item) {
+      var el;
+      if (item.kind === 'element') {
+        el = item.el;
+        if (!el) return null;
+      } else if (item.kind === 'select') {
+        el = h('select', { class: 'nsh-sel', 'aria-label': item.label, title: itemTip(item) });
+        optionsOf(item).forEach(function (o) { el.append(h('option', { value: String(o.value), text: o.label })); });
+        el.addEventListener('change', function () { runItem(item, el.value); });
+        parityOf(el, item);
+      } else {
+        var kids = [iconOf(item)];
+        if (item.glyph) kids.push(h('span', { class: 'nsh-glyph', text: item.glyph, 'aria-hidden': 'true' }));
+        if (item.text) kids.push(h('span', { text: item.text }));
+        if (item.kind === 'menu') { var c = icon(ICON.caret); c.setAttribute('class', 'nsh-caret'); kids.push(c); }
+        el = h('button', { class: 'nsh-rb', type: 'button', title: itemTip(item), 'aria-label': item.label,
+          'aria-haspopup': item.kind === 'menu' ? 'menu' : null, 'aria-expanded': item.kind === 'menu' ? 'false' : null,
+          'aria-pressed': item.kind === 'toggle' ? 'false' : null,
+          // keep the document's selection: a ribbon press must not move focus out of the editor or the grid
+          onmousedown: function (e) { e.preventDefault(); },
+          onclick: function () { if (item.kind === 'menu') showMenu(el, item); else runItem(item); } }, kids);
+        parityOf(el, item);
+      }
+      el.setAttribute('data-shell-item', item.id);
+      ribbonItems.push({ item: item, el: el });
+      if (item.key) keyItems[item.key] = item;
+      return el;
+    }
+    function showTab(id) {
+      var t = tabs.filter(function (x) { return x.id === id; })[0] || tabs[0];
+      activeTab = t.id;
+      closeMenu();
+      tabBtns.forEach(function (b) { var on = b.getAttribute('data-tab') === t.id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+      ribbonItems = []; keyItems = {};
+      // keys stay live for every tab's items, as in Office: Mod+B works whichever tab shows
+      tabs.forEach(function (x) { x.groups.forEach(function (g) { (g.items || []).forEach(function (it) { if (it && it.key) keyItems[it.key] = it; }); }); });
+      ribbon.textContent = '';
+      ribbon.setAttribute('aria-label', t.label);
+      t.groups.forEach(function (g) {
+        var grp = h('div', { class: 'nsh-grp', role: 'group', 'aria-label': g.label, title: g.label, 'data-group': g.id });
+        (g.items || []).forEach(function (it) { var el = it && buildItem(it); if (el) grp.append(el); });
+        if (grp.childNodes.length) ribbon.append(grp);
+      });
+      refreshRibbon();
+    }
+    function refreshRibbon() {
+      if (!ribbon) return;
+      var s = readState();
+      ribbonItems.forEach(function (x) {
+        var it = x.item, el = x.el;
+        if (it.kind === 'element') return;
+        if (typeof it.disabled === 'function') { try { el.disabled = !!it.disabled(s); } catch (_) {} }
+        if (it.kind === 'toggle' && typeof it.pressed === 'function') { try { el.setAttribute('aria-pressed', String(!!it.pressed(s))); } catch (_) {} }
+        if (it.kind === 'select' && typeof it.value === 'function' && document.activeElement !== el) {
+          try { var v = it.value(s); el.value = v == null ? '' : String(v); } catch (_) {}
+        }
+      });
+    }
+    function setCollapsed(on) {
+      ribbonCollapsed = !!on;
+      try { localStorage.setItem(ribbonKey, ribbonCollapsed ? 'collapsed' : 'open'); } catch (_) {}
+      ribbon.hidden = ribbonCollapsed;
+      collapseBtn.replaceChildren(icon(ribbonCollapsed ? ICON.chevronDown : ICON.chevronUp));
+      collapseBtn.title = (ribbonCollapsed ? 'Show the ribbon' : 'Collapse the ribbon') + ' (' + keyLabel(RIBBON_KEY) + ')';
+      collapseBtn.setAttribute('aria-expanded', String(!ribbonCollapsed));
+      topHeight();
+    }
+    function topHeight() {
+      // --shell-top-h: everything the shell draws above the app (title row, command row, ribbon), for apps whose
+      // panes are fixed and must clear it. Measured, so an app's own font size cannot put it out of step.
+      var px = title.offsetHeight + (bar ? bar.offsetHeight : 0);
+      if (px > 0) document.documentElement.style.setProperty('--shell-top-h', px + 'px');
+    }
+    var collapseBtn = null;
+    if (tabs.length) {
+      var tablist = h('div', { class: 'nsh-tablist', role: 'tablist', 'aria-label': app.name + ' tabs' });
+      tabs.forEach(function (t) {
+        var b = h('button', { class: 'nsh-tab', type: 'button', role: 'tab', 'data-tab': t.id, 'data-parity': 'view', text: t.label,
+          onclick: function () { if (ribbonCollapsed) setCollapsed(false); showTab(t.id); } });
+        tabBtns.push(b); tablist.append(b);
+      });
+      tablist.addEventListener('keydown', function (e) {
+        var i = tabBtns.indexOf(document.activeElement);
+        if (i < 0) return;
+        var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -2;
+        if (j === -2) return;
+        e.preventDefault();
+        var b = tabBtns[(j + tabBtns.length) % tabBtns.length]; b.focus(); showTab(b.getAttribute('data-tab'));
+      });
+      collapseBtn = h('button', { class: 'nsh-btn', type: 'button', 'data-parity': 'view', 'aria-label': 'Collapse the ribbon', onclick: function () { setCollapsed(!ribbonCollapsed); } });
+      ribbon = h('div', { class: 'nsh-ribbon', role: 'toolbar', 'aria-label': 'Ribbon' });
+      // File leaves the title row for the command row's first place (spec 2: File first, then Home)
+      fileBtn.remove();
+      bar = h('div', { class: 'nsh-bar' }, [
+        h('nav', { class: 'nsh-cmdrow', 'aria-label': app.name + ' commands' }, [fileBtn, tablist, h('div', { class: 'nsh-cmdrow-end' }, [collapseBtn])]),
+        ribbon,
+      ]);
+      showTab((tabs.filter(function (t) { return t.id === opts.tab; })[0] || tabs.filter(function (t) { return t.id === 'home'; })[0] || tabs[0]).id);
+      setCollapsed(ribbonCollapsed);
+      window.addEventListener('resize', function () { closeMenu(); topHeight(); });
+    }
     // ---- layer 4: the assistant
     var assistant = null, pane = null, askBtn = null, askState = null;
     if (opts.agent && typeof opts.agent.commands === 'function') {
@@ -14243,6 +14494,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
       }
       listeners.forEach(function (fn) { try { fn(api.info()); } catch (_) {} });
       askRender();
+      if (typeof refreshRibbon === 'function') refreshRibbon();
     }
     function setError(e, kind) {
       if (e && e.name === 'AbortError') return;
@@ -14657,8 +14909,27 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
           return Promise.resolve(false);
       }
     }
+    function inPlainField(t) {
+      // a format key in a plain text field (a dialog, the Ask box, a select) stays the field's own
+      return !!(t && t.closest && (t.closest('input,textarea,select') || t.closest('.nsh-bs,.nsh-dlg,.nsh-pane,.nsh-menu')));
+    }
+    function onFormatKey(e) {
+      if (bar && keyMatches(RIBBON_KEY, e)) { setCollapsed(!ribbonCollapsed); return true; }
+      if (inPlainField(e.target)) return false;
+      for (var i = 0; i < FORMAT_KEYS.length; i++) {
+        var f = FORMAT_KEYS[i], item = keyItems[f.name];
+        if (!item || !f.keys.some(function (k) { return keyMatches(k, e); })) continue;
+        if (typeof item.disabled === 'function') { try { if (item.disabled(readState())) return false; } catch (_) {} }
+        // a toggle or button runs; a select or menu item with a key runs its keyRun (for example grow and shrink)
+        if (typeof item.keyRun === 'function') { Promise.resolve(item.keyRun()).then(refreshRibbon, refreshRibbon); return true; }
+        runItem(item);
+        return true;
+      }
+      return false;
+    }
     function onKey(e) {
       if (e.defaultPrevented || e.isComposing) return;
+      if (onFormatKey(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       for (var i = 0; i < CORE_KEYS.length; i++) {
         var c = CORE_KEYS[i];
         if (!c.keys.some(function (k) { return keyMatches(k, e); })) continue;
@@ -14682,6 +14953,7 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
     // ---- mount
     var host = opts.mount || document.body;
     host.insertBefore(title, host.firstChild);
+    if (bar) { title.after(bar); topHeight(); }
     document.body.append(bs);
     if (pane) document.body.append(pane.el);
     st.name = cleanName(opts.name) || untitled();
@@ -14724,6 +14996,15 @@ Object.assign(NSio, { IMPORT_MAX_CELLS, odsExportNotes, IMPORT_WORKER_MODULES, c
           home: hm ? { kind: hm.kind, path: hm.path || null, fileName: hm.fileName || null, handle: hm.handle || null } : null, status: whereText() };
       },
       element: title,
+      // Layer 2: the command row and ribbon (null when the app gave no tabs), and the visible tab.
+      ribbon: bar ? {
+        element: bar,
+        show: function (id) { showTab(id); },
+        tab: function () { return activeTab; },
+        collapsed: function () { return ribbonCollapsed; },
+        collapse: function (on) { setCollapsed(on !== false); },
+        item: function (id) { var x = ribbonItems.filter(function (r) { return r.item.id === id; })[0]; return x ? x.el : null; },
+      } : null,
       // The rail commands for the file layer, ready to merge into an app's registration (spec 6.3).
       commands: function () {
         var out = [
@@ -20693,6 +20974,28 @@ const STR = {
   'gops.pivots': { en: 'pivot tables', hi: 'पिवट टेबल' },
 
   // --- toolbar tooltips + labels ---
+  // app shell layer 2: ribbon tabs and groups (Excel profile, app-shell-001 3.1)
+  'rb.home': { en: 'Home', hi: 'होम' },
+  'rb.insert': { en: 'Insert', hi: 'सम्मिलित करें' },
+  'rb.formulas': { en: 'Formulas', hi: 'सूत्र' },
+  'rb.data': { en: 'Data', hi: 'डेटा' },
+  'rb.review': { en: 'Review', hi: 'समीक्षा' },
+  'rb.view': { en: 'View', hi: 'दृश्य' },
+  'rb.g.clipboard': { en: 'Clipboard', hi: 'क्लिपबोर्ड' },
+  'rb.g.font': { en: 'Font', hi: 'फ़ॉन्ट' },
+  'rb.g.alignment': { en: 'Alignment', hi: 'संरेखण' },
+  'rb.g.number': { en: 'Number', hi: 'संख्या' },
+  'rb.g.styles': { en: 'Styles', hi: 'शैलियाँ' },
+  'rb.g.cells': { en: 'Cells', hi: 'कक्ष' },
+  'rb.g.editing': { en: 'Editing', hi: 'संपादन' },
+  'rb.g.tables': { en: 'Tables', hi: 'तालिकाएँ' },
+  'rb.g.charts': { en: 'Charts', hi: 'चार्ट' },
+  'rb.g.analysis': { en: 'Analysis', hi: 'विश्लेषण' },
+  'rb.g.names': { en: 'Defined names', hi: 'परिभाषित नाम' },
+  'rb.g.datatools': { en: 'Data tools', hi: 'डेटा उपकरण' },
+  'rb.g.io': { en: 'Import and export', hi: 'आयात और निर्यात' },
+  'rb.g.protect': { en: 'Protect', hi: 'सुरक्षा' },
+  'rb.g.window': { en: 'Window', hi: 'विंडो' },
   'tb.more':           { en: 'More tools', hi: 'और उपकरण' },
   'tb.undo':           { en: 'Undo', hi: 'पूर्ववत करें' },
   'tb.undoTip':        { en: 'Undo (⌘/Ctrl+Z)', hi: 'पूर्ववत करें (⌘/Ctrl+Z)' },
@@ -24947,6 +25250,8 @@ export function createToolbar({ mount, hooks = {} }) {
   const RK = globalThis.Reckon;
   const CURRENCIES = RK.FORMAT_META?.CURRENCIES ?? ['INR', 'USD', 'EUR', 'GBP', 'JPY'];
 
+  // true once the controls live in the app shell's ribbon (ribbonTabs, below)
+  let inRibbon = false;
   // ---------- popover host (one open at a time) ----------
   let openPop = null;
   // An outside press closes the open popover. It listens for pointerdown, not
@@ -25334,12 +25639,19 @@ export function createToolbar({ mount, hooks = {} }) {
   readout.className = 'rk-tb-readout';
 
   // ---------- assemble ----------
-  const groups = [
-    [undoBtn, redoBtn], [fmtBtn, decMinus, decPlus], [boldBtn, italBtn, ulBtn, stBtn, fgBtn, fontBtn], [alL, alC, alR, wrapBtn, vaBtn],
+  // Undo and Redo sit once, in the app shell's title row (app-shell-001 3.3);
+  // the toolbar keeps the buttons unattached so setHistory stays harmless.
+  const listed = [
+    [fmtBtn, decMinus, decPlus], [boldBtn, italBtn, ulBtn, stBtn, fgBtn, fontBtn], [alL, alC, alR, wrapBtn, vaBtn],
     [fillBtn, bordBtn, painterBtn, clearBtn], [sortA, sortD, filterBtn, dataBtn], [nameBtn, freezeBtn], [condBtn, dvBtn, chartBtn, pivotBtn, tableBtn],
     [stylesBtn, insertBtn, protectBtn], // parity v1.x
     [fillBtn, bordBtn, painterBtn, clearBtn], [sortA, sortD, filterBtn, dataBtn], [nameBtn, freezeBtn], [condBtn, dvBtn, chartBtn, pivotBtn, analyseBtn],
   ];
+  // A control listed twice sits at its last place (append moves it), so drop
+  // its earlier listing and any group left empty: no orphan separators.
+  const lastGroup = new Map();
+  listed.forEach((g, i) => g.forEach((el) => lastGroup.set(el, i)));
+  const groups = listed.map((g, i) => g.filter((el) => lastGroup.get(el) === i)).filter((g) => g.length);
   groups.forEach((g, i) => {
     if (i) mount.appendChild(sep());
     for (const el of g) mount.appendChild(el);
@@ -25431,6 +25743,7 @@ export function createToolbar({ mount, hooks = {} }) {
 
   const overflows = () => mount.scrollWidth > mount.clientWidth + 1;
   const fit = () => {
+    if (inRibbon) return; // the shell's ribbon scrolls sideways (app-shell-001 D-B); nothing folds
     // unfold everything first, so widening recovers controls as well as
     // narrowing sheds them
     for (const f of FOLDABLE) f.el.style.display = '';
@@ -25485,6 +25798,11 @@ export function createToolbar({ mount, hooks = {} }) {
     return cs;
   };
   const focusRegion = () => {
+    if (inRibbon) {
+      const b = Array.from(document.querySelectorAll('.nsh-ribbon button')).find((x) => x.offsetParent !== null && !x.disabled);
+      b?.focus();
+      return !!b;
+    }
     const cs = applyRoving();
     cs[roving]?.focus();
     return !!cs.length;
@@ -25512,6 +25830,37 @@ export function createToolbar({ mount, hooks = {} }) {
   });
   applyRoving();
   fit();
+
+  // ---------- app shell layer 2: the controls move into the shell's ribbon ----------
+  // app-shell-001 sections 2 and 3.1, Excel profile. The shell draws the command row, the tabs, the groups and
+  // their order; each item is this toolbar's own button (kind 'element', decision D-A in the 2026-11-26 audit), so
+  // its popover, its active state and its parity attribute come with it. After this call the old row stays empty
+  // and stops folding. Import and Export sit in the Data tab: the File page also opens .csv/.xlsx/.ods and exports,
+  // but "Keep formatting" lives only in the Export menu.
+  const ribbonTabs = () => {
+    inRibbon = true;
+    for (const f of FOLDABLE) f.el.style.display = '';
+    const item = (el) => {
+      el.removeAttribute('tabindex');
+      return { id: el.dataset.k || el.title, label: el.title || el.getAttribute('aria-label') || '', kind: 'element', el };
+    };
+    const tab = (id, groups) => ({
+      id, get label() { return RK.t(`rb.${id}`); },
+      groups: groups.map(([gid, els]) => ({ id: gid, get label() { return RK.t(`rb.g.${gid}`); }, items: els.map(item) })),
+    });
+    return [
+      tab('home', [
+        ['clipboard', [painterBtn]], ['font', [fontBtn, boldBtn, italBtn, ulBtn, stBtn, fgBtn, fillBtn, bordBtn]],
+        ['alignment', [alL, alC, alR, vaBtn, wrapBtn, mergeBtn]], ['number', [fmtBtn, decMinus, decPlus]],
+        ['styles', [condBtn, tableBtn, stylesBtn]], ['cells', [insertBtn]], ['editing', [clearBtn, sortA, sortD, filterBtn]],
+      ]),
+      tab('insert', [['tables', [pivotBtn]], ['charts', [chartBtn]], ['analysis', [analyseBtn]]]),
+      tab('formulas', [['names', [nameBtn]]]),
+      tab('data', [['datatools', [dvBtn, dataBtn]], ['io', [importBtn, exportBtn]]]),
+      tab('review', [['protect', [protectBtn]]]),
+      tab('view', [['window', [freezeBtn]]]),
+    ];
+  };
 
   // ---------- reflect active cell + view state ----------
   const setActive = (def, state = {}) => {
@@ -25544,7 +25893,7 @@ export function createToolbar({ mount, hooks = {} }) {
     painterBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
   };
 
-  return { setActive, setHistory, setPainter, setProtected, closePop, focusRegion, applyRoving, fit, el: mount };
+  return { setActive, setHistory, setPainter, setProtected, closePop, focusRegion, applyRoving, fit, ribbonTabs, el: mount };
 }
 
 // single-file composition: register on the shared namespace
@@ -40100,11 +40449,15 @@ export function createApp({ client, params = new URLSearchParams() }) {
       state: () => shellHistory,
       locations: [folderLocation, nakRootLocation],
       agent: shellAgent(), // app shell layer 4
+      // app shell layer 2: the toolbar's controls in the shell's command row and ribbon (Excel tabs)
+      tabs: toolbar?.ribbonTabs?.() ?? [],
       // every command Reckon publishes, for the shell's live parity check (spec 10.8)
       published: () => (commandManifest?.commands ?? []).map((c) => c.name),
       // fixture and fresh runs never write real storage: AutoSave is off there (not stored)
       ...(ephemeral ? { autosave: false } : {}),
     });
+    // the ribbon holds the toolbar's controls now; the old row stays out of the layout
+    if (document.querySelector('.nsh-ribbon')) els.toolbar.style.display = 'none'; // CSSOM: #rk-toolbar's display:flex beats [hidden]
     // app-shell.js leaves the Ask pane's text box without a parity attribute;
     // what the person types there becomes assistant.ask
     document.querySelector('.nsh-pane .nsh-ask-form textarea')?.setAttribute('data-command', 'assistant.ask');
@@ -40119,6 +40472,15 @@ export function createApp({ client, params = new URLSearchParams() }) {
     });
     persistShellDoc(shell.info());
     setSaveStatus(describeStorage());
+    // One Ask (app-shell-001 10.1): where the shell's Ask shows (hosted, AI
+    // allowed), the formula bar's own Ask button steps aside; standalone it
+    // stays, because there the shell has no model to offer.
+    const syncAskButton = () => {
+      const b = document.getElementById('rk-ask-btn');
+      if (b) b.hidden = !!shell?.assistant?.available();
+    };
+    shell.onChange(syncAskButton);
+    syncAskButton();
   };
 
   // ---------- a stored workbook that does not load (review C1) ----------
@@ -40897,7 +41259,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
     return commandManifest;
   };
   // The assistant's tools and the parity check read the manifest, so load it now, standalone too.
-  void loadCommandManifest();
+  // Not over file://: Chrome refuses fetch there and logs an error (the file:// console-clean e2e check).
+  if (location.protocol !== 'file:') void loadCommandManifest();
   // the cell-level diff of planned ops: each cell's final planned entry (promo
   // P4: a sort's clear-then-write shows each cell's new value, never
   // "(cleared)"), with the current contents read for the first 12
@@ -41695,7 +42058,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
     // the likelier target, then the status line, then back to the grid.
     const regions = () => [
       { el: els.grid, label: $t('region.grid', 'Grid'), focus: () => { grid.focus(); return true; } },
-      { el: els.toolbar, label: $t('region.toolbar', 'Toolbar'), focus: () => toolbar?.focusRegion?.() },
+      // with the app shell's ribbon, the toolbar's controls live there (layer 2)
+      { el: document.querySelector('.nsh-ribbon') ?? els.toolbar, label: $t('region.toolbar', 'Toolbar'), focus: () => toolbar?.focusRegion?.() },
       { el: els.status, label: $t('region.status', 'Status line'), focus: () => { const b = els.settings ?? els.help; if (!b) return false; b.focus(); return true; } },
     ];
     let ringed = null;
