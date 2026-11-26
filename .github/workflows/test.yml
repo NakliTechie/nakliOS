@@ -722,8 +722,10 @@ jobs:
         run: node sys/ai/test/supersede-prune.test.mjs
       - name: Command parity
         run: node scripts/check-command-parity.mjs
+      - name: App shell check script catches broken manifests
+        run: node scripts/test-check-app-shell.mjs
       - name: App shell agent surface (spec 6.3, every app that vendors the shell)
-        run: node scripts/test-check-app-shell.mjs && node scripts/check-app-shell.mjs
+        run: node scripts/check-app-shell.mjs
       - name: File targets
         run: node sys/host/test/file-targets.test.mjs
       - name: Desktop widgets
