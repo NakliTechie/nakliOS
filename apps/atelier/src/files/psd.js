@@ -44,7 +44,7 @@ export function readPsdPlan(bytes) {
   const psd = readPsd(bytes, { useImageData: true, skipThumbnail: true, skipLinkedFilesData: true });
   const plan = { width: psd.width, height: psd.height, bits: psd.bitsPerChannel ?? 8, colorMode: psd.colorMode ?? 3, icc: psd.imageResources?.iccProfile || null, layers: [], skipped: [], notes: [] };
   if (plan.colorMode !== 3) plan.notes.push(`colour mode ${['bitmap', 'grayscale', 'indexed', 'RGB', 'CMYK', '', '', 'multichannel', 'duotone', 'Lab'][plan.colorMode] ?? plan.colorMode} converted to RGB by ag-psd`);
-  if (plan.bits !== 8) plan.notes.push(`${plan.bits}-bit channels reduced to 8-bit (Atelier raster layers are 8-bit)`);
+  if (plan.bits !== 8) plan.notes.push(`${plan.bits}-bit channels reduced to 8-bit (nPhoto raster layers are 8-bit)`);
   const skip = (name, reason) => plan.skipped.push({ name, reason });
 
   function walk(children, parent) {
@@ -54,15 +54,15 @@ export function readPsdPlan(bytes) {
       const blend = l.blendMode ?? 'normal';
       if (l.children) {
         const e = { ...base, kind: 'group', isolation: blend === 'pass through' ? 'pass-through' : 'isolated', blend: blend === 'pass through' ? 'normal' : PSD_BLEND_TO_ATELIER[blend] ?? 'normal' };
-        if (blend !== 'pass through' && !PSD_BLEND_TO_ATELIER[blend]) skip(name, `group blend mode "${blend}" has no Atelier equivalent; normal used`);
-        if (l.mask?.imageData && !l.mask.disabled) skip(name, 'group layer mask dropped (Atelier group masks take gradient or range components, not bitmaps)');
+        if (blend !== 'pass through' && !PSD_BLEND_TO_ATELIER[blend]) skip(name, `group blend mode "${blend}" has no nPhoto equivalent; normal used`);
+        if (l.mask?.imageData && !l.mask.disabled) skip(name, 'group layer mask dropped (nPhoto group masks take gradient or range components, not bitmaps)');
         if (l.effects) skip(name, 'layer effects not applied');
         plan.layers.push(e);
         walk(l.children, e.index);
         continue;
       }
       if (l.adjustment) { skip(name, `adjustment layer (${l.adjustment.type}) not rendered; ag-psd offers no composite for it`); continue; }
-      if (!PSD_BLEND_TO_ATELIER[blend]) skip(name, `blend mode "${blend}" has no Atelier equivalent; normal used`);
+      if (!PSD_BLEND_TO_ATELIER[blend]) skip(name, `blend mode "${blend}" has no nPhoto equivalent; normal used`);
       if (l.effects) skip(name, 'layer effects not applied (the pixels are the layer without its effects)');
       if (l.clipping) skip(name, 'clipping mask not kept; the layer shows unclipped');
       if (l.filterMask) skip(name, 'smart filter mask not kept');

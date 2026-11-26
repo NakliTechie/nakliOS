@@ -118,7 +118,7 @@ export function createAIPanel(root, ui) {
     ...(!dev() ? [h('button', { dataset: { command: 'smart_select' }, disabled: !doc()?.selection, title: 'Snaps a rough selection to the photo edges (no model)', onclick: async () => { const r = await send('smart_select', {}); if (r.status === 'ok') say(`Snapped the selection to edges (${r.result.refinedPixels} pixels refined).`); } }, 'Snap selection to edges'),
       h('button', { dataset: { command: 'refine_edge' }, disabled: !doc()?.selection, title: models.find((m) => m.id === MATTING_MODEL)?.status === 'ready' ? 'Soft edge for hair and fur with the ViTMatte model' : `Soft edge for hair and fur by a colour guided filter; download ${modelById(MATTING_MODEL).label} for the model`, onclick: async () => { const r = await send('refine_edge', { band: Number(edgeBand.value) }); if (r.status === 'ok') say(`Refined the edge (${r.result.method}): ${r.result.softPixels} soft pixels.`); } }, 'Refine edge'),
       h('span', {}, 'band'), edgeBand] : []));
-    note.textContent = 'Models download only when you click Download, run in this browser and never send your photos anywhere. Atelier works fully without them.';
+    note.textContent = 'Models download only when you click Download, run in this browser and never send your photos anywhere. nPhoto works fully without them.';
   }
 
   refresh().catch(() => {});

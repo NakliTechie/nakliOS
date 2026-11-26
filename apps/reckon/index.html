@@ -12,8 +12,8 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-Otz8uk1ooeQK52eTi0GaCgSKfk+0zPMTVhO7fCE/Tw8=' 'sha256-rTuttgmkJiqamaK38ZGZskOSkBNDO+nrrwOPHZeo/20=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Reckon</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOcPCTON9TM/wHde/sIqyQuj/5kps2ujufLa2uUCyEg=' 'sha256-Otz8uk1ooeQK52eTi0GaCgSKfk+0zPMTVhO7fCE/Tw8=' 'sha256-lzxraNUjxweIcvuCn4adfDt+VrH3zJ4Caq0JLFLcrS4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>nSheet</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
   /* ================= Reckon tokens (handoff §8) =================
@@ -1860,7 +1860,7 @@ form fieldset select {
       <input id="rk-fx" type="text" aria-label="Formula bar" spellcheck="false" autocomplete="off" readonly data-command="range.write">
     </div>
     <button id="rk-ai-hint" type="button" class="rk-dim" aria-label="Draft a formula with AI" data-parity="person: the in-app model drafts a formula that the person accepts or discards">=?</button>
-    <button id="rk-ask-btn" type="button" aria-label="Ask Reckon" title="Ask Reckon or explain the workbook (Ctrl/Cmd+Shift+K)" data-command="assistant.ask">Ask</button>
+    <button id="rk-ask-btn" type="button" aria-label="Ask nSheet" title="Ask nSheet or explain the workbook (Ctrl/Cmd+Shift+K)" data-command="assistant.ask">Ask</button>
   </header>
   <div id="rk-sidecar" hidden data-parity="person: the formula helper's suggestion waits for the person to accept it"></div>
   <div id="rk-toolbar" role="toolbar" aria-label="Formatting and data"></div>
@@ -6904,7 +6904,7 @@ export function ensureSeamRegistered(HF) {
         if (kind === 'contents') return isBlank(v) ? '' : v;
         return isBlank(v) ? 'b' : typeof v === 'string' ? 'l' : 'v';
       }
-      return new CellError(ErrorType.VALUE, `CELL("${kind}") is not supported; Reckon supports address, col, row, contents and type`);
+      return new CellError(ErrorType.VALUE, `CELL("${kind}") is not supported; nSheet supports address, col, row, contents and type`);
     }
     fixed(ast, state) {
       return this.runFunction(ast.args, state, this.metadata('FIXED'), (x, decimals, noCommas) => {
@@ -8150,7 +8150,7 @@ export function ensureSeamRegistered(HF) {
 export function assertLicensed(hf) {
   const state = hf && hf.licenseKeyValidityState;
   if (state !== undefined && state !== 'valid') {
-    throw new Error(`HyperFormula licence key rejected (state: ${state}); Reckon must pass licenseKey 'gpl-v3'`);
+    throw new Error(`HyperFormula licence key rejected (state: ${state}); nSheet must pass licenseKey 'gpl-v3'`);
   }
   return hf;
 }
@@ -11340,7 +11340,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   const note = (o) => { notes.push(o); };
 
   // macros / VBA — stripped: we only ever emit .reckon.json, never the vbaraw
-  if (wb.vbaraw) note({ sheet: '*', kind: 'macros', ...ioNote('ionote.macros', 'Macro / VBA project removed ({n} bytes). Reckon does not run macros.', { n: wb.vbaraw.length ?? '?' }) });
+  if (wb.vbaraw) note({ sheet: '*', kind: 'macros', ...ioNote('ionote.macros', 'Macro / VBA project removed ({n} bytes). nSheet does not run macros.', { n: wb.vbaraw.length ?? '?' }) });
   // styling that the escape hatch does not import — stated once, honestly
   // (wording and fill mapping: see the XLSX cell styles block below)
   note({ sheet: '*', kind: 'formatting', ...ioNote('ionote.styleImport', XLSX_STYLE_IMPORT_NOTE) });
@@ -11468,7 +11468,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   for (const n of styleImportNotes(styleStats)) note(n);
   fx.finish();
   if (truncated) note({ sheet: '*', kind: 'truncated', ...ioNote('ionote.truncated', 'Import stopped at {n} cells; the workbook is larger.', { n: maxCells }) });
-  if (shifted) note({ sheet: '*', kind: 'date1904', ...ioNote(`ionote.date1904.${shifted > 1 ? 'many' : 'one'}`, `The file uses the 1904 date system. {n} date cell${shifted > 1 ? 's were' : ' was'} moved by 1,462 days so they show the same dates in Reckon's 1900 system. Dates typed as numbers in formulas were not changed.`, { n: shifted }) });
+  if (shifted) note({ sheet: '*', kind: 'date1904', ...ioNote(`ionote.date1904.${shifted > 1 ? 'many' : 'one'}`, `The file uses the 1904 date system. {n} date cell${shifted > 1 ? 's were' : ' was'} moved by 1,462 days so they show the same dates in nSheet's 1900 system. Dates typed as numbers in formulas were not changed.`, { n: shifted }) });
   else if (date1904) note({ sheet: '*', kind: 'date1904', ...ioNote('ionote.date1904.none', 'The file uses the 1904 date system; it has no date cells to convert. Dates typed as numbers in formulas were not changed.') });
   // pivot tables are not imported; their cached values stay as plain cells
   const pivotParts = Object.keys(wb.files ?? {}).filter((p) => /(^|\/)xl\/pivotTables\/pivotTable[^/]*\.xml$/i.test(p)).length;
@@ -11485,7 +11485,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   for (const d of defs) {
     if (!d || typeof d.Name !== 'string') continue;
     if (/^_xlnm\./i.test(d.Name)) { note({ sheet: '*', cell: null, kind: 'defined-name', ...ioNote('ionote.builtinName', 'Built-in name {name} skipped.', { name: d.Name }) }); continue; }
-    if (!/^[A-Za-z_][A-Za-z0-9_.]{0,254}$/.test(d.Name)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.badName', 'Name "{name}" is not a valid Reckon identifier; skipped.', { name: d.Name }) }); continue; }
+    if (!/^[A-Za-z_][A-Za-z0-9_.]{0,254}$/.test(d.Name)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.badName', 'Name "{name}" is not a valid nSheet identifier; skipped.', { name: d.Name }) }); continue; }
     const ref = String(d.Ref ?? '');
     if (!ref || isExternalFormula(ref)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.externalName', 'Name "{name}" references another workbook, a file path or a DDE program; skipped.', { name: d.Name }) }); continue; }
     names[d.Name] = ref.startsWith('=') ? ref : `=${ref}`;
@@ -11646,7 +11646,7 @@ function xlsxFormulaFixer(wb, note) {
       return out;
     },
     finish() {
-      if (allLive) note({ sheet: '*', kind: 'table-import', ...ioNote('ionote.tablesLive', '{n} Excel Table(s) imported as Reckon tables ({names}); formulas keep their Table references.', { n: tables.length, names: live.map((x) => x.table.name).join(', ') }) });
+      if (allLive) note({ sheet: '*', kind: 'table-import', ...ioNote('ionote.tablesLive', '{n} Excel Table(s) imported as nSheet tables ({names}); formulas keep their Table references.', { n: tables.length, names: live.map((x) => x.table.name).join(', ') }) });
       else if (tables.length) note({ sheet: '*', kind: 'tables', ...ioNote('ionote.tablesPlain', '{n} Excel Table(s) imported as plain ranges; Table references in formulas were rewritten to cell ranges.', { n: tables.length }) });
       for (const u of unresolved) {
         note({ sheet: u.sheet, cell: u.a1, kind: 'structured-ref', ...ioNote('ionote.structuredRef', 'Table reference not resolved: {refs}. The cell will show #NAME? until you rewrite it as a cell range.', { refs: u.refs.join(', ') }) });
@@ -11716,7 +11716,7 @@ function importCellFormat(cell, sheetName, stats) {
 function styleImportNotes(stats) {
   return Object.entries(stats.fills).map(([sheet, n]) => ({
     sheet, kind: 'formatting',
-    ...ioNote(`ionote.fillMapped.${n > 1 ? 'many' : 'one'}`, `{n} cell${n > 1 ? 's' : ''}: fill colour mapped to the nearest grey (Reckon fills use a neutral palette and one accent).`, { n }),
+    ...ioNote(`ionote.fillMapped.${n > 1 ? 'many' : 'one'}`, `{n} cell${n > 1 ? 's' : ''}: fill colour mapped to the nearest grey (nSheet fills use a neutral palette and one accent).`, { n }),
   }));
 }
 // export side: per sheet, how many cells carry a style SheetJS CE cannot write
@@ -11894,7 +11894,7 @@ function importHyperlinks(ws, cells, sheetName, note) {
     n += 1;
     if (!RK.openableLinkUrl(target)) inside += 1;
   }
-  if (n) note({ sheet: sheetName, kind: 'hyperlinks', detail: `${n} hyperlink${n > 1 ? 's' : ''} imported as =HYPERLINK formulas.${inside ? ` ${inside} of them point inside the workbook or to a file; Reckon opens only http, https and mailto links.` : ''}` });
+  if (n) note({ sheet: sheetName, kind: 'hyperlinks', detail: `${n} hyperlink${n > 1 ? 's' : ''} imported as =HYPERLINK formulas.${inside ? ` ${inside} of them point inside the workbook or to a file; nSheet opens only http, https and mailto links.` : ''}` });
 }
 const HYPERLINK_RE = /^=?\s*HYPERLINK\(\s*"((?:[^"]|"")*)"/i;
 export function hyperlinkTarget(f) {
@@ -11938,7 +11938,7 @@ function importSheetState(sheet, info, xml, ws, note) {
     const c = Math.max(0, Math.floor(Number(xmlAttr(pane[0], 'xSplit')) || 0));
     const r = Math.max(0, Math.floor(Number(xmlAttr(pane[0], 'ySplit')) || 0));
     if (r || c) sheet.freeze = { r: Math.min(r, 1048575), c: Math.min(c, 16383) };
-  } else if (pane) note({ sheet: name, kind: 'sheet-state', ...ioNote('ionote.splitPanes', 'Split panes not imported: Reckon freezes panes but does not split them.') });
+  } else if (pane) note({ sheet: name, kind: 'sheet-state', ...ioNote('ionote.splitPanes', 'Split panes not imported: nSheet freezes panes but does not split them.') });
   const prot = /<sheetProtection\b[^>]*>/.exec(x);
   if ((prot && xmlAttr(prot[0], 'sheet') !== '0' && xmlAttr(prot[0], 'sheet') !== 'false') || (ws && ws['!protect'])) {
     sheet.protected = true;
@@ -15948,7 +15948,7 @@ export async function createCrateFacade({ backends, isReadOnly = () => false } =
   const notify = () => listeners.forEach((fn) => { try { fn(facade.status()); } catch { /* ignore */ } });
 
   const doSave = async (bytes, { force = false } = {}) => {
-    if (isReadOnly()) throw facadeError('read-only', 'this tab is read-only, because another Reckon tab is editing the workbook');
+    if (isReadOnly()) throw facadeError('read-only', 'this tab is read-only, because another nSheet tab is editing the workbook');
     if (!force && knownStamp !== undefined) {
       const now = await stampOf();
       if (now !== undefined && now !== knownStamp) {
@@ -17789,7 +17789,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   const note = (o) => { notes.push(o); };
 
   // macros / VBA — stripped: we only ever emit .reckon.json, never the vbaraw
-  if (wb.vbaraw) note({ sheet: '*', kind: 'macros', ...ioNote('ionote.macros', 'Macro / VBA project removed ({n} bytes). Reckon does not run macros.', { n: wb.vbaraw.length ?? '?' }) });
+  if (wb.vbaraw) note({ sheet: '*', kind: 'macros', ...ioNote('ionote.macros', 'Macro / VBA project removed ({n} bytes). nSheet does not run macros.', { n: wb.vbaraw.length ?? '?' }) });
   // styling that the escape hatch does not import — stated once, honestly
   // (wording and fill mapping: see the XLSX cell styles block below)
   note({ sheet: '*', kind: 'formatting', ...ioNote('ionote.styleImport', XLSX_STYLE_IMPORT_NOTE) });
@@ -17917,7 +17917,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   for (const n of styleImportNotes(styleStats)) note(n);
   fx.finish();
   if (truncated) note({ sheet: '*', kind: 'truncated', ...ioNote('ionote.truncated', 'Import stopped at {n} cells; the workbook is larger.', { n: maxCells }) });
-  if (shifted) note({ sheet: '*', kind: 'date1904', ...ioNote(`ionote.date1904.${shifted > 1 ? 'many' : 'one'}`, `The file uses the 1904 date system. {n} date cell${shifted > 1 ? 's were' : ' was'} moved by 1,462 days so they show the same dates in Reckon's 1900 system. Dates typed as numbers in formulas were not changed.`, { n: shifted }) });
+  if (shifted) note({ sheet: '*', kind: 'date1904', ...ioNote(`ionote.date1904.${shifted > 1 ? 'many' : 'one'}`, `The file uses the 1904 date system. {n} date cell${shifted > 1 ? 's were' : ' was'} moved by 1,462 days so they show the same dates in nSheet's 1900 system. Dates typed as numbers in formulas were not changed.`, { n: shifted }) });
   else if (date1904) note({ sheet: '*', kind: 'date1904', ...ioNote('ionote.date1904.none', 'The file uses the 1904 date system; it has no date cells to convert. Dates typed as numbers in formulas were not changed.') });
   // pivot tables are not imported; their cached values stay as plain cells
   const pivotParts = Object.keys(wb.files ?? {}).filter((p) => /(^|\/)xl\/pivotTables\/pivotTable[^/]*\.xml$/i.test(p)).length;
@@ -17934,7 +17934,7 @@ export function xlsxImport(data, { maxCells = IMPORT_MAX_CELLS, onProgress = nul
   for (const d of defs) {
     if (!d || typeof d.Name !== 'string') continue;
     if (/^_xlnm\./i.test(d.Name)) { note({ sheet: '*', cell: null, kind: 'defined-name', ...ioNote('ionote.builtinName', 'Built-in name {name} skipped.', { name: d.Name }) }); continue; }
-    if (!/^[A-Za-z_][A-Za-z0-9_.]{0,254}$/.test(d.Name)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.badName', 'Name "{name}" is not a valid Reckon identifier; skipped.', { name: d.Name }) }); continue; }
+    if (!/^[A-Za-z_][A-Za-z0-9_.]{0,254}$/.test(d.Name)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.badName', 'Name "{name}" is not a valid nSheet identifier; skipped.', { name: d.Name }) }); continue; }
     const ref = String(d.Ref ?? '');
     if (!ref || isExternalFormula(ref)) { note({ sheet: '*', kind: 'defined-name', ...ioNote('ionote.externalName', 'Name "{name}" references another workbook, a file path or a DDE program; skipped.', { name: d.Name }) }); continue; }
     names[d.Name] = ref.startsWith('=') ? ref : `=${ref}`;
@@ -18095,7 +18095,7 @@ function xlsxFormulaFixer(wb, note) {
       return out;
     },
     finish() {
-      if (allLive) note({ sheet: '*', kind: 'table-import', ...ioNote('ionote.tablesLive', '{n} Excel Table(s) imported as Reckon tables ({names}); formulas keep their Table references.', { n: tables.length, names: live.map((x) => x.table.name).join(', ') }) });
+      if (allLive) note({ sheet: '*', kind: 'table-import', ...ioNote('ionote.tablesLive', '{n} Excel Table(s) imported as nSheet tables ({names}); formulas keep their Table references.', { n: tables.length, names: live.map((x) => x.table.name).join(', ') }) });
       else if (tables.length) note({ sheet: '*', kind: 'tables', ...ioNote('ionote.tablesPlain', '{n} Excel Table(s) imported as plain ranges; Table references in formulas were rewritten to cell ranges.', { n: tables.length }) });
       for (const u of unresolved) {
         note({ sheet: u.sheet, cell: u.a1, kind: 'structured-ref', ...ioNote('ionote.structuredRef', 'Table reference not resolved: {refs}. The cell will show #NAME? until you rewrite it as a cell range.', { refs: u.refs.join(', ') }) });
@@ -18165,7 +18165,7 @@ function importCellFormat(cell, sheetName, stats) {
 function styleImportNotes(stats) {
   return Object.entries(stats.fills).map(([sheet, n]) => ({
     sheet, kind: 'formatting',
-    ...ioNote(`ionote.fillMapped.${n > 1 ? 'many' : 'one'}`, `{n} cell${n > 1 ? 's' : ''}: fill colour mapped to the nearest grey (Reckon fills use a neutral palette and one accent).`, { n }),
+    ...ioNote(`ionote.fillMapped.${n > 1 ? 'many' : 'one'}`, `{n} cell${n > 1 ? 's' : ''}: fill colour mapped to the nearest grey (nSheet fills use a neutral palette and one accent).`, { n }),
   }));
 }
 // export side: per sheet, how many cells carry a style SheetJS CE cannot write
@@ -18343,7 +18343,7 @@ function importHyperlinks(ws, cells, sheetName, note) {
     n += 1;
     if (!RK.openableLinkUrl(target)) inside += 1;
   }
-  if (n) note({ sheet: sheetName, kind: 'hyperlinks', detail: `${n} hyperlink${n > 1 ? 's' : ''} imported as =HYPERLINK formulas.${inside ? ` ${inside} of them point inside the workbook or to a file; Reckon opens only http, https and mailto links.` : ''}` });
+  if (n) note({ sheet: sheetName, kind: 'hyperlinks', detail: `${n} hyperlink${n > 1 ? 's' : ''} imported as =HYPERLINK formulas.${inside ? ` ${inside} of them point inside the workbook or to a file; nSheet opens only http, https and mailto links.` : ''}` });
 }
 const HYPERLINK_RE = /^=?\s*HYPERLINK\(\s*"((?:[^"]|"")*)"/i;
 export function hyperlinkTarget(f) {
@@ -18387,7 +18387,7 @@ function importSheetState(sheet, info, xml, ws, note) {
     const c = Math.max(0, Math.floor(Number(xmlAttr(pane[0], 'xSplit')) || 0));
     const r = Math.max(0, Math.floor(Number(xmlAttr(pane[0], 'ySplit')) || 0));
     if (r || c) sheet.freeze = { r: Math.min(r, 1048575), c: Math.min(c, 16383) };
-  } else if (pane) note({ sheet: name, kind: 'sheet-state', ...ioNote('ionote.splitPanes', 'Split panes not imported: Reckon freezes panes but does not split them.') });
+  } else if (pane) note({ sheet: name, kind: 'sheet-state', ...ioNote('ionote.splitPanes', 'Split panes not imported: nSheet freezes panes but does not split them.') });
   const prot = /<sheetProtection\b[^>]*>/.exec(x);
   if ((prot && xmlAttr(prot[0], 'sheet') !== '0' && xmlAttr(prot[0], 'sheet') !== 'false') || (ws && ws['!protect'])) {
     sheet.protected = true;
@@ -20886,12 +20886,12 @@ const LOCALES = ['en', 'hi'];
 const STR = {
   // --- empty state / welcome ---
   'empty.open':        { en: 'Open a folder to keep your workbooks on your disk', hi: 'अपनी वर्कबुक अपनी डिस्क पर रखने के लिए एक फ़ोल्डर खोलें' },
-  'io.notExcel':       { en: '{file} is not an Excel file, so Reckon did not import it.', hi: '{file} Excel फ़ाइल नहीं है, इसलिए Reckon ने इसे आयात नहीं किया।' },
-  'io.notOds':         { en: '{file} is not an OpenDocument spreadsheet, so Reckon did not import it.', hi: '{file} OpenDocument स्प्रेडशीट नहीं है, इसलिए Reckon ने इसे आयात नहीं किया।' },
+  'io.notExcel':       { en: '{file} is not an Excel file, so nSheet did not import it.', hi: '{file} Excel फ़ाइल नहीं है, इसलिए nSheet ने इसे आयात नहीं किया।' },
+  'io.notOds':         { en: '{file} is not an OpenDocument spreadsheet, so nSheet did not import it.', hi: '{file} OpenDocument स्प्रेडशीट नहीं है, इसलिए nSheet ने इसे आयात नहीं किया।' },
   'empty.openShort':   { en: 'Open folder', hi: 'फ़ोल्डर खोलें' },
   'a11y.help':         { en: 'Help', hi: 'मदद' },
   'fsa.cancelled':     { en: 'No folder chosen — still saving in this browser', hi: 'कोई फ़ोल्डर नहीं चुना — अभी भी इसी ब्राउज़र में सहेजा जा रहा है' },
-  'fsa.unavailable':   { en: "This browser can't open folders; Reckon is saving in browser storage instead", hi: 'यह ब्राउज़र फ़ोल्डर नहीं खोल सकता; Reckon इसके बजाय ब्राउज़र स्टोरेज में सहेज रहा है' },
+  'fsa.unavailable':   { en: "This browser can't open folders; nSheet is saving in browser storage instead", hi: 'यह ब्राउज़र फ़ोल्डर नहीं खोल सकता; nSheet इसके बजाय ब्राउज़र स्टोरेज में सहेज रहा है' },
 
   // --- grid and editing (parity v1: context menu, tabs, insert/delete, hide, merge) ---
   'tb.merge': { en: 'Merge cells', hi: 'सेल मर्ज करें' },
@@ -21224,7 +21224,7 @@ const STR = {
   'io.csvSheet':       { en: 'CSV (this sheet)', hi: 'CSV (यह शीट)' },
   'io.xlsx':           { en: 'Excel (.xlsx)', hi: 'Excel (.xlsx)' },
   'io.xlsxImport':     { en: 'Excel (.xlsx)…', hi: 'Excel (.xlsx) आयात…' },
-  'io.reckon':         { en: 'Reckon (.reckon.json)', hi: 'Reckon (.reckon.json)' },
+  'io.reckon':         { en: 'nSheet (.reckon.json)', hi: 'nSheet (.reckon.json)' },
   // parity v1.x (X7, X9, X12)
   'io.ods':            { en: 'OpenDocument (.ods)', hi: 'OpenDocument (.ods)' },
   'io.odsImport':      { en: 'OpenDocument (.ods)…', hi: 'OpenDocument (.ods) आयात…' },
@@ -21282,7 +21282,7 @@ const STR = {
   'hist.none':         { en: 'No transactions yet.', hi: 'अभी कोई लेन-देन नहीं।' },
 
   // --- help modal ---
-  'help.title':        { en: 'Reckon help', hi: 'Reckon मदद' },
+  'help.title':        { en: 'nSheet help', hi: 'nSheet मदद' },
   'help.lede':         { en: 'An instrument, not a service — your workbook stays on your disk. Nothing phones home.', hi: 'एक उपकरण, सेवा नहीं — आपकी वर्कबुक आपकी डिस्क पर रहती है। कुछ भी बाहर नहीं भेजा जाता।' },
   'help.dataLives':    { en: 'Where your data lives', hi: 'आपका डेटा कहाँ रहता है' },
   'help.folderGranted':{ en: 'The workbook file', hi: 'वर्कबुक फ़ाइल' },
@@ -21296,7 +21296,7 @@ const STR = {
   'help.formulasD':    { en: 'Array results (FILTER, SORT, SORTBY, UNIQUE, SEQUENCE, TAKE, TOCOL and similar) fill the cells next to the formula and show #SPILL! when those cells are not empty. Limits: SORT sorts by one key (use SORTBY for several); SEQUENCE, RANDARRAY, WRAPROWS, WRAPCOLS and EXPAND need sizes typed as numbers; TEXTSPLIT fills cells only for typed text, so for a cell use INDEX(TEXTSPLIT(A1, ","), 1, 2). LET and LAMBDA work, with the limits below.', hi: 'ऐरे परिणाम (FILTER, SORT, SORTBY, UNIQUE, SEQUENCE, TAKE, TOCOL और इसी तरह के) फ़ॉर्मूले के पास की सेल भरते हैं और वे सेल खाली न हों तो #SPILL! दिखाते हैं। सीमाएँ: SORT एक ही कुंजी से क्रमबद्ध करता है (कई के लिए SORTBY इस्तेमाल करें); SEQUENCE, RANDARRAY, WRAPROWS, WRAPCOLS और EXPAND को आकार संख्या के रूप में टाइप चाहिए; TEXTSPLIT केवल टाइप किए गए टेक्स्ट के लिए सेल भरता है, इसलिए किसी सेल के लिए INDEX(TEXTSPLIT(A1, ","), 1, 2) इस्तेमाल करें। LET और LAMBDA काम करते हैं, नीचे की सीमाओं के साथ।' },
   // parity v1.x (F7, F8, F10)
   'help.formulasL':    { en: 'LAMBDA works when it is called at once (LAMBDA(x, x+1)(A1)), through a LET name, through a name whose value is =LAMBDA(...) (call it as MyFn(A1)), and inside MAP, REDUCE, SCAN, BYROW, BYCOL and MAKEARRAY; ISOMITTED tells an omitted argument. Limits: a named LAMBDA cannot call itself (no recursion); a LAMBDA handed in as an argument cannot be called by name inside another LAMBDA; REDUCE and SCAN keep one value, not an array; MAKEARRAY needs its sizes typed as numbers. REGEXMATCH, REGEXEXTRACT and REGEXREPLACE follow Google Sheets and take text only; patterns over 500 characters, text over 32,768 characters and nested repeats such as (a+)+ give #VALUE!. Bond functions (PRICE, YIELD, DURATION, MDURATION, ACCRINT, ACCRINTM, DISC, PRICEDISC, YIELDDISC and the COUP family) take all five day-count bases.', hi: 'LAMBDA तब काम करता है जब उसे तुरंत बुलाया जाए (LAMBDA(x, x+1)(A1)), किसी LET नाम के ज़रिए, किसी ऐसे नाम के ज़रिए जिसका मान =LAMBDA(...) हो (इसे MyFn(A1) की तरह बुलाएँ), और MAP, REDUCE, SCAN, BYROW, BYCOL और MAKEARRAY के अंदर; ISOMITTED छोड़ा गया तर्क बताता है। सीमाएँ: नामित LAMBDA खुद को नहीं बुला सकता (कोई पुनरावृत्ति नहीं); तर्क के रूप में दिया गया LAMBDA किसी दूसरे LAMBDA के अंदर नाम से नहीं बुलाया जा सकता; REDUCE और SCAN एक ही मान रखते हैं, ऐरे नहीं; MAKEARRAY को आकार संख्या के रूप में टाइप चाहिए। REGEXMATCH, REGEXEXTRACT और REGEXREPLACE Google Sheets की तरह चलते हैं और केवल टेक्स्ट लेते हैं; 500 अक्षरों से लंबे पैटर्न, 32,768 अक्षरों से लंबा टेक्स्ट और (a+)+ जैसे नेस्टेड दोहराव #VALUE! देते हैं। बॉन्ड फ़ंक्शन (PRICE, YIELD, DURATION, MDURATION, ACCRINT, ACCRINTM, DISC, PRICEDISC, YIELDDISC और COUP परिवार) पाँचों दिन-गणना आधार लेते हैं।' },
-  'help.screenD':      { en: 'Reckon\u2019s minimum comfortable viewport is 768 px wide \u2014 a cell grid is not a phone surface. That is about comfort, never a licence to hide a control: below that width the toolbar folds its lowest-priority controls into the \u22ef menu instead of letting them fall off the edge, and every control stays at least 24\u00d724 px.', hi: 'Reckon \u0915\u093e \u0928\u094d\u092f\u0942\u0928\u0924\u092e \u0906\u0930\u093e\u092e\u0926\u093e\u092f\u0915 \u0935\u094d\u092f\u0942\u092a\u094b\u0930\u094d\u091f 768 px \u091a\u094c\u0921\u093c\u093e \u0939\u0948 \u2014 \u0938\u0947\u0932 \u0917\u094d\u0930\u093f\u0921 \u092b\u093c\u094b\u0928 \u0915\u0940 \u0938\u0924\u0939 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u092f\u0939 \u0906\u0930\u093e\u092e \u0915\u0940 \u092c\u093e\u0924 \u0939\u0948, \u0915\u093f\u0938\u0940 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u094b \u091b\u093f\u092a\u093e\u0928\u0947 \u0915\u0940 \u091b\u0942\u091f \u0928\u0939\u0940\u0902: \u0909\u0938\u0938\u0947 \u0938\u0902\u0915\u0930\u0940 \u091a\u094c\u0921\u093c\u093e\u0908 \u092a\u0930 \u091f\u0942\u0932\u092c\u093e\u0930 \u0905\u092a\u0928\u0947 \u0915\u092e-\u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e \u0935\u093e\u0932\u0947 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u22ef \u092e\u0947\u0928\u0942 \u092e\u0947\u0902 \u092e\u094b\u0921\u093c \u0926\u0947\u0924\u093e \u0939\u0948, \u0914\u0930 \u0939\u0930 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u092e \u0938\u0947 \u0915\u092e 24\u00d724 px \u0930\u0939\u0924\u093e \u0939\u0948\u0964' },
+  'help.screenD':      { en: 'nSheet\u2019s minimum comfortable viewport is 768 px wide \u2014 a cell grid is not a phone surface. That is about comfort, never a licence to hide a control: below that width the toolbar folds its lowest-priority controls into the \u22ef menu instead of letting them fall off the edge, and every control stays at least 24\u00d724 px.', hi: 'nSheet \u0915\u093e \u0928\u094d\u092f\u0942\u0928\u0924\u092e \u0906\u0930\u093e\u092e\u0926\u093e\u092f\u0915 \u0935\u094d\u092f\u0942\u092a\u094b\u0930\u094d\u091f 768 px \u091a\u094c\u0921\u093c\u093e \u0939\u0948 \u2014 \u0938\u0947\u0932 \u0917\u094d\u0930\u093f\u0921 \u092b\u093c\u094b\u0928 \u0915\u0940 \u0938\u0924\u0939 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u092f\u0939 \u0906\u0930\u093e\u092e \u0915\u0940 \u092c\u093e\u0924 \u0939\u0948, \u0915\u093f\u0938\u0940 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u094b \u091b\u093f\u092a\u093e\u0928\u0947 \u0915\u0940 \u091b\u0942\u091f \u0928\u0939\u0940\u0902: \u0909\u0938\u0938\u0947 \u0938\u0902\u0915\u0930\u0940 \u091a\u094c\u0921\u093c\u093e\u0908 \u092a\u0930 \u091f\u0942\u0932\u092c\u093e\u0930 \u0905\u092a\u0928\u0947 \u0915\u092e-\u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e \u0935\u093e\u0932\u0947 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u22ef \u092e\u0947\u0928\u0942 \u092e\u0947\u0902 \u092e\u094b\u0921\u093c \u0926\u0947\u0924\u093e \u0939\u0948, \u0914\u0930 \u0939\u0930 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u092e \u0938\u0947 \u0915\u092e 24\u00d724 px \u0930\u0939\u0924\u093e \u0939\u0948\u0964' },
   'help.conflicts':    { en: 'Known conflicts: the browser owns ⌘/Ctrl+N/T/W; Ctrl+Space may collide with OS input switching — click the column header instead.', hi: 'ज्ञात टकराव: ⌘/Ctrl+N/T/W ब्राउज़र के अधीन हैं; Ctrl+Space OS इनपुट-स्विचिंग से टकरा सकता है — इसके बजाय कॉलम शीर्ष पर क्लिक करें।' },
   'help.privacyTitle': { en: 'Privacy — what leaves your device', hi: 'निजता — आपके डिवाइस से क्या बाहर जाता है' },
 
@@ -21328,11 +21328,11 @@ const STR = {
   'ai.webgpuNote':     { en: 'Runs a small model entirely in your browser. The model downloads on first use (about 1 GB) — nothing downloads until you enable it.', hi: 'एक छोटा मॉडल पूरी तरह आपके ब्राउज़र में चलाता है। मॉडल पहली बार उपयोग पर डाउनलोड होता है (लगभग 1 GB) — सक्षम करने तक कुछ डाउनलोड नहीं होता।' },
   'ai.webgpuNone':     { en: 'This browser has no WebGPU — on-device inference is unavailable here.', hi: 'इस ब्राउज़र में WebGPU नहीं है — यहाँ डिवाइस-पर अनुमान उपलब्ध नहीं है।' },
   'ai.byokH':          { en: 'Bring your own key (BYOK)', hi: 'अपनी कुंजी लाएँ (BYOK)' },
-  'ai.byokNote':       { en: 'Your key is stored in this browser only (IndexedDB) and is sent ONLY to the provider you name — never to Reckon’s origin. The context slice goes to their service.', hi: 'आपकी कुंजी केवल इसी ब्राउज़र में (IndexedDB) रखी जाती है और केवल उसी प्रदाता को भेजी जाती है जिसे आप नाम देते हैं — कभी Reckon के मूल को नहीं। संदर्भ अंश उनकी सेवा को जाता है।' },
+  'ai.byokNote':       { en: 'Your key is stored in this browser only (IndexedDB) and is sent ONLY to the provider you name — never to nSheet’s origin. The context slice goes to their service.', hi: 'आपकी कुंजी केवल इसी ब्राउज़र में (IndexedDB) रखी जाती है और केवल उसी प्रदाता को भेजी जाती है जिसे आप नाम देते हैं — कभी nSheet के मूल को नहीं। संदर्भ अंश उनकी सेवा को जाता है।' },
   'ai.hostH':          { en: 'NakliOS model', hi: 'NakliOS मॉडल' },
-  'ai.hostNote':       { en: 'Inside NakliOS, Reckon uses the model you chose in NakliOS Settings → AI before any rung below. NakliOS asks before the first use. Only the bounded context slice is sent, and only when you press Send.', hi: 'NakliOS के अंदर, Reckon नीचे के किसी भी स्तर से पहले वही मॉडल इस्तेमाल करता है जो आपने NakliOS Settings → AI में चुना है। पहली बार इस्तेमाल से पहले NakliOS अनुमति माँगता है। केवल सीमित संदर्भ अंश भेजा जाता है, और केवल तब जब आप भेजें दबाते हैं।' },
+  'ai.hostNote':       { en: 'Inside NakliOS, nSheet uses the model you chose in NakliOS Settings → AI before any rung below. NakliOS asks before the first use. Only the bounded context slice is sent, and only when you press Send.', hi: 'NakliOS के अंदर, nSheet नीचे के किसी भी स्तर से पहले वही मॉडल इस्तेमाल करता है जो आपने NakliOS Settings → AI में चुना है। पहली बार इस्तेमाल से पहले NakliOS अनुमति माँगता है। केवल सीमित संदर्भ अंश भेजा जाता है, और केवल तब जब आप भेजें दबाते हैं।' },
   'ai.hostInUse':      { en: 'In use', hi: 'उपयोग में' },
-  'ai.hostNone':       { en: 'NakliOS offers no model to Reckon right now. Choose one in NakliOS Settings → AI, or use a rung below.', hi: 'NakliOS अभी Reckon को कोई मॉडल नहीं दे रहा। NakliOS Settings → AI में एक चुनें, या नीचे का कोई स्तर इस्तेमाल करें।' },
+  'ai.hostNone':       { en: 'NakliOS offers no model to nSheet right now. Choose one in NakliOS Settings → AI, or use a rung below.', hi: 'NakliOS अभी nSheet को कोई मॉडल नहीं दे रहा। NakliOS Settings → AI में एक चुनें, या नीचे का कोई स्तर इस्तेमाल करें।' },
   'ai.saveKey':        { en: 'Save key', hi: 'कुंजी सहेजें' },
   'ai.remove':         { en: 'Remove', hi: 'हटाएँ' },
 
@@ -21362,17 +21362,17 @@ const STR = {
   'ff.noPattern':      { en: 'No pattern fits the examples. Type one more example, then press Ctrl/Cmd+E again.', hi: 'उदाहरणों में कोई पैटर्न नहीं मिला। एक और उदाहरण टाइप करें, फिर Ctrl/Cmd+E दोबारा दबाएँ।' },
   'ff.nothingToFill':  { en: 'The examples fit a pattern, but there are no blank cells below them to fill.', hi: 'उदाहरणों में पैटर्न मिला, पर उनके नीचे भरने के लिए कोई खाली सेल नहीं है।' },
   'ff.askingModel':    { en: 'No pattern found, so asking', hi: 'कोई पैटर्न नहीं मिला, इसलिए पूछ रहे हैं' },
-  'as.askTitle':       { en: 'Ask Reckon', hi: 'Reckon से पूछें' },
+  'as.askTitle':       { en: 'Ask nSheet', hi: 'nSheet से पूछें' },
   'as.explainTitle':   { en: 'Explain the workbook', hi: 'वर्कबुक समझाएँ' },
   'as.explainBook':    { en: 'Explain the workbook', hi: 'वर्कबुक समझाएँ' },
   'as.askPlaceholder': { en: 'Say what to change, e.g. "sort by Sales, largest first, and make the header bold"', hi: 'बताइए क्या बदलना है, जैसे "Sales के हिसाब से क्रमबद्ध करें, सबसे बड़ा पहले, और शीर्षक बोल्ड करें"' },
-  'as.noModelAsk':     { en: 'Ask Reckon needs a model. Choose one in NakliOS Settings, AI, or add the local bridge or a key in AI settings. Explain the workbook works without one.', hi: 'Reckon से पूछने के लिए एक मॉडल चाहिए। NakliOS Settings → AI में एक चुनें, या AI सेटिंग्स में स्थानीय ब्रिज या कुंजी जोड़ें। वर्कबुक समझाएँ बिना मॉडल के भी काम करता है।' },
-  'as.noModelExplain': { en: 'No model is available, so this shows only the structure Reckon works out itself. Add a model in AI settings for a written summary.', hi: 'कोई मॉडल उपलब्ध नहीं है, इसलिए यहाँ केवल वह ढाँचा दिखता है जो Reckon खुद निकालता है। लिखित सारांश के लिए AI सेटिंग्स में एक मॉडल जोड़ें।' },
-  'as.structureLabel': { en: 'Structure (worked out by Reckon, no model)', hi: 'ढाँचा (Reckon ने निकाला, कोई मॉडल नहीं)' },
+  'as.noModelAsk':     { en: 'Ask nSheet needs a model. Choose one in NakliOS Settings, AI, or add the local bridge or a key in AI settings. Explain the workbook works without one.', hi: 'nSheet से पूछने के लिए एक मॉडल चाहिए। NakliOS Settings → AI में एक चुनें, या AI सेटिंग्स में स्थानीय ब्रिज या कुंजी जोड़ें। वर्कबुक समझाएँ बिना मॉडल के भी काम करता है।' },
+  'as.noModelExplain': { en: 'No model is available, so this shows only the structure nSheet works out itself. Add a model in AI settings for a written summary.', hi: 'कोई मॉडल उपलब्ध नहीं है, इसलिए यहाँ केवल वह ढाँचा दिखता है जो nSheet खुद निकालता है। लिखित सारांश के लिए AI सेटिंग्स में एक मॉडल जोड़ें।' },
+  'as.structureLabel': { en: 'Structure (worked out by nSheet, no model)', hi: 'ढाँचा (nSheet ने निकाला, कोई मॉडल नहीं)' },
   'as.modelLabel':     { en: 'Summary from', hi: 'सारांश, इससे:' },
   'as.explainWith':    { en: 'Write a summary with', hi: 'सारांश लिखवाएँ, इससे:' },
   'as.sendsSchema':    { en: 'Sends the structure below to the model, never the whole sheet.', hi: 'नीचे का ढाँचा मॉडल को भेजता है, पूरी शीट कभी नहीं।' },
-  'as.sendsSummary':   { en: 'Sends your request, a summary of the workbook and the list of Reckon commands.', hi: 'आपका अनुरोध, वर्कबुक का सारांश और Reckon कमांड की सूची भेजता है।' },
+  'as.sendsSummary':   { en: 'Sends your request, a summary of the workbook and the list of nSheet commands.', hi: 'आपका अनुरोध, वर्कबुक का सारांश और nSheet कमांड की सूची भेजता है।' },
   'as.emptyBook':      { en: 'The workbook is empty.', hi: 'वर्कबुक खाली है।' },
   'as.asking':         { en: 'Asking', hi: 'पूछ रहे हैं' },
   'as.keyColumns':     { en: 'Key columns', hi: 'मुख्य कॉलम' },
@@ -21387,7 +21387,7 @@ const STR = {
   'as.confirmRisk':    { en: 'I understand this plan', hi: 'मैं यह योजना समझता/समझती हूँ' },
   'as.apply':          { en: 'Apply (one undo step)', hi: 'लागू करें (एक पूर्ववत चरण)' },
   'as.applied':        { en: 'Applied. Undo reverses the whole change in one step.', hi: 'लागू हो गया। पूर्ववत करने से पूरा बदलाव एक ही चरण में वापस हो जाता है।' },
-  'as.noCommands':     { en: 'Reckon could not load its command list (commands.json), so Ask Reckon cannot check a plan here.', hi: 'Reckon अपनी कमांड सूची (commands.json) लोड नहीं कर सका, इसलिए Reckon से पूछें यहाँ योजना की जाँच नहीं कर सकता।' },
+  'as.noCommands':     { en: 'nSheet could not load its command list (commands.json), so Ask nSheet cannot check a plan here.', hi: 'nSheet अपनी कमांड सूची (commands.json) लोड नहीं कर सका, इसलिए nSheet से पूछें यहाँ योजना की जाँच नहीं कर सकता।' },
   'as.newSheet':       { en: '(new sheet)', hi: '(नई शीट)' },
   'as.cleared':        { en: '(cleared)', hi: '(साफ़ किया गया)' },
 
@@ -21442,7 +21442,7 @@ const STR = {
   'note.menuDelete': { en: "Delete notes in selection", hi: 'चयन के नोट हटाएँ' },
   'clip.rejected': { en: "Paste rejected", hi: 'चिपकाना अस्वीकार हुआ' },
   'clip.noFormats': { en: "The clipboard holds no formatting to paste", hi: 'क्लिपबोर्ड में चिपकाने के लिए कोई फ़ॉर्मैटिंग नहीं है' },
-  'clip.readBlocked': { en: "Reckon could not read the clipboard. Allow clipboard access, or paste with Ctrl/Cmd+V.", hi: 'Reckon क्लिपबोर्ड नहीं पढ़ सका। क्लिपबोर्ड पहुँच की अनुमति दें, या Ctrl/Cmd+V से चिपकाएँ।' },
+  'clip.readBlocked': { en: "nSheet could not read the clipboard. Allow clipboard access, or paste with Ctrl/Cmd+V.", hi: 'nSheet क्लिपबोर्ड नहीं पढ़ सका। क्लिपबोर्ड पहुँच की अनुमति दें, या Ctrl/Cmd+V से चिपकाएँ।' },
   'dt.column': { en: "Column", hi: 'कॉलम' },
   'dt.noFill': { en: "No fill", hi: 'कोई भराव नहीं' },
   'dt.accentFill': { en: "Accent blue", hi: 'नीला भराव' },
@@ -21807,7 +21807,7 @@ const STR = {
   'ver.inFolder': { en: 'kept in the folder beside the workbook', hi: 'वर्कबुक के साथ वाले फ़ोल्डर में रखा गया' },
   'ver.inBrowser': { en: 'kept in this browser', hi: 'इस ब्राउज़र में रखा गया' },
   'ver.inMemory': { en: 'kept in memory only', hi: 'केवल मेमोरी में रखा गया' },
-  'ver.none': { en: 'No saved versions yet. Save one now, or Reckon saves one every 30 minutes of editing and before an import.', hi: 'अभी कोई सहेजा संस्करण नहीं। अभी एक सहेजें, या Reckon हर 30 मिनट के संपादन पर और हर आयात से पहले एक सहेजता है।' },
+  'ver.none': { en: 'No saved versions yet. Save one now, or nSheet saves one every 30 minutes of editing and before an import.', hi: 'अभी कोई सहेजा संस्करण नहीं। अभी एक सहेजें, या nSheet हर 30 मिनट के संपादन पर और हर आयात से पहले एक सहेजता है।' },
   'ver.auto': { en: 'automatic', hi: 'स्वचालित' },
   'ver.named': { en: 'named', hi: 'नामित' },
   'ver.restore': { en: 'Restore', hi: 'बहाल करें' },
@@ -21820,7 +21820,7 @@ const STR = {
   'ver.deleteBody': { en: 'Delete this saved version? This cannot be undone.', hi: 'यह सहेजा संस्करण हटाएँ? इसे पूर्ववत नहीं किया जा सकता।' },
   'ver.deleted': { en: 'Deleted version', hi: 'संस्करण हटाया गया' },
   'ver.fullTitle': { en: 'Version history is full', hi: 'संस्करण इतिहास भर गया है' },
-  'ver.fullBody': { en: 'Reckon keeps 50 versions. Delete the oldest named version to make room?', hi: 'Reckon 50 संस्करण रखता है। जगह बनाने के लिए सबसे पुराना नामित संस्करण हटाएँ?' },
+  'ver.fullBody': { en: 'nSheet keeps 50 versions. Delete the oldest named version to make room?', hi: 'nSheet 50 संस्करण रखता है। जगह बनाने के लिए सबसे पुराना नामित संस्करण हटाएँ?' },
   'ver.autoName': { en: 'Automatic', hi: 'स्वचालित' },
   'ver.beforeImport': { en: 'Before importing', hi: 'आयात से पहले' },
 
@@ -21828,21 +21828,21 @@ const STR = {
   'review.discarded': { en: 'Spreadsheet change discarded.', hi: 'स्प्रेडशीट का बदलाव छोड़ दिया गया।' },
   'review.refreshFailed': { en: 'Change committed; refresh failed: {msg}', hi: 'बदलाव लागू हुआ; रीफ़्रेश विफल: {msg}' },
   'review.committed': { en: 'Spreadsheet change committed.', hi: 'स्प्रेडशीट का बदलाव लागू हुआ।' },
-  'review.busy': { en: 'Reckon already has a change waiting for review. Commit or discard it first; this change was not applied.', hi: 'Reckon में पहले से एक बदलाव समीक्षा के लिए रुका है। पहले उसे लागू करें या छोड़ें; यह बदलाव लागू नहीं हुआ।' },
+  'review.busy': { en: 'nSheet already has a change waiting for review. Commit or discard it first; this change was not applied.', hi: 'nSheet में पहले से एक बदलाव समीक्षा के लिए रुका है। पहले उसे लागू करें या छोड़ें; यह बदलाव लागू नहीं हुआ।' },
   'review.staged': { en: 'Spreadsheet change staged for review.', hi: 'स्प्रेडशीट का बदलाव समीक्षा के लिए रखा गया।' },
   // --- agent door review fixes (2026-11-17 review B5, B7, B13, B19, B20, B21) ---
-  'review.abandoned': { en: 'An agent change was waiting for your review when Reckon closed, so it was not applied.', hi: 'Reckon बंद होते समय एक एजेंट का बदलाव आपकी समीक्षा के लिए रुका था, इसलिए वह लागू नहीं हुआ।' },
+  'review.abandoned': { en: 'An agent change was waiting for your review when nSheet closed, so it was not applied.', hi: 'nSheet बंद होते समय एक एजेंट का बदलाव आपकी समीक्षा के लिए रुका था, इसलिए वह लागू नहीं हुआ।' },
   'review.sheetChangedWithdrawn': { en: "The sheet changed, so the agent's proposal was withdrawn. The agent can try again.", hi: 'शीट बदल गई, इसलिए एजेंट का प्रस्ताव वापस ले लिया गया। एजेंट फिर से कोशिश कर सकता है।' },
   'review.sheetChanged': { en: 'The sheet changed, so this proposal was dropped. Discard the card; the agent can try again.', hi: 'शीट बदल गई, इसलिए यह प्रस्ताव हटा दिया गया। कार्ड को छोड़ दें; एजेंट फिर से कोशिश कर सकता है।' },
-  'review.unknown': { en: 'Reckon has no change waiting for this card. Discard the card.', hi: 'इस कार्ड के लिए Reckon में कोई बदलाव नहीं रुका है। कार्ड को छोड़ दें।' },
-  'review.hostBusy': { en: 'NakliOS already shows a Reckon change waiting for review. Commit or discard that card first; this change was not applied.', hi: 'NakliOS में पहले से Reckon का एक बदलाव समीक्षा के लिए दिख रहा है। पहले उस कार्ड को लागू करें या छोड़ें; यह बदलाव लागू नहीं हुआ।' },
-  'review.recentlyDiscarded': { en: 'The person discarded this same change a short while ago, so Reckon did not ask again. Nothing changed.', hi: 'व्यक्ति ने यही बदलाव कुछ देर पहले छोड़ दिया था, इसलिए Reckon ने फिर नहीं पूछा। कुछ नहीं बदला।' },
+  'review.unknown': { en: 'nSheet has no change waiting for this card. Discard the card.', hi: 'इस कार्ड के लिए nSheet में कोई बदलाव नहीं रुका है। कार्ड को छोड़ दें।' },
+  'review.hostBusy': { en: 'NakliOS already shows an nSheet change waiting for review. Commit or discard that card first; this change was not applied.', hi: 'NakliOS में पहले से nSheet का एक बदलाव समीक्षा के लिए दिख रहा है। पहले उस कार्ड को लागू करें या छोड़ें; यह बदलाव लागू नहीं हुआ।' },
+  'review.recentlyDiscarded': { en: 'The person discarded this same change a short while ago, so nSheet did not ask again. Nothing changed.', hi: 'व्यक्ति ने यही बदलाव कुछ देर पहले छोड़ दिया था, इसलिए nSheet ने फिर नहीं पूछा। कुछ नहीं बदला।' },
   'review.stageFailed': { en: 'NakliOS could not show this change for review: {msg}. Nothing changed.', hi: 'NakliOS यह बदलाव समीक्षा के लिए नहीं दिखा सका: {msg}। कुछ नहीं बदला।' },
   'agentView.filterCleared': { en: 'An agent showed every row on {sheet}.', hi: 'एक एजेंट ने {sheet} की सभी पंक्तियाँ दिखाईं।' },
   'agentView.filtered': { en: 'An agent filtered column {col} on {sheet}: {n} rows hidden.', hi: 'एक एजेंट ने {sheet} पर कॉलम {col} फ़िल्टर किया: {n} पंक्तियाँ छिपीं।' },
   'agentView.selected': { en: 'An agent selected {range}.', hi: 'एक एजेंट ने {range} चुना।' },
   'agentView.zoomed': { en: 'An agent set the zoom on {sheet} to {n}%.', hi: 'एक एजेंट ने {sheet} का ज़ूम {n}% किया।' },
-  'store.nakUnavailable': { en: 'NakliOS storage is not available now (it may be locked), so Reckon opened the copy in this browser. Your workbook in NakliOS storage is unchanged.', hi: 'NakliOS स्टोरेज अभी उपलब्ध नहीं है (शायद लॉक है), इसलिए Reckon ने इस ब्राउज़र वाली प्रति खोली। NakliOS स्टोरेज में आपकी वर्कबुक नहीं बदली।' },
+  'store.nakUnavailable': { en: 'NakliOS storage is not available now (it may be locked), so nSheet opened the copy in this browser. Your workbook in NakliOS storage is unchanged.', hi: 'NakliOS स्टोरेज अभी उपलब्ध नहीं है (शायद लॉक है), इसलिए nSheet ने इस ब्राउज़र वाली प्रति खोली। NakliOS स्टोरेज में आपकी वर्कबुक नहीं बदली।' },
   'store.nakNotReady': { en: 'NakliOS storage is not connected. Choose a folder or Crate in NakliOS Settings, Storage, then try again.', hi: 'NakliOS स्टोरेज जुड़ा नहीं है। NakliOS सेटिंग्स, स्टोरेज में कोई फ़ोल्डर या Crate चुनें, फिर से कोशिश करें।' },
   'store.nakTitle': { en: 'NakliOS storage', hi: 'NakliOS स्टोरेज' },
   'store.nakExists': { en: '{file} already exists in NakliOS storage; open it from the list or pick another name.', hi: '{file} NakliOS स्टोरेज में पहले से है; उसे सूची से खोलें या कोई और नाम चुनें।' },
@@ -21951,7 +21951,7 @@ const STR = {
   'io.styleWriterFailed': { en: 'The full-style writer (ExcelJS) could not load ({msg}), so this file was written without formatting.', hi: 'पूरी शैली वाला राइटर (ExcelJS) लोड नहीं हो सका ({msg}), इसलिए यह फ़ाइल फ़ॉर्मैटिंग के बिना लिखी गई।' },
   'io.exportedDropped': { en: 'Exported .{ext} ({parts} dropped, see notes)', hi: '.{ext} निर्यात किया गया ({parts} छोड़े गए, नोट देखें)' },
   'io.exported': { en: 'Exported .{ext}', hi: '.{ext} निर्यात किया गया' },
-  'inote.lede': { en: 'Some content was changed to fit Reckon. Your original file on disk is untouched. This affects only the copy imported here.', hi: 'कुछ सामग्री Reckon में फ़िट करने के लिए बदली गई। डिस्क पर आपकी मूल फ़ाइल अछूती है। इसका असर केवल यहाँ आयात की गई प्रति पर है।' },
+  'inote.lede': { en: 'Some content was changed to fit nSheet. Your original file on disk is untouched. This affects only the copy imported here.', hi: 'कुछ सामग्री nSheet में फ़िट करने के लिए बदली गई। डिस्क पर आपकी मूल फ़ाइल अछूती है। इसका असर केवल यहाँ आयात की गई प्रति पर है।' },
   'inote.noLoss': { en: 'Imported with no loss.', hi: 'बिना किसी नुकसान के आयात हुआ।' },
   'inote.title': { en: 'Import notes', hi: 'आयात नोट' },
   // promo P5: the same panel after an export
@@ -21960,27 +21960,27 @@ const STR = {
   'enote.noLoss': { en: 'Exported with no loss.', hi: 'बिना किसी नुकसान के निर्यात हुआ।' },
   // promo P7: the Ask button, and the import and export note details (io/*.mjs ioNote)
   'as.askButton': { en: 'Ask', hi: 'पूछें' },
-  'as.askButtonTitle': { en: 'Ask Reckon or explain the workbook (Ctrl/Cmd+Shift+K)', hi: 'Reckon से पूछें या वर्कबुक समझाएँ (Ctrl/Cmd+Shift+K)' },
-  'ionote.macros': { en: 'Macro / VBA project removed ({n} bytes). Reckon does not run macros.', hi: 'मैक्रो / VBA प्रोजेक्ट हटाया गया ({n} बाइट)। Reckon मैक्रो नहीं चलाता।' },
+  'as.askButtonTitle': { en: 'Ask nSheet or explain the workbook (Ctrl/Cmd+Shift+K)', hi: 'nSheet से पूछें या वर्कबुक समझाएँ (Ctrl/Cmd+Shift+K)' },
+  'ionote.macros': { en: 'Macro / VBA project removed ({n} bytes). nSheet does not run macros.', hi: 'मैक्रो / VBA प्रोजेक्ट हटाया गया ({n} बाइट)। nSheet मैक्रो नहीं चलाता।' },
   'ionote.styleImport': { en: 'Fonts, text colours, borders, wrap and alignment are not imported (SheetJS CE does not link them to cells). Values, formulas, number formats (custom codes included) and solid fills are.', hi: 'फ़ॉन्ट, टेक्स्ट के रंग, बॉर्डर, रैप और संरेखण आयात नहीं होते (SheetJS CE उन्हें सेल से नहीं जोड़ता)। मान, फ़ॉर्मूले, संख्या फ़ॉर्मैट (कस्टम कोड सहित) और ठोस भराव आयात होते हैं।' },
   'ionote.externalLink': { en: 'Formula referencing another workbook, a file path or a DDE program removed; the cached value is kept: ={f}', hi: 'किसी दूसरी वर्कबुक, फ़ाइल पथ या DDE प्रोग्राम को संदर्भित करने वाला फ़ॉर्मूला हटाया गया; सहेजा गया मान रखा गया: ={f}' },
   'ionote.arrayFormula': { en: 'Array/spill formulas imported as their anchor formula; re-enter if results differ.', hi: 'ऐरे/स्पिल फ़ॉर्मूले अपने एंकर फ़ॉर्मूले के रूप में आयात हुए; परिणाम अलग हों तो दोबारा दर्ज करें।' },
   'ionote.truncated': { en: 'Import stopped at {n} cells; the workbook is larger.', hi: 'आयात {n} सेल पर रुका; वर्कबुक इससे बड़ी है।' },
-  'ionote.date1904.one': { en: "The file uses the 1904 date system. {n} date cell was moved by 1,462 days so they show the same dates in Reckon's 1900 system. Dates typed as numbers in formulas were not changed.", hi: 'फ़ाइल 1904 तारीख़ प्रणाली इस्तेमाल करती है। {n} तारीख़ सेल को 1,462 दिन खिसकाया गया ताकि Reckon की 1900 प्रणाली में वही तारीख़ दिखे। फ़ॉर्मूलों में संख्या के रूप में लिखी तारीख़ें नहीं बदलीं।' },
-  'ionote.date1904.many': { en: "The file uses the 1904 date system. {n} date cells were moved by 1,462 days so they show the same dates in Reckon's 1900 system. Dates typed as numbers in formulas were not changed.", hi: 'फ़ाइल 1904 तारीख़ प्रणाली इस्तेमाल करती है। {n} तारीख़ सेल 1,462 दिन खिसकाए गए ताकि Reckon की 1900 प्रणाली में वही तारीख़ें दिखें। फ़ॉर्मूलों में संख्या के रूप में लिखी तारीख़ें नहीं बदलीं।' },
+  'ionote.date1904.one': { en: "The file uses the 1904 date system. {n} date cell was moved by 1,462 days so they show the same dates in nSheet's 1900 system. Dates typed as numbers in formulas were not changed.", hi: 'फ़ाइल 1904 तारीख़ प्रणाली इस्तेमाल करती है। {n} तारीख़ सेल को 1,462 दिन खिसकाया गया ताकि nSheet की 1900 प्रणाली में वही तारीख़ दिखे। फ़ॉर्मूलों में संख्या के रूप में लिखी तारीख़ें नहीं बदलीं।' },
+  'ionote.date1904.many': { en: "The file uses the 1904 date system. {n} date cells were moved by 1,462 days so they show the same dates in nSheet's 1900 system. Dates typed as numbers in formulas were not changed.", hi: 'फ़ाइल 1904 तारीख़ प्रणाली इस्तेमाल करती है। {n} तारीख़ सेल 1,462 दिन खिसकाए गए ताकि nSheet की 1900 प्रणाली में वही तारीख़ें दिखें। फ़ॉर्मूलों में संख्या के रूप में लिखी तारीख़ें नहीं बदलीं।' },
   'ionote.date1904.none': { en: 'The file uses the 1904 date system; it has no date cells to convert. Dates typed as numbers in formulas were not changed.', hi: 'फ़ाइल 1904 तारीख़ प्रणाली इस्तेमाल करती है; इसमें बदलने के लिए कोई तारीख़ सेल नहीं है। फ़ॉर्मूलों में संख्या के रूप में लिखी तारीख़ें नहीं बदलीं।' },
   'ionote.pivots.one': { en: '{n} pivot table not imported as pivots: their last values stay as plain cells. Recreate them with Insert pivot.', hi: '{n} पिवट टेबल पिवट के रूप में आयात नहीं हुई: उसके आख़िरी मान सादे सेल के रूप में रहते हैं। Insert pivot से उसे फिर बनाएँ।' },
   'ionote.pivots.many': { en: '{n} pivot tables not imported as pivots: their last values stay as plain cells. Recreate them with Insert pivot.', hi: '{n} पिवट टेबल पिवट के रूप में आयात नहीं हुईं: उनके आख़िरी मान सादे सेल के रूप में रहते हैं। Insert pivot से उन्हें फिर बनाएँ।' },
   'ionote.allHidden': { en: 'Every sheet in the file is hidden; this sheet is shown so the workbook has a visible sheet.', hi: 'फ़ाइल की हर शीट छिपी है; यह शीट दिखाई गई है ताकि वर्कबुक में एक दिखने वाली शीट रहे।' },
   'ionote.builtinName': { en: 'Built-in name {name} skipped.', hi: 'अंतर्निहित नाम {name} छोड़ा गया।' },
-  'ionote.badName': { en: 'Name "{name}" is not a valid Reckon identifier; skipped.', hi: 'नाम "{name}" Reckon का मान्य पहचानकर्ता नहीं है; छोड़ा गया।' },
+  'ionote.badName': { en: 'Name "{name}" is not a valid nSheet identifier; skipped.', hi: 'नाम "{name}" nSheet का मान्य पहचानकर्ता नहीं है; छोड़ा गया।' },
   'ionote.externalName': { en: 'Name "{name}" references another workbook, a file path or a DDE program; skipped.', hi: 'नाम "{name}" किसी दूसरी वर्कबुक, फ़ाइल पथ या DDE प्रोग्राम को संदर्भित करता है; छोड़ा गया।' },
   'ionote.lambda': { en: 'LET or LAMBDA not computed ({issue}). The cell shows an error.', hi: 'LET या LAMBDA की गणना नहीं हुई ({issue})। सेल त्रुटि दिखाता है।' },
-  'ionote.tablesLive': { en: '{n} Excel Table(s) imported as Reckon tables ({names}); formulas keep their Table references.', hi: '{n} Excel टेबल Reckon टेबल के रूप में आयात हुईं ({names}); फ़ॉर्मूलों में उनके टेबल संदर्भ बने रहते हैं।' },
+  'ionote.tablesLive': { en: '{n} Excel Table(s) imported as nSheet tables ({names}); formulas keep their Table references.', hi: '{n} Excel टेबल nSheet टेबल के रूप में आयात हुईं ({names}); फ़ॉर्मूलों में उनके टेबल संदर्भ बने रहते हैं।' },
   'ionote.tablesPlain': { en: '{n} Excel Table(s) imported as plain ranges; Table references in formulas were rewritten to cell ranges.', hi: '{n} Excel टेबल सादी रेंज के रूप में आयात हुईं; फ़ॉर्मूलों के टेबल संदर्भ सेल रेंज में बदले गए।' },
   'ionote.structuredRef': { en: 'Table reference not resolved: {refs}. The cell will show #NAME? until you rewrite it as a cell range.', hi: 'टेबल संदर्भ हल नहीं हुआ: {refs}। जब तक आप इसे सेल रेंज के रूप में दोबारा नहीं लिखते, सेल #NAME? दिखाएगा।' },
-  'ionote.fillMapped.one': { en: '{n} cell: fill colour mapped to the nearest grey (Reckon fills use a neutral palette and one accent).', hi: '{n} सेल: भराव का रंग सबसे पास के ग्रे में बदला गया (Reckon के भराव एक तटस्थ पैलेट और एक एक्सेंट रंग इस्तेमाल करते हैं)।' },
-  'ionote.fillMapped.many': { en: '{n} cells: fill colour mapped to the nearest grey (Reckon fills use a neutral palette and one accent).', hi: '{n} सेल: भराव का रंग सबसे पास के ग्रे में बदला गया (Reckon के भराव एक तटस्थ पैलेट और एक एक्सेंट रंग इस्तेमाल करते हैं)।' },
+  'ionote.fillMapped.one': { en: '{n} cell: fill colour mapped to the nearest grey (nSheet fills use a neutral palette and one accent).', hi: '{n} सेल: भराव का रंग सबसे पास के ग्रे में बदला गया (nSheet के भराव एक तटस्थ पैलेट और एक एक्सेंट रंग इस्तेमाल करते हैं)।' },
+  'ionote.fillMapped.many': { en: '{n} cells: fill colour mapped to the nearest grey (nSheet fills use a neutral palette and one accent).', hi: '{n} सेल: भराव का रंग सबसे पास के ग्रे में बदला गया (nSheet के भराव एक तटस्थ पैलेट और एक एक्सेंट रंग इस्तेमाल करते हैं)।' },
   'ionote.styledXlsx.one': { en: '{n} styled cell: fonts, colours, fills, borders, wrap and alignment are not written to .xlsx (SheetJS CE writes number formats only). They stay in .reckon.json.', hi: '{n} शैली वाला सेल: फ़ॉन्ट, रंग, भराव, बॉर्डर, रैप और संरेखण .xlsx में नहीं लिखे जाते (SheetJS CE केवल संख्या फ़ॉर्मैट लिखता है)। वे .reckon.json में रहते हैं।' },
   'ionote.styledXlsx.many': { en: '{n} styled cells: fonts, colours, fills, borders, wrap and alignment are not written to .xlsx (SheetJS CE writes number formats only). They stay in .reckon.json.', hi: '{n} शैली वाले सेल: फ़ॉन्ट, रंग, भराव, बॉर्डर, रैप और संरेखण .xlsx में नहीं लिखे जाते (SheetJS CE केवल संख्या फ़ॉर्मैट लिखता है)। वे .reckon.json में रहते हैं।' },
   'ionote.tableExport': { en: 'Table {name} ({ref}) is written as a plain range: SheetJS CE cannot write Excel Tables, so its banding, filter buttons and total-row menus stay in .reckon.json and its structured references are written as cell ranges.', hi: 'टेबल {name} ({ref}) सादी रेंज के रूप में लिखी गई है: SheetJS CE Excel टेबल नहीं लिख सकता, इसलिए उसकी पट्टियाँ, फ़िल्टर बटन और कुल-पंक्ति मेनू .reckon.json में रहते हैं और उसके टेबल संदर्भ सेल रेंज के रूप में लिखे जाते हैं।' },
@@ -21990,7 +21990,7 @@ const STR = {
   'ionote.sparkExport.one': { en: '{n} sparkline is not written to {ext}. It stays in .reckon.json.', hi: '{n} स्पार्कलाइन {ext} में नहीं लिखी जाती। यह .reckon.json में रहती है।' },
   'ionote.sparkExport.many': { en: '{n} sparklines are not written to {ext}. They stay in .reckon.json.', hi: '{n} स्पार्कलाइन {ext} में नहीं लिखी जातीं। वे .reckon.json में रहती हैं।' },
   'ionote.tabColour': { en: 'Tab colour not imported: it is a theme or indexed colour.', hi: 'टैब का रंग आयात नहीं हुआ: यह थीम या इंडेक्स वाला रंग है।' },
-  'ionote.splitPanes': { en: 'Split panes not imported: Reckon freezes panes but does not split them.', hi: 'विभाजित पेन आयात नहीं हुए: Reckon पेन फ़्रीज़ करता है पर उन्हें विभाजित नहीं करता।' },
+  'ionote.splitPanes': { en: 'Split panes not imported: nSheet freezes panes but does not split them.', hi: 'विभाजित पेन आयात नहीं हुए: nSheet पेन फ़्रीज़ करता है पर उन्हें विभाजित नहीं करता।' },
   'ionote.protectionImport': { en: 'Protected sheet imported as protected. Its password and its unlocked cells are not imported; unprotect it from the sheet tab menu to edit.', hi: 'सुरक्षित शीट सुरक्षित रूप में आयात हुई। उसका पासवर्ड और उसके खुले सेल आयात नहीं होते; संपादन के लिए शीट टैब मेनू से सुरक्षा हटाएँ।' },
   'ionote.cfImport.one': { en: '{n} conditional formatting block not imported: SheetJS CE does not read them. Recreate them with Conditional formatting.', hi: '{n} सशर्त फ़ॉर्मैटिंग ब्लॉक आयात नहीं हुआ: SheetJS CE उसे नहीं पढ़ता। Conditional formatting से उसे फिर बनाएँ।' },
   'ionote.cfImport.many': { en: '{n} conditional formatting blocks not imported: SheetJS CE does not read them. Recreate them with Conditional formatting.', hi: '{n} सशर्त फ़ॉर्मैटिंग ब्लॉक आयात नहीं हुए: SheetJS CE उन्हें नहीं पढ़ता। Conditional formatting से उन्हें फिर बनाएँ।' },
@@ -22032,17 +22032,17 @@ const STR = {
   'tabs.deleteTitle': { en: 'Delete sheet', hi: 'शीट हटाएँ' },
   'tabs.deleteBody': { en: 'Delete "{name}"? Undo (⌘Z) can restore it.', hi: '"{name}" हटाएँ? पूर्ववत (⌘Z) से इसे वापस लाया जा सकता है।' },
   'tabs.sheetName': { en: 'Sheet name', hi: 'शीट का नाम' },
-  'privacy.p1': { en: 'Reckon runs entirely in your browser. Your workbook, your edits, and your formulas never leave your device on their own — there is no server, no account, and no telemetry.', hi: 'Reckon पूरी तरह आपके ब्राउज़र में चलता है। आपकी वर्कबुक, आपके बदलाव और आपके फ़ॉर्मूले अपने आप कभी आपके डिवाइस से बाहर नहीं जाते — कोई सर्वर नहीं, कोई खाता नहीं, और कोई टेलीमेट्री नहीं।' },
-  'privacy.p2': { en: 'The one feature that can send anything is the optional AI sidecar (the <code>=?</code> formula drafting and the formula explanations), and only when you press Send. It never calls out on its own. When you do send, Reckon sends a bounded <em>slice</em> of context, never the whole sheet: the target cell reference and the selected cells\' values and formulas; the row-1 column headers and column-A row labels of the enclosing block; your named ranges and your locale.', hi: 'केवल एक सुविधा कुछ भेज सकती है: वैकल्पिक AI साइडकार (<code>=?</code> फ़ॉर्मूला मसौदा और फ़ॉर्मूला व्याख्या), और वह भी केवल तब जब आप भेजें दबाते हैं। यह अपने आप कभी कुछ नहीं भेजता। जब आप भेजते हैं, Reckon संदर्भ का एक सीमित <em>अंश</em> भेजता है, पूरी शीट कभी नहीं: लक्ष्य सेल का पता और चुनी गई सेल के मान और फ़ॉर्मूले; आसपास के ब्लॉक के पंक्ति-1 कॉलम शीर्षक और कॉलम-A पंक्ति लेबल; आपकी नामित श्रेणियाँ और आपका लोकेल।' },
+  'privacy.p1': { en: 'nSheet runs entirely in your browser. Your workbook, your edits, and your formulas never leave your device on their own — there is no server, no account, and no telemetry.', hi: 'nSheet पूरी तरह आपके ब्राउज़र में चलता है। आपकी वर्कबुक, आपके बदलाव और आपके फ़ॉर्मूले अपने आप कभी आपके डिवाइस से बाहर नहीं जाते — कोई सर्वर नहीं, कोई खाता नहीं, और कोई टेलीमेट्री नहीं।' },
+  'privacy.p2': { en: 'The one feature that can send anything is the optional AI sidecar (the <code>=?</code> formula drafting and the formula explanations), and only when you press Send. It never calls out on its own. When you do send, nSheet sends a bounded <em>slice</em> of context, never the whole sheet: the target cell reference and the selected cells\' values and formulas; the row-1 column headers and column-A row labels of the enclosing block; your named ranges and your locale.', hi: 'केवल एक सुविधा कुछ भेज सकती है: वैकल्पिक AI साइडकार (<code>=?</code> फ़ॉर्मूला मसौदा और फ़ॉर्मूला व्याख्या), और वह भी केवल तब जब आप भेजें दबाते हैं। यह अपने आप कभी कुछ नहीं भेजता। जब आप भेजते हैं, nSheet संदर्भ का एक सीमित <em>अंश</em> भेजता है, पूरी शीट कभी नहीं: लक्ष्य सेल का पता और चुनी गई सेल के मान और फ़ॉर्मूले; आसपास के ब्लॉक के पंक्ति-1 कॉलम शीर्षक और कॉलम-A पंक्ति लेबल; आपकी नामित श्रेणियाँ और आपका लोकेल।' },
   'privacy.p3': { en: 'Where that slice goes depends on which rung of the model ladder is active:', hi: 'वह अंश कहाँ जाता है, यह इस पर निर्भर है कि मॉडल सीढ़ी का कौन-सा स्तर सक्रिय है:' },
   'privacy.rNak': { en: 'NakliOS model', hi: 'NakliOS मॉडल' },
-  'privacy.rNakD': { en: 'only when Reckon runs inside NakliOS and the host grants a model: the slice goes to the NakliOS host model, which runs on this device or through the provider set in NakliOS Settings → AI.', hi: 'केवल तब जब Reckon NakliOS के अंदर चलता है और होस्ट एक मॉडल देता है: अंश NakliOS होस्ट मॉडल को जाता है, जो इसी डिवाइस पर चलता है या NakliOS Settings → AI में चुने गए प्रदाता के ज़रिए।' },
+  'privacy.rNakD': { en: 'only when nSheet runs inside NakliOS and the host grants a model: the slice goes to the NakliOS host model, which runs on this device or through the provider set in NakliOS Settings → AI.', hi: 'केवल तब जब nSheet NakliOS के अंदर चलता है और होस्ट एक मॉडल देता है: अंश NakliOS होस्ट मॉडल को जाता है, जो इसी डिवाइस पर चलता है या NakliOS Settings → AI में चुने गए प्रदाता के ज़रिए।' },
   'privacy.rBridge': { en: 'Local bridge', hi: 'स्थानीय ब्रिज' },
   'privacy.rBridgeD': { en: 'Ollama on 127.0.0.1 — the slice stays on your own machine.', hi: '127.0.0.1 पर Ollama — अंश आपकी अपनी मशीन पर ही रहता है।' },
   'privacy.rWebgpu': { en: 'In-browser (WebGPU)', hi: 'ब्राउज़र के अंदर (WebGPU)' },
   'privacy.rWebgpuD': { en: 'runs in this tab; the model downloads once from Hugging Face, then inference is local — nothing you type is sent anywhere.', hi: 'इसी टैब में चलता है; मॉडल एक बार Hugging Face से डाउनलोड होता है, फिर सब कुछ स्थानीय रूप से चलता है — आप जो टाइप करते हैं वह कहीं नहीं भेजा जाता।' },
   'privacy.rByok': { en: 'Your own key (BYOK)', hi: 'आपकी अपनी कुंजी (BYOK)' },
-  'privacy.rByokD': { en: 'the slice goes to the provider <em>you</em> configured, using <em>your</em> key. The key is stored in this browser (IndexedDB), shown only as a fingerprint, and is never sent to us — Reckon has no server to send it to.', hi: 'अंश उस प्रदाता को जाता है जिसे <em>आपने</em> सेट किया है, <em>आपकी</em> कुंजी से। कुंजी इसी ब्राउज़र (IndexedDB) में रखी जाती है, केवल फ़िंगरप्रिंट के रूप में दिखती है, और हमें कभी नहीं भेजी जाती — Reckon के पास इसे भेजने के लिए कोई सर्वर ही नहीं है।' },
+  'privacy.rByokD': { en: 'the slice goes to the provider <em>you</em> configured, using <em>your</em> key. The key is stored in this browser (IndexedDB), shown only as a fingerprint, and is never sent to us — nSheet has no server to send it to.', hi: 'अंश उस प्रदाता को जाता है जिसे <em>आपने</em> सेट किया है, <em>आपकी</em> कुंजी से। कुंजी इसी ब्राउज़र (IndexedDB) में रखी जाती है, केवल फ़िंगरप्रिंट के रूप में दिखती है, और हमें कभी नहीं भेजी जाती — nSheet के पास इसे भेजने के लिए कोई सर्वर ही नहीं है।' },
   'privacy.p4': { en: 'Hover the Send button to see exactly what will be sent before you send it.', hi: 'भेजने से पहले ठीक-ठीक क्या भेजा जाएगा, यह देखने के लिए भेजें बटन पर पॉइंटर रखें।' },
   'help.kArrows': { en: 'Arrows · Tab · Enter', hi: 'तीर कुंजियाँ · Tab · Enter' },
   'help.kd1': { en: 'move (Shift reverses / extends)', hi: 'आगे बढ़ें (Shift से उलटी दिशा / चयन बढ़ाएँ)' },
@@ -22083,11 +22083,11 @@ const STR = {
   'store.fileInvalid': { en: '{file} failed validation: {msg}', hi: '{file} जाँच में विफल: {msg}' },
   'store.opened': { en: 'Opened {file}', hi: '{file} खोली गई' },
   'store.openFailed': { en: 'Could not open: {msg}', hi: 'खोला नहीं जा सका: {msg}' },
-  'store.saveFailed': { en: 'Reckon could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', hi: 'Reckon सहेज नहीं सका: {msg}। आख़िरी सहेजी गई प्रति सुरक्षित है; पिछला बदलाव पूर्ववत करें या वर्कबुक निर्यात करें।' },
+  'store.saveFailed': { en: 'nSheet could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', hi: 'nSheet सहेज नहीं सका: {msg}। आख़िरी सहेजी गई प्रति सुरक्षित है; पिछला बदलाव पूर्ववत करें या वर्कबुक निर्यात करें।' },
   'store.notLoadedTitle': { en: 'The stored workbook did not open', hi: 'सहेजी गई वर्कबुक नहीं खुली' },
-  'store.notLoadedBody': { en: 'Reckon could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', hi: 'Reckon इस ब्राउज़र में सहेजी गई वर्कबुक ({from}) नहीं खोल सका: {problem}। उसे बदला नहीं गया है।' },
-  'store.keptAs': { en: 'A copy is kept as {name} in {where}. Reckon writes nothing until you edit the new, empty workbook.', hi: 'एक प्रति {name} नाम से {where} में रखी गई है। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, Reckon कुछ नहीं लिखता।' },
-  'store.notKept': { en: 'Reckon could not keep a copy, so download it now. Reckon writes nothing until you edit the new, empty workbook.', hi: 'Reckon प्रति नहीं रख सका, इसलिए उसे अभी डाउनलोड करें। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, Reckon कुछ नहीं लिखता।' },
+  'store.notLoadedBody': { en: 'nSheet could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', hi: 'nSheet इस ब्राउज़र में सहेजी गई वर्कबुक ({from}) नहीं खोल सका: {problem}। उसे बदला नहीं गया है।' },
+  'store.keptAs': { en: 'A copy is kept as {name} in {where}. nSheet writes nothing until you edit the new, empty workbook.', hi: 'एक प्रति {name} नाम से {where} में रखी गई है। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, nSheet कुछ नहीं लिखता।' },
+  'store.notKept': { en: 'nSheet could not keep a copy, so download it now. nSheet writes nothing until you edit the new, empty workbook.', hi: 'nSheet प्रति नहीं रख सका, इसलिए उसे अभी डाउनलोड करें। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, nSheet कुछ नहीं लिखता।' },
   'store.downloadStored': { en: 'Download the stored copy', hi: 'सहेजी गई प्रति डाउनलोड करें' },
   'store.startEmpty': { en: 'Start empty', hi: 'खाली से शुरू करें' },
   'store.storedInvalid': { en: 'Stored workbook ({from}) failed validation — starting empty', hi: 'सहेजी गई वर्कबुक ({from}) जाँच में विफल रही — खाली से शुरू कर रहे हैं' },
@@ -22113,19 +22113,19 @@ const STR = {
   'as.whyDeletesOps': { en: 'deletes {what}', hi: '{what} हटाता है' },
   'as.whyOverwrites': { en: 'replaces {n} cells that hold data', hi: 'डेटा वाले {n} सेल बदलता है' },
   'as.overwriteCount': { en: 'This plan replaces {n} cells that hold data.', hi: 'यह योजना डेटा वाले {n} सेल बदलती है।' },
-  'store.readOnlyEdit': { en: 'This tab is read-only, because Reckon is editing this workbook in another tab. Choose Take over to edit here.', hi: 'यह टैब केवल पढ़ने के लिए है, क्योंकि Reckon इस वर्कबुक को दूसरे टैब में संपादित कर रहा है। यहाँ संपादन के लिए "नियंत्रण लें" चुनें।' },
-  'store.otherTab': { en: 'Reckon is editing this workbook in another tab, so this tab is read-only.', hi: 'Reckon इस वर्कबुक को दूसरे टैब में संपादित कर रहा है, इसलिए यह टैब केवल पढ़ने के लिए है।' },
+  'store.readOnlyEdit': { en: 'This tab is read-only, because nSheet is editing this workbook in another tab. Choose Take over to edit here.', hi: 'यह टैब केवल पढ़ने के लिए है, क्योंकि nSheet इस वर्कबुक को दूसरे टैब में संपादित कर रहा है। यहाँ संपादन के लिए "नियंत्रण लें" चुनें।' },
+  'store.otherTab': { en: 'nSheet is editing this workbook in another tab, so this tab is read-only.', hi: 'nSheet इस वर्कबुक को दूसरे टैब में संपादित कर रहा है, इसलिए यह टैब केवल पढ़ने के लिए है।' },
   'store.takeOver': { en: 'Take over', hi: 'नियंत्रण लें' },
-  'store.tookOver': { en: 'Another Reckon tab took over this workbook, so this tab is read-only. Reckon saved this tab\'s edits first.', hi: 'Reckon के दूसरे टैब ने इस वर्कबुक का नियंत्रण ले लिया, इसलिए यह टैब केवल पढ़ने के लिए है। Reckon ने पहले इस टैब के बदलाव सहेज दिए।' },
-  'store.tookOverStolen': { en: 'Another Reckon tab took over this workbook without waiting, so this tab is read-only. An edit made in the last few seconds may not be saved.', hi: 'Reckon के दूसरे टैब ने बिना रुके इस वर्कबुक का नियंत्रण ले लिया, इसलिए यह टैब केवल पढ़ने के लिए है। पिछले कुछ सेकंड का बदलाव शायद सहेजा न गया हो।' },
-  'store.editableNow': { en: 'This tab can edit the workbook now. Reckon loaded the stored copy.', hi: 'अब यह टैब वर्कबुक संपादित कर सकता है। Reckon ने सहेजी हुई प्रति खोल दी।' },
-  'store.reloadFailed': { en: 'Reckon could not load the stored copy: {msg}', hi: 'Reckon सहेजी हुई प्रति नहीं खोल सका: {msg}' },
+  'store.tookOver': { en: 'Another nSheet tab took over this workbook, so this tab is read-only. nSheet saved this tab\'s edits first.', hi: 'nSheet के दूसरे टैब ने इस वर्कबुक का नियंत्रण ले लिया, इसलिए यह टैब केवल पढ़ने के लिए है। nSheet ने पहले इस टैब के बदलाव सहेज दिए।' },
+  'store.tookOverStolen': { en: 'Another nSheet tab took over this workbook without waiting, so this tab is read-only. An edit made in the last few seconds may not be saved.', hi: 'nSheet के दूसरे टैब ने बिना रुके इस वर्कबुक का नियंत्रण ले लिया, इसलिए यह टैब केवल पढ़ने के लिए है। पिछले कुछ सेकंड का बदलाव शायद सहेजा न गया हो।' },
+  'store.editableNow': { en: 'This tab can edit the workbook now. nSheet loaded the stored copy.', hi: 'अब यह टैब वर्कबुक संपादित कर सकता है। nSheet ने सहेजी हुई प्रति खोल दी।' },
+  'store.reloadFailed': { en: 'nSheet could not load the stored copy: {msg}', hi: 'nSheet सहेजी हुई प्रति नहीं खोल सका: {msg}' },
   'store.conflictTitle': { en: 'The stored workbook changed', hi: 'सहेजी हुई वर्कबुक बदल गई' },
-  'store.conflictBody': { en: 'The stored workbook changed after this tab opened it, perhaps in another tab or program. Reckon saved nothing over it. Load the stored copy to drop this tab\'s unsaved edits, or keep this tab\'s version to replace the stored copy.', hi: 'इस टैब के खोलने के बाद सहेजी हुई वर्कबुक बदल गई, शायद किसी दूसरे टैब या प्रोग्राम में। Reckon ने उसके ऊपर कुछ नहीं सहेजा। इस टैब के बिना सहेजे बदलाव छोड़ने के लिए सहेजी हुई प्रति खोलें, या सहेजी हुई प्रति की जगह इस टैब का संस्करण रखें।' },
+  'store.conflictBody': { en: 'The stored workbook changed after this tab opened it, perhaps in another tab or program. nSheet saved nothing over it. Load the stored copy to drop this tab\'s unsaved edits, or keep this tab\'s version to replace the stored copy.', hi: 'इस टैब के खोलने के बाद सहेजी हुई वर्कबुक बदल गई, शायद किसी दूसरे टैब या प्रोग्राम में। nSheet ने उसके ऊपर कुछ नहीं सहेजा। इस टैब के बिना सहेजे बदलाव छोड़ने के लिए सहेजी हुई प्रति खोलें, या सहेजी हुई प्रति की जगह इस टैब का संस्करण रखें।' },
   'store.loadStored': { en: 'Load the stored copy', hi: 'सहेजी हुई प्रति खोलें' },
   'store.keepMine': { en: 'Keep this tab\'s version', hi: 'इस टैब का संस्करण रखें' },
   'store.savedInBrowserOnly': { en: 'save problem: {msg}. The newest copy is saved in this browser only.', hi: 'सहेजने में समस्या: {msg}। सबसे नई प्रति केवल इसी ब्राउज़र में सहेजी गई है।' },
-  'help.aboutTitle': { en: 'About Reckon', hi: 'Reckon के बारे में' },
+  'help.aboutTitle': { en: 'About nSheet', hi: 'nSheet के बारे में' },
   'help.aboutLicence': { en: 'Reckon © 2026 Chirag Patnaik. Reckon is free software: you can redistribute it and modify it under the terms of the GNU Affero General Public License, version 3 or any later version. It comes with no warranty.', hi: 'Reckon © 2026 Chirag Patnaik. Reckon मुक्त सॉफ़्टवेयर है: आप इसे GNU Affero General Public License, संस्करण 3 या किसी बाद के संस्करण की शर्तों के तहत फिर से बाँट और बदल सकते हैं। इसके साथ कोई वारंटी नहीं है।' },
   'help.aboutSource': { en: 'Source code and full licence texts:', hi: 'सोर्स कोड और लाइसेंस के पूरे पाठ:' },
   'help.aboutMit': { en: 'The page source carries the full MIT copyright and permission notice beside the x-data-spreadsheet code it includes.', hi: 'पेज के सोर्स में x-data-spreadsheet कोड के साथ उसकी पूरी MIT कॉपीराइट और अनुमति सूचना है।' },
@@ -22151,7 +22151,7 @@ const STR = {
   'sc.hostModel': { en: 'host model', hi: 'होस्ट मॉडल' },
   'sc.asking': { en: 'asking {rung}…', hi: '{rung} से पूछ रहे हैं…' },
   'sc.nothingUsable': { en: 'the model returned nothing usable', hi: 'मॉडल ने कुछ भी काम का नहीं लौटाया' },
-  'sc.noParse': { en: 'The drafted formula does not parse, so Reckon did not use it: {formula}', hi: 'मसौदा फ़ॉर्मूला पार्स नहीं होता, इसलिए Reckon ने इसे इस्तेमाल नहीं किया: {formula}' },
+  'sc.noParse': { en: 'The drafted formula does not parse, so nSheet did not use it: {formula}', hi: 'मसौदा फ़ॉर्मूला पार्स नहीं होता, इसलिए nSheet ने इसे इस्तेमाल नहीं किया: {formula}' },
   'sc.askingExplain': { en: 'Asking {rung} to explain…', hi: '{rung} से व्याख्या माँग रहे हैं…' },
   'sc.returnedNothing': { en: '(the model returned nothing)', hi: '(मॉडल ने कुछ नहीं लौटाया)' },
   'sc.explainFailed': { en: 'Could not explain: {msg}', hi: 'समझाया नहीं जा सका: {msg}' },
@@ -22197,7 +22197,7 @@ const STR = {
   'io.csvKept': { en: '{n} field(s) kept as text: a leading zero or more than 15 digits would be lost as a number (codes, phone and card numbers). {typed} field(s) became numbers or TRUE/FALSE.', hi: '{n} फ़ील्ड टेक्स्ट के रूप में रखे गए: संख्या बनने पर आगे का शून्य या 15 से अधिक अंक खो जाते (कोड, फ़ोन और कार्ड नंबर)। {typed} फ़ील्ड संख्या या TRUE/FALSE बने।' },
   'io.csvFormulas': { en: '{n} field(s) start with = and were read as formulas. Check them before you trust the results.', hi: '{n} फ़ील्ड = से शुरू होते हैं और फ़ॉर्मूले के रूप में पढ़े गए। परिणामों पर भरोसा करने से पहले उन्हें जाँचें।' },
   'io.importRenamed': { en: 'Sheet "{from}" imported as "{to}", because the workbook already has a sheet of that name. Formulas and names from the file that refer to it are rewritten to match.', hi: 'शीट "{from}" को "{to}" के रूप में आयात किया गया, क्योंकि वर्कबुक में इस नाम की शीट पहले से है। फ़ाइल के जो फ़ॉर्मूले और नाम इसका संदर्भ देते हैं, वे इसके अनुसार बदले गए।' },
-  'io.nameRefused': { en: 'Name "{name}" from the file is skipped: Reckon cannot use it as a name (it reads like a cell reference). Formulas that use it show #NAME?.', hi: 'फ़ाइल का नाम "{name}" छोड़ा गया: Reckon इसे नाम के रूप में इस्तेमाल नहीं कर सकता (यह सेल संदर्भ जैसा दिखता है)। इसका उपयोग करने वाले फ़ॉर्मूले #NAME? दिखाते हैं।' },
+  'io.nameRefused': { en: 'Name "{name}" from the file is skipped: nSheet cannot use it as a name (it reads like a cell reference). Formulas that use it show #NAME?.', hi: 'फ़ाइल का नाम "{name}" छोड़ा गया: nSheet इसे नाम के रूप में इस्तेमाल नहीं कर सकता (यह सेल संदर्भ जैसा दिखता है)। इसका उपयोग करने वाले फ़ॉर्मूले #NAME? दिखाते हैं।' },
   'io.nameSkipped': { en: 'Name "{name}" from the file is skipped: the workbook already has a name "{name}", which keeps its target ({ref} in the file).', hi: 'फ़ाइल का नाम "{name}" छोड़ा गया: वर्कबुक में "{name}" नाम पहले से है, जो अपना लक्ष्य रखता है (फ़ाइल में {ref})।' },
   'io.drop.charts.one': { en: 'chart', hi: 'चार्ट' },
   'io.drop.charts.many': { en: 'charts', hi: 'चार्ट' },
@@ -22209,7 +22209,7 @@ const STR = {
   'io.drop.pivots.many': { en: 'pivots', hi: 'पिवट' },
   'io.drop.tables.one': { en: 'Table', hi: 'टेबल' },
   'io.drop.tables.many': { en: 'Tables', hi: 'टेबल' },
-  'cmd.sheets.list': { en: 'List the sheets in the open Reckon workbook', hi: 'खुली Reckon वर्कबुक की शीटों की सूची' },
+  'cmd.sheets.list': { en: 'List the sheets in the open nSheet workbook', hi: 'खुली nSheet वर्कबुक की शीटों की सूची' },
   'cmd.range.subscribe': { en: 'Subscribe to a range as a live source', hi: 'किसी रेंज को लाइव स्रोत के रूप में सब्सक्राइब करें' },
   'cmd.range.unsubscribe': { en: 'Stop a live range subscription', hi: 'लाइव रेंज सब्सक्रिप्शन रोकें' },
   'link.askingNakliData': { en: 'Asking NakliData for its table', hi: 'NakliData से उसकी टेबल माँगी जा रही है' },
@@ -22217,12 +22217,12 @@ const STR = {
   'link.copyMenu': { en: 'Copy link to range', hi: 'रेंज का लिंक कॉपी करें' },
   'link.pasteNakliData': { en: 'Paste from NakliData', hi: 'NakliData से पेस्ट करें' },
   'link.copied': { en: 'Copied link', hi: 'लिंक कॉपी हुआ' },
-  'link.copyBlocked': { en: 'Reckon could not write to the clipboard. Allow clipboard access and try again.', hi: 'Reckon क्लिपबोर्ड पर नहीं लिख सका। क्लिपबोर्ड की अनुमति दें और फिर से कोशिश करें।' },
-  'cmd.range.read': { en: 'Read the values and formulas in a range of the Reckon spreadsheet', hi: 'Reckon स्प्रेडशीट की किसी रेंज के मान और फ़ॉर्मूले पढ़ें' },
-  'cmd.range.write': { en: 'Write values or formulas into the Reckon spreadsheet', hi: 'Reckon स्प्रेडशीट में मान या फ़ॉर्मूले लिखें' },
-  'cmd.formula.eval': { en: 'Work out a formula without changing the Reckon spreadsheet', hi: 'Reckon स्प्रेडशीट बदले बिना एक फ़ॉर्मूला निकालें' },
-  'cmd.recalc': { en: 'Recompute every formula in the Reckon workbook', hi: 'Reckon वर्कबुक के हर फ़ॉर्मूले की फिर से गणना करें' },
-  'cmd.workbook.read': { en: 'Summarise the Reckon workbook for an agent: each sheet with its used range, data blocks and their header rows, frozen panes, hidden rows and columns, charts, pivot tables, conditional formatting and validation rules, notes, named ranges and the selection', hi: 'एजेंट के लिए Reckon वर्कबुक का सारांश: हर शीट की इस्तेमाल हुई रेंज, डेटा ब्लॉक और उनकी शीर्षक पंक्तियाँ, स्थिर पैन, छिपी पंक्तियाँ और कॉलम, चार्ट, पिवट टेबल, सशर्त फ़ॉर्मैटिंग और सत्यापन नियम, नोट, नामित श्रेणियाँ और चयन' },
+  'link.copyBlocked': { en: 'nSheet could not write to the clipboard. Allow clipboard access and try again.', hi: 'nSheet क्लिपबोर्ड पर नहीं लिख सका। क्लिपबोर्ड की अनुमति दें और फिर से कोशिश करें।' },
+  'cmd.range.read': { en: 'Read the values and formulas in a range of the nSheet spreadsheet', hi: 'nSheet स्प्रेडशीट की किसी रेंज के मान और फ़ॉर्मूले पढ़ें' },
+  'cmd.range.write': { en: 'Write values or formulas into the nSheet spreadsheet', hi: 'nSheet स्प्रेडशीट में मान या फ़ॉर्मूले लिखें' },
+  'cmd.formula.eval': { en: 'Work out a formula without changing the nSheet spreadsheet', hi: 'nSheet स्प्रेडशीट बदले बिना एक फ़ॉर्मूला निकालें' },
+  'cmd.recalc': { en: 'Recompute every formula in the nSheet workbook', hi: 'nSheet वर्कबुक के हर फ़ॉर्मूले की फिर से गणना करें' },
+  'cmd.workbook.read': { en: 'Summarise the nSheet workbook for an agent: each sheet with its used range, data blocks and their header rows, frozen panes, hidden rows and columns, charts, pivot tables, conditional formatting and validation rules, notes, named ranges and the selection', hi: 'एजेंट के लिए nSheet वर्कबुक का सारांश: हर शीट की इस्तेमाल हुई रेंज, डेटा ब्लॉक और उनकी शीर्षक पंक्तियाँ, स्थिर पैन, छिपी पंक्तियाँ और कॉलम, चार्ट, पिवट टेबल, सशर्त फ़ॉर्मैटिंग और सत्यापन नियम, नोट, नामित श्रेणियाँ और चयन' },
   'cmd.sheet.add': { en: 'Add sheet', hi: 'शीट जोड़ें' },
   'cmd.sheet.rename': { en: 'Rename sheet', hi: 'शीट का नाम बदलें' },
   'cmd.sheet.delete': { en: 'Delete sheet', hi: 'शीट हटाएँ' },
@@ -22300,7 +22300,7 @@ const STR = {
   'ver.newWorkbook': { en: 'a new workbook', hi: 'एक नई वर्कबुक' },
   'store.folderLabel': { en: 'Folder: {name}', hi: 'फ़ोल्डर: {name}' },
   'store.nakRootLabel': { en: 'NakliOS storage, earlier workbooks', hi: 'NakliOS स्टोरेज, पहले की वर्कबुक' },
-  'store.folderDenied': { en: 'Reckon has no permission to use the folder {name}. Choose Open folder again.', hi: 'Reckon को फ़ोल्डर {name} इस्तेमाल करने की अनुमति नहीं है। फिर से फ़ोल्डर खोलें चुनें।' },
+  'store.folderDenied': { en: 'nSheet has no permission to use the folder {name}. Choose Open folder again.', hi: 'nSheet को फ़ोल्डर {name} इस्तेमाल करने की अनुमति नहीं है। फिर से फ़ोल्डर खोलें चुनें।' },
   'store.openRefused': { en: '{file} did not import', hi: '{file} आयात नहीं हुई' },
   'cmd.script.run_destructive': { en: 'Run script that deletes', hi: 'हटाने वाली स्क्रिप्ट चलाएँ' },
   'cmd.review.status': { en: 'Review status of an agent change', hi: 'एजेंट के बदलाव की समीक्षा की स्थिति' },
@@ -26604,7 +26604,7 @@ export function describeWorkbook(wb, { activeId = null, selection = null, maxCha
       if (rows.length) b.firstRows = rows;
     }
   }
-  const out = { app: 'Reckon', kind: 'workbook', ...sum };
+  const out = { app: 'nSheet', kind: 'workbook', ...sum };
   const size = () => JSON.stringify(out).length;
   if (size() > maxChars) { out.truncated = true; for (const s of out.sheets) for (const b of s.blocks) delete b.firstRows; }
   if (size() > maxChars) for (const s of out.sheets) { s.blocks = s.blocks.slice(0, 2); s.charts = s.charts.slice(0, 5); s.conditionalFormats = s.conditionalFormats.slice(0, 5); s.dataValidations = s.dataValidations.slice(0, 5); }
@@ -26732,7 +26732,7 @@ function defineCommands(deps) {
     for (let i = idx; i < idx + count; i += 1) {
       const k = olKey(axis, i);
       const lv = (map[k] ?? 0) + delta;
-      if (lv > R().OUTLINE_MAX) fail('invalid', `${axis === 'rows' ? 'row' : 'column'} ${k} is already grouped ${R().OUTLINE_MAX} levels deep, the most Reckon allows`);
+      if (lv > R().OUTLINE_MAX) fail('invalid', `${axis === 'rows' ? 'row' : 'column'} ${k} is already grouped ${R().OUTLINE_MAX} levels deep, the most nSheet allows`);
       if (lv <= 0) delete map[k]; else map[k] = lv;
     }
     const levels = Object.values(map).reduce((a, b) => Math.max(a, b), 0);
@@ -27814,7 +27814,7 @@ function defineCommands(deps) {
       run: async (input) => {
         const id = reqStr(input.proposal_id, 'proposal_id', 200);
         const got = deps.reviewStatus ? deps.reviewStatus(id) : null;
-        return got ?? { proposal_id: id, status: 'unknown', message: 'Reckon has no record of this proposal in this visit.' };
+        return got ?? { proposal_id: id, status: 'unknown', message: 'nSheet has no record of this proposal in this visit.' };
       },
     },
     // ---- app shell layer 4 (the shared assistant): sizes, a description of the
@@ -27853,7 +27853,7 @@ function defineCommands(deps) {
       kind: 'read',
       noScript: true,
       run: async (input, ctx) => {
-        if (typeof deps.snapshot !== 'function') fail('unavailable', 'a picture of the sheet needs the Reckon page');
+        if (typeof deps.snapshot !== 'function') fail('unavailable', 'a picture of the sheet needs the nSheet page');
         if (input.ref !== undefined && input.ref !== null) {
           const { sheet, rect } = target(ctx, input.ref);
           return deps.snapshot({ sheetId: sheet.id, sheet: sheet.name, rect });
@@ -27867,7 +27867,7 @@ function defineCommands(deps) {
       kind: 'store',
       noScript: true,
       run: async (input) => {
-        if (typeof deps.assistant !== 'function') fail('unavailable', 'Reckon\'s assistant runs only inside NakliOS with AI allowed');
+        if (typeof deps.assistant !== 'function') fail('unavailable', 'the nSheet assistant runs only inside NakliOS with AI allowed');
         if (name === 'assistant.ask') reqStr(input.request, 'request', 4000);
         return deps.assistant(name, input);
       },
@@ -28948,7 +28948,7 @@ export function createSidecar(deps) {
     let evalOut;
     try { evalOut = await evalFormula(formula); } catch (e) { evalOut = { error: String(e && e.message || e) }; }
     // a formula the engine cannot parse is rejected outright (parity v1, Q2)
-    if (isParseFailure(evalOut)) { showProposeError(scT('sc.noParse', 'The drafted formula does not parse, so Reckon did not use it: {formula}', { formula }), retryCtx); return; }
+    if (isParseFailure(evalOut)) { showProposeError(scT('sc.noParse', 'The drafted formula does not parse, so nSheet did not use it: {formula}', { formula }), retryCtx); return; }
     state = { targetA1, description, formula, explanation, proposer };
     showProposal(evalOut);
   };
@@ -32207,7 +32207,7 @@ export function createClipboard(ctx) {
       } else if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
     } catch {
       try { text = await navigator.clipboard.readText(); } catch { text = ''; }
-      if (!text) { ctx.toast(t('clip.readBlocked', 'Reckon could not read the clipboard. Allow clipboard access, or paste with Ctrl/Cmd+V.'), { kind: 'error', ms: 6000 }); return; }
+      if (!text) { ctx.toast(t('clip.readBlocked', 'nSheet could not read the clipboard. Allow clipboard access, or paste with Ctrl/Cmd+V.'), { kind: 'error', ms: 6000 }); return; }
     }
     await pasteExternal({ text, html }, mode);
   };
@@ -34111,7 +34111,7 @@ export function buildWorkbookSchema(wb, { sheet = null } = {}) {
     for (const o of out) if (o !== s && o.linksTo[s.name]) s.linkedFrom[o.name] = o.linksTo[s.name];
   }
   return {
-    source: 'Worked out by Reckon from the workbook, without a model.',
+    source: 'Worked out by nSheet from the workbook, without a model.',
     sheets: out,
     names: Object.fromEntries(Object.entries(wb?.names ?? {}).slice(0, 30)),
   };
@@ -34206,7 +34206,7 @@ export const PLAN_SCHEMA = {
 const AS_REF_RULES = 'References are A1 with the sheet name, e.g. "Sheet1!A1:C10". Column letters are like "B". Text that starts with = is a formula. A string "$N.key" in an input stands for that key of the result of step N (from 1), e.g. "$1.id".';
 export function buildPlanMessages(request, workbook, cmdText) {
   return [
-    { role: 'system', content: `You turn a person's request about their spreadsheet into a plan of Reckon commands. Reply with ONE JSON object only, matching this JSON Schema: ${JSON.stringify(PLAN_SCHEMA)}. Use only these commands (name {input keys, * = required} what it does):\n${cmdText}\nRules: at most ${AS_PLAN_MAX_STEPS} steps, run in order as one change. ${AS_REF_RULES} "explanation" says in one or two plain sentences what the plan does. If the request cannot be done with these commands, reply with no steps and say why in "explanation". No text outside the JSON object, no markdown, no tool calls. ${asDataRule}` },
+    { role: 'system', content: `You turn a person's request about their spreadsheet into a plan of nSheet commands. Reply with ONE JSON object only, matching this JSON Schema: ${JSON.stringify(PLAN_SCHEMA)}. Use only these commands (name {input keys, * = required} what it does):\n${cmdText}\nRules: at most ${AS_PLAN_MAX_STEPS} steps, run in order as one change. ${AS_REF_RULES} "explanation" says in one or two plain sentences what the plan does. If the request cannot be done with these commands, reply with no steps and say why in "explanation". No text outside the JSON object, no markdown, no tool calls. ${asDataRule}` },
     { role: 'user', content: `The workbook (summary): ${JSON.stringify(workbook)}\n\nRequest: ${request}` },
   ];
 }
@@ -34217,7 +34217,7 @@ export function buildPlanMessages(request, workbook, cmdText) {
 // prompt and its two assist modes as recipes: "sheet" (Ask Reckon: build, fill
 // or format from a request) and "explain" (Explain the workbook).
 export const SHEET_AGENT_PROMPT = [
-  'Reckon is a spreadsheet: a workbook of named sheets of cells. doc.describe lists every sheet with its used range, data blocks, header rows, charts, tables and named ranges.',
+  'nSheet is a spreadsheet: a workbook of named sheets of cells. doc.describe lists every sheet with its used range, data blocks, header rows, charts, tables and named ranges.',
   `${AS_REF_RULES} The "$N.key" form works between the steps of one script.run.`,
   'range.write {ref, values} writes rows of values from the top-left cell of ref; a value is a number, text, true or false, or a formula such as "=SUM(B2:B13)".',
   'format.set {ref, numberFormat, bold, fill, border, align} formats cells; cols.width and rows.height size them; chart.add {ref, type, title} draws a chart from a range whose first row or column holds the labels.',
@@ -34228,7 +34228,7 @@ export const SHEET_AGENT_PROMPT = [
 export const SHEET_SKILLS = [
   {
     id: 'sheet', label: 'Build or change a sheet',
-    when: 'The person asks Reckon to build, fill, fix or format a sheet: a budget, a tracker, a summary table with totals, a chart.',
+    when: 'The person asks nSheet to build, fill, fix or format a sheet: a budget, a tracker, a summary table with totals, a chart.',
     prompt: 'Plan the layout first: which sheet, the header row, the data rows, the totals and where the chart goes. Build it in one or two script.run calls. Bold the header row, give numbers a number format, and widen columns whose text does not fit. Check with view.snapshot.',
   },
   {
@@ -34563,7 +34563,7 @@ export function createAssist(deps) {
       cmds = planCommands(manifest);
       if (!cmds.length) throw new Error(T('as.noCommands'));
       const wb = await readWorkbook();
-      const label = `Ask Reckon: ${asCut(text, 40)}`;
+      const label = `Ask nSheet: ${asCut(text, 40)}`;
       const r = await askChecked({
         call: (m) => callModel(proposer, 'plan', m),
         messages: buildPlanMessages(text, wb, abbreviateCommands(cmds)),
@@ -36433,7 +36433,7 @@ export function createVersionsUi({ showDialog, confirmDialog, toast, getStore, s
       if (auto) return null;
       const old = res.oldestNamed;
       const ok = await confirmDialog(t('ver.fullTitle', 'Version history is full'),
-        `${t('ver.fullBody', 'Reckon keeps 50 versions. Delete the oldest named version to make room?')} ${old ? `"${old.name}", ${new Date(old.ts).toLocaleString()}` : ''}`);
+        `${t('ver.fullBody', 'nSheet keeps 50 versions. Delete the oldest named version to make room?')} ${old ? `"${old.name}", ${new Date(old.ts).toLocaleString()}` : ''}`);
       if (!ok) return null;
       res = await store.save({ name, auto, reason, bytes, allowNamedPrune: true });
     }
@@ -36491,7 +36491,7 @@ export function createVersionsUi({ showDialog, confirmDialog, toast, getStore, s
     if (!list.length) {
       const none = document.createElement('div');
       none.className = 'rk-ver-none';
-      none.textContent = t('ver.none', 'No saved versions yet. Save one now, or Reckon saves one every 30 minutes of editing and before an import.');
+      none.textContent = t('ver.none', 'No saved versions yet. Save one now, or nSheet saves one every 30 minutes of editing and before an import.');
       table.appendChild(none);
     }
     let dlg = null;
@@ -36738,7 +36738,7 @@ export function createLinkHub(deps) {
     const rc = R.parseRangeA1(range);
     const cells = (rc.end.row - rc.start.row + 1) * (rc.end.col - rc.start.col + 1);
     if (cells > maxCells) throw lkErr('too-big', `the range covers ${cells} cells; a live range may cover at most ${maxCells}`);
-    if (subs.size >= maxSubs) throw lkErr('too-big', `Reckon already has ${maxSubs} live ranges, the most it keeps; unsubscribe one first`);
+    if (subs.size >= maxSubs) throw lkErr('too-big', `nSheet already has ${maxSubs} live ranges, the most it keeps; unsubscribe one first`);
     const got = shape(await deps.read(sh.name, range));
     const { key: secret, raw } = await newRangeKey();
     const id = lkRandomId();
@@ -36925,7 +36925,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
   // changes nothing. Every write method of the worker client refuses while
   // readOnly is true, so no edit path can slip past the gate.
   let readOnly = false;
-  const readOnlyMessage = () => $t('store.readOnlyEdit', 'This tab is read-only, because Reckon is editing this workbook in another tab. Choose Take over to edit here.');
+  const readOnlyMessage = () => $t('store.readOnlyEdit', 'This tab is read-only, because nSheet is editing this workbook in another tab. Choose Take over to edit here.');
   for (const m of ['applyTransaction', 'applyTransactionIfBase']) {
     const f = client[m].bind(client);
     client[m] = async (...a) => { if (readOnly) throw new Error(readOnlyMessage()); return f(...a); };
@@ -37142,9 +37142,9 @@ export function createApp({ client, params = new URLSearchParams() }) {
     pending: "The change is waiting for the person's review.",
     committed: 'The person committed the change; it is in the workbook.',
     discarded: 'The person discarded the change; nothing changed.',
-    dropped: 'The sheet changed where the change would apply, so Reckon dropped it; nothing changed. Read the cells again before you retry.',
-    abandoned: 'Reckon closed before the person decided, so the change was not applied.',
-    withdrawn: 'withdrawn: superseded by your edit. The sheet changed where the change would apply, so Reckon withdrew the card; nothing changed. Read the cells again before you retry.',
+    dropped: 'The sheet changed where the change would apply, so nSheet dropped it; nothing changed. Read the cells again before you retry.',
+    abandoned: 'nSheet closed before the person decided, so the change was not applied.',
+    withdrawn: 'withdrawn: superseded by your edit. The sheet changed where the change would apply, so nSheet withdrew the card; nothing changed. Read the cells again before you retry.',
   };
   const reviewStatus = (proposal_id) => {
     if (pendingReview.has(proposal_id)) return { proposal_id, status: 'pending', message: REVIEW_STATUS_TEXT.pending };
@@ -37159,7 +37159,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     for (const id of lost) reviewOutcomes.set(id, { proposal_id: id, status: 'abandoned', at: new Date().toISOString() });
     if (lost.length) {
       saveReviewState();
-      setTimeout(() => toast($t('review.abandoned', 'An agent change was waiting for your review when Reckon closed, so it was not applied.'), { kind: 'info', ms: 8000 }), 0);
+      setTimeout(() => toast($t('review.abandoned', 'An agent change was waiting for your review when nSheet closed, so it was not applied.'), { kind: 'info', ms: 8000 }), 0);
     }
   } catch { /* no earlier record */ }
   // The host draws the card and keeps it until the person decides. A stale
@@ -37215,7 +37215,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
       if (!pending) {
         const known = reviewOutcomes.get(proposal_id);
         if (known?.status === 'dropped') throw new Error(SHEET_CHANGED());
-        throw new Error($t('review.unknown', 'Reckon has no change waiting for this card. Discard the card.'));
+        throw new Error($t('review.unknown', 'nSheet has no change waiting for this card. Discard the card.'));
       }
       if (type === 'discard') {
         pendingReview.delete(proposal_id);
@@ -37251,8 +37251,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
   // B20: the host's refusals, in words a person and an agent can act on
   const stageError = (error) => {
     const msg = String(error?.message ?? error);
-    if (/review the pending change before staging another/i.test(msg)) return $t('review.hostBusy', 'NakliOS already shows a Reckon change waiting for review. Commit or discard that card first; this change was not applied.');
-    if (/discarded recently/i.test(msg)) return $t('review.recentlyDiscarded', 'The person discarded this same change a short while ago, so Reckon did not ask again. Nothing changed.');
+    if (/review the pending change before staging another/i.test(msg)) return $t('review.hostBusy', 'NakliOS already shows an nSheet change waiting for review. Commit or discard that card first; this change was not applied.');
+    if (/discarded recently/i.test(msg)) return $t('review.recentlyDiscarded', 'The person discarded this same change a short while ago, so nSheet did not ask again. Nothing changed.');
     return $t('review.stageFailed', 'NakliOS could not show this change for review: {msg}. Nothing changed.', { msg });
   };
 
@@ -37269,7 +37269,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
       const preview = actor === 'api' && window.naklios?.capabilities.review === true ? await client.previewTransaction(tx) : null;
       if (preview && !preview.rejected && RK.needsReview(preview.diff)) {
         if (pendingReview.size > 0) {
-          const msg = $t('review.busy', 'Reckon already has a change waiting for review. Commit or discard it first; this change was not applied.');
+          const msg = $t('review.busy', 'nSheet already has a change waiting for review. Commit or discard it first; this change was not applied.');
           toast(msg, { kind: 'error', ms: 6000 });
           throw new Error(msg);
         }
@@ -38587,8 +38587,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
     // one-cell sheet and report success. The bytes must fit the file's name.
     if (!workbookSignature(u8, fileName)) {
       const ods = /\.ods$/i.test(fileName);
-      toast(ods ? $t('io.notOds', '{file} is not an OpenDocument spreadsheet, so Reckon did not import it.', { file: cleanName(fileName) })
-        : $t('io.notExcel', '{file} is not an Excel file, so Reckon did not import it.', { file: cleanName(fileName) }), { kind: 'error', ms: 7000 });
+      toast(ods ? $t('io.notOds', '{file} is not an OpenDocument spreadsheet, so nSheet did not import it.', { file: cleanName(fileName) })
+        : $t('io.notExcel', '{file} is not an Excel file, so nSheet did not import it.', { file: cleanName(fileName) }), { kind: 'error', ms: 7000 });
       lastImportNotes = [];
       return null;
     }
@@ -38654,7 +38654,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     const haveNames = new Set(Object.keys(definedNames).map((k) => k.toLowerCase()));
     const refused = new Set(await client.badNames(Object.keys(parsed.names)).catch(() => []));
     for (const [nm, ref] of Object.entries(parsed.names)) {
-      if (refused.has(nm)) { extraNotes.push({ sheet: '*', kind: 'defined-name', detail: $t('io.nameRefused', 'Name "{name}" from the file is skipped: Reckon cannot use it as a name (it reads like a cell reference). Formulas that use it show #NAME?.', { name: nm }) }); continue; }
+      if (refused.has(nm)) { extraNotes.push({ sheet: '*', kind: 'defined-name', detail: $t('io.nameRefused', 'Name "{name}" from the file is skipped: nSheet cannot use it as a name (it reads like a cell reference). Formulas that use it show #NAME?.', { name: nm }) }); continue; }
       if (haveNames.has(nm.toLowerCase())) { extraNotes.push({ sheet: '*', kind: 'defined-name', detail: $t('io.nameSkipped', 'Name "{name}" from the file is skipped: the workbook already has a name "{name}", which keeps its target ({ref} in the file).', { name: nm, ref }) }); continue; }
       ops.push({ op: 'nameSet', name: nm, ref });
     }
@@ -38768,7 +38768,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
         : $t('enote.noLoss', 'Exported with no loss.');
     } else {
       lede.textContent = notes.length
-        ? $t('inote.lede', 'Some content was changed to fit Reckon. Your original file on disk is untouched. This affects only the copy imported here.')
+        ? $t('inote.lede', 'Some content was changed to fit nSheet. Your original file on disk is untouched. This affects only the copy imported here.')
         : $t('inote.noLoss', 'Imported with no loss.');
     }
     body.appendChild(lede);
@@ -39843,14 +39843,14 @@ export function createApp({ client, params = new URLSearchParams() }) {
   // runs entirely in the browser; the only thing that can ever leave is the
   // optional AI sidecar, and only on an explicit Send, as a bounded slice.
   const PRIVACY_STATEMENT_HTML = () => `
-      <p class="rk-help-lede">${$t('privacy.p1', 'Reckon runs entirely in your browser. Your workbook, your edits, and your formulas never leave your device on their own — there is no server, no account, and no telemetry.')}</p>
-      <p class="rk-help-note">${$t('privacy.p2', 'The one feature that can send anything is the optional AI sidecar (the <code>=?</code> formula drafting and the formula explanations), and only when you press Send. It never calls out on its own. When you do send, Reckon sends a bounded <em>slice</em> of context, never the whole sheet: the target cell reference and the selected cells\' values and formulas; the row-1 column headers and column-A row labels of the enclosing block; your named ranges and your locale.')}</p>
+      <p class="rk-help-lede">${$t('privacy.p1', 'nSheet runs entirely in your browser. Your workbook, your edits, and your formulas never leave your device on their own — there is no server, no account, and no telemetry.')}</p>
+      <p class="rk-help-note">${$t('privacy.p2', 'The one feature that can send anything is the optional AI sidecar (the <code>=?</code> formula drafting and the formula explanations), and only when you press Send. It never calls out on its own. When you do send, nSheet sends a bounded <em>slice</em> of context, never the whole sheet: the target cell reference and the selected cells\' values and formulas; the row-1 column headers and column-A row labels of the enclosing block; your named ranges and your locale.')}</p>
       <p class="rk-help-note">${$t('privacy.p3', 'Where that slice goes depends on which rung of the model ladder is active:')}</p>
       <table class="rk-help-table">
-        <tr><td>${$t('privacy.rNak', 'NakliOS model')}</td><td>${$t('privacy.rNakD', 'only when Reckon runs inside NakliOS and the host grants a model: the slice goes to the NakliOS host model, which runs on this device or through the provider set in NakliOS Settings → AI.')}</td></tr>
+        <tr><td>${$t('privacy.rNak', 'NakliOS model')}</td><td>${$t('privacy.rNakD', 'only when nSheet runs inside NakliOS and the host grants a model: the slice goes to the NakliOS host model, which runs on this device or through the provider set in NakliOS Settings → AI.')}</td></tr>
         <tr><td>${$t('privacy.rBridge', 'Local bridge')}</td><td>${$t('privacy.rBridgeD', 'Ollama on 127.0.0.1 — the slice stays on your own machine.')}</td></tr>
         <tr><td>${$t('privacy.rWebgpu', 'In-browser (WebGPU)')}</td><td>${$t('privacy.rWebgpuD', 'runs in this tab; the model downloads once from Hugging Face, then inference is local — nothing you type is sent anywhere.')}</td></tr>
-        <tr><td>${$t('privacy.rByok', 'Your own key (BYOK)')}</td><td>${$t('privacy.rByokD', 'the slice goes to the provider <em>you</em> configured, using <em>your</em> key. The key is stored in this browser (IndexedDB), shown only as a fingerprint, and is never sent to us — Reckon has no server to send it to.')}</td></tr>
+        <tr><td>${$t('privacy.rByok', 'Your own key (BYOK)')}</td><td>${$t('privacy.rByokD', 'the slice goes to the provider <em>you</em> configured, using <em>your</em> key. The key is stored in this browser (IndexedDB), shown only as a fingerprint, and is never sent to us — nSheet has no server to send it to.')}</td></tr>
       </table>
       <p class="rk-help-note">${$t('privacy.p4', 'Hover the Send button to see exactly what will be sent before you send it.')}</p>`;
 
@@ -39890,7 +39890,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
       <p class="rk-help-note">${RK.t('help.formulasL')}</p>
       <h3>${RK.t('help.privacyTitle')}</h3>
       ${PRIVACY_STATEMENT_HTML()}
-      <h3>${$t('help.aboutTitle', 'About Reckon')}</h3>
+      <h3>${$t('help.aboutTitle', 'About nSheet')}</h3>
       <p class="rk-help-note">${$t('help.version', 'Version')} ${VERSION}. ${$t('help.aboutLicence', 'Reckon © 2026 Chirag Patnaik. Reckon is free software: you can redistribute it and modify it under the terms of the GNU Affero General Public License, version 3 or any later version. It comes with no warranty.')}</p>
       <p class="rk-help-note">${$t('help.aboutSource', 'Source code and full licence texts:')} <a href="${RK_SOURCE_URL}" target="_blank" rel="noopener noreferrer">${RK_SOURCE_URL}</a> (LICENSE, LICENSES.md, licenses/)</p>
       <table class="rk-help-table rk-help-licences">
@@ -39953,7 +39953,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
         const nowMs = Date.now();
         if (nowMs - lastSaveErrorToast < 10000) return;
         lastSaveErrorToast = nowMs;
-        toast($t('store.saveFailed', 'Reckon could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', { msg: String(e?.message ?? e) }), { kind: 'error', ms: 10000 });
+        toast($t('store.saveFailed', 'nSheet could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', { msg: String(e?.message ?? e) }), { kind: 'error', ms: 10000 });
       },
     });
   };
@@ -40006,21 +40006,21 @@ export function createApp({ client, params = new URLSearchParams() }) {
         hideReadOnly();
         if (initial) return;
         bootReady.then(reloadStored).then(
-          () => toast($t('store.editableNow', 'This tab can edit the workbook now. Reckon loaded the stored copy.')),
-          (e) => toast($t('store.reloadFailed', 'Reckon could not load the stored copy: {msg}', { msg: String(e?.message ?? e) }), { kind: 'error', ms: 8000 }),
+          () => toast($t('store.editableNow', 'This tab can edit the workbook now. nSheet loaded the stored copy.')),
+          (e) => toast($t('store.reloadFailed', 'nSheet could not load the stored copy: {msg}', { msg: String(e?.message ?? e) }), { kind: 'error', ms: 8000 }),
         );
       },
       onLose: ({ stolen }) => {
         readOnly = true;
         showReadOnly(stolen
-          ? $t('store.tookOverStolen', 'Another Reckon tab took over this workbook without waiting, so this tab is read-only. An edit made in the last few seconds may not be saved.')
-          : $t('store.tookOver', 'Another Reckon tab took over this workbook, so this tab is read-only. Reckon saved this tab\'s edits first.'));
+          ? $t('store.tookOverStolen', 'Another nSheet tab took over this workbook without waiting, so this tab is read-only. An edit made in the last few seconds may not be saved.')
+          : $t('store.tookOver', 'Another nSheet tab took over this workbook, so this tab is read-only. nSheet saved this tab\'s edits first.'));
       },
       beforeRelease: async () => { await autosave?.flushIfDirty().catch(() => {}); },
     });
     if ((await tabLock.start()) === 'reader') {
       readOnly = true;
-      showReadOnly($t('store.otherTab', 'Reckon is editing this workbook in another tab, so this tab is read-only.'));
+      showReadOnly($t('store.otherTab', 'nSheet is editing this workbook in another tab, so this tab is read-only.'));
     }
     window.addEventListener('pagehide', () => tabLock.closing());
   };
@@ -40029,7 +40029,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     if (conflictOpen) return;
     conflictOpen = true;
     const body = document.createElement('p');
-    body.textContent = $t('store.conflictBody', 'The stored workbook changed after this tab opened it, perhaps in another tab or program. Reckon saved nothing over it. Load the stored copy to drop this tab\'s unsaved edits, or keep this tab\'s version to replace the stored copy.');
+    body.textContent = $t('store.conflictBody', 'The stored workbook changed after this tab opened it, perhaps in another tab or program. nSheet saved nothing over it. Load the stored copy to drop this tab\'s unsaved edits, or keep this tab\'s version to replace the stored copy.');
     showDialog({
       title: $t('store.conflictTitle', 'The stored workbook changed'),
       body,
@@ -40062,10 +40062,10 @@ export function createApp({ client, params = new URLSearchParams() }) {
 
   const folderPermission = async (mode) => {
     const dir = fsaState.dir;
-    if (!dir) throw new Error($t('store.folderDenied', 'Reckon has no permission to use the folder {name}. Choose Open folder again.', { name: '' }));
+    if (!dir) throw new Error($t('store.folderDenied', 'nSheet has no permission to use the folder {name}. Choose Open folder again.', { name: '' }));
     if ((await dir.queryPermission({ mode })) === 'granted') return dir;
     if ((await dir.requestPermission({ mode })) === 'granted') return dir;
-    throw new Error($t('store.folderDenied', 'Reckon has no permission to use the folder {name}. Choose Open folder again.', { name: dir.name }));
+    throw new Error($t('store.folderDenied', 'nSheet has no permission to use the folder {name}. Choose Open folder again.', { name: dir.name }));
   };
   const folderLocation = {
     id: 'folder',
@@ -40130,7 +40130,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
           return { name: shellBase(nak.fileName), home: { kind: 'nakroot', path: nak.fileName }, versionsKey: nak.fileName, ...(bytes?.length ? { bytes, from: 'naklios' } : {}) };
         }
       } catch { /* not reachable now */ }
-      setTimeout(() => toast($t('store.nakUnavailable', 'NakliOS storage is not available now (it may be locked), so Reckon opened the copy in this browser. Your workbook in NakliOS storage is unchanged.'), { kind: 'info', ms: 9000 }), 0);
+      setTimeout(() => toast($t('store.nakUnavailable', 'NakliOS storage is not available now (it may be locked), so nSheet opened the copy in this browser. Your workbook in NakliOS storage is unchanged.'), { kind: 'info', ms: 9000 }), 0);
       return { name: null, home: null, versionsKey: 'browser', retry: true };
     }
     return { name: null, home: null, versionsKey: 'browser' };
@@ -40361,7 +40361,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
   // assistant"), never the person's ownerHandlers: a hard-to-undo write stages
   // for NakliOS review exactly as any agent's does (commit bcd056d), and a
   // script with a deleting step is refused unless it is script.run_destructive.
-  const AGENT_CALLER = "Reckon's assistant";
+  const AGENT_CALLER = "the nSheet assistant";
   // left out: the assistant's own rail commands, the File page chrome, the view
   // zoom, the file download and the live-range links meant for other apps
   const AGENT_LEFT_OUT = new Set([
@@ -40399,7 +40399,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
   });
   // assistant.ask / status / stop from commands.json run the shell's own handlers
   const shellAssistant = async (name, input = {}) => {
-    if (!shell?.assistant) throw new Error("[unavailable] Reckon's assistant runs only inside NakliOS with AI allowed");
+    if (!shell?.assistant) throw new Error("[unavailable] the nSheet assistant runs only inside NakliOS with AI allowed");
     const c = shell.commands().find((x) => x.name === name);
     if (!c) throw new Error(`[not-found] no command ${name}`);
     return c.handler(input);
@@ -40443,7 +40443,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     if (window.parent !== window && window.naklios) { try { await RK.waitForCapabilities(window.naklios, { timeoutMs: 3000 }); } catch { /* standalone default */ } }
     shell = window.naklishell.mount({
       mount: els.app,
-      app: { id: 'reckon', name: 'Reckon', ext: '.reckon.json', mime: 'application/json', opens: ['.reckon.json', '.csv', '.xlsx', '.ods'], folder: SHELL_FOLDER, docNoun: 'workbook' },
+      app: { id: 'reckon', name: 'nSheet', ext: '.reckon.json', mime: 'application/json', opens: ['.reckon.json', '.csv', '.xlsx', '.ods'], folder: SHELL_FOLDER, docNoun: 'workbook' },
       doc: shellDoc,
       commands: shellCommands,
       state: () => shellHistory,
@@ -40515,11 +40515,11 @@ export function createApp({ client, params = new URLSearchParams() }) {
     client.on('transaction', arm);
     const body = document.createElement('div');
     const p1 = document.createElement('p');
-    p1.textContent = $t('store.notLoadedBody', 'Reckon could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', { from, problem });
+    p1.textContent = $t('store.notLoadedBody', 'nSheet could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', { from, problem });
     const p2 = document.createElement('p');
     p2.textContent = kept.length
-      ? $t('store.keptAs', 'A copy is kept as {name} in {where}. Reckon writes nothing until you edit the new, empty workbook.', { name, where: kept.join(', ') })
-      : $t('store.notKept', 'Reckon could not keep a copy, so download it now. Reckon writes nothing until you edit the new, empty workbook.');
+      ? $t('store.keptAs', 'A copy is kept as {name} in {where}. nSheet writes nothing until you edit the new, empty workbook.', { name, where: kept.join(', ') })
+      : $t('store.notKept', 'nSheet could not keep a copy, so download it now. nSheet writes nothing until you edit the new, empty workbook.');
     body.append(p1, p2);
     showDialog({
       title: $t('store.notLoadedTitle', 'The stored workbook did not open'),
@@ -41224,7 +41224,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     // review C7: a script that deletes runs only where the person reviews it
     destructiveGate: ({ caller } = {}) => {
       if (String(caller ?? '').startsWith('door:')) return 'a program outside NakliOS cannot run a script that deletes or replaces work; the person starts those in NakliOS';
-      if (window.parent !== window && window.naklios?.capabilities.review !== true) return 'NakliOS review is off for Reckon, so a script that deletes or replaces work cannot be shown to the person first';
+      if (window.parent !== window && window.naklios?.capabilities.review !== true) return 'NakliOS review is off for nSheet, so a script that deletes or replaces work cannot be shown to the person first';
       return null;
     },
   };
@@ -41851,7 +41851,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     workbook: linkWorkbook,
     post: (msg) => linkChannel.post(msg),
   });
-  window.addEventListener('pagehide', () => { linkHub.endAll('the Reckon tab closed'); });
+  window.addEventListener('pagehide', () => { linkHub.endAll('the nSheet tab closed'); });
   // review C16: a subscription names sheet ids, so it ends when another workbook
   // opens; every path that opens one goes through client.loadWorkbook
   {
@@ -41871,7 +41871,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
   const copyRangeLink = async () => {
     const url = selectionLink();
     try { await navigator.clipboard.writeText(url); toast(`${tg('link.copied', 'Copied link')} ${url}`); }
-    catch { toast(tg('link.copyBlocked', 'Reckon could not write to the clipboard. Allow clipboard access and try again.'), { kind: 'error', ms: 6000 }); }
+    catch { toast(tg('link.copyBlocked', 'nSheet could not write to the clipboard. Allow clipboard access and try again.'), { kind: 'error', ms: 6000 }); }
     return url;
   };
   // the person chose "Paste from NakliData": ask once, accept one table
@@ -41905,8 +41905,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
     const b = document.getElementById('rk-ask-btn');
     if (!b) return;
     b.textContent = $t('as.askButton', 'Ask');
-    b.setAttribute('aria-label', $t('as.askTitle', 'Ask Reckon'));
-    b.title = $t('as.askButtonTitle', 'Ask Reckon or explain the workbook (Ctrl/Cmd+Shift+K)');
+    b.setAttribute('aria-label', $t('as.askTitle', 'Ask nSheet'));
+    b.title = $t('as.askButtonTitle', 'Ask nSheet or explain the workbook (Ctrl/Cmd+Shift+K)');
   }
   const boot = async () => {
     // i18n: choose the UI locale BEFORE any chrome is built (?lang= wins, for
@@ -42558,7 +42558,7 @@ async function runSelfTest(rk) {
   document.getElementById('rk-app').remove();
   const box = document.createElement('main');
   box.id = 'rk-selftest';
-  box.innerHTML = '<h1>Reckon <small></small></h1><p id="rk-st-status">running the spine self-test…</p><ul id="rk-st-results"></ul>';
+  box.innerHTML = '<h1>nSheet <small></small></h1><p id="rk-st-status">running the spine self-test…</p><ul id="rk-st-results"></ul>';
   document.body.appendChild(box);
   const VERSION = document.querySelector('meta[name="reckon-version"]').content;
   box.querySelector('small').textContent = VERSION + ' — spine self-test';
@@ -42639,7 +42639,7 @@ async function runSelfTest(rk) {
 async function main() {
   let hfSrc;
   try { hfSrc = await fetchHfSource(); }
-  catch (e) { throw new Error(`the calculation engine did not load: ${e?.message ?? e}. Reckon needs a network connection on its first load.`); }
+  catch (e) { throw new Error(`the calculation engine did not load: ${e?.message ?? e}. nSheet needs a network connection on its first load.`); }
   const rk = bootWorker(hfSrc);
   await rk.init();
   if (params.has('selftest')) {
@@ -42657,7 +42657,7 @@ main().catch((e) => {
   window.__rk = { ready: false, error: String(e && e.stack || e) };
   const el = document.createElement('div');
   el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#a51d2d;color:#fff;padding:6px 12px;font:12px monospace;z-index:99';
-  el.textContent = 'Reckon failed to boot: ' + String(e && e.message || e);
+  el.textContent = 'nSheet failed to boot: ' + String(e && e.message || e);
   document.body.appendChild(el);
   console.error(e);
 });

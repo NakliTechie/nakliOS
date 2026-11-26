@@ -11,7 +11,7 @@ import { writeTiff } from '../files/tiff.js';
 import { cmykProfileInfo, rgb16ToCmyk16 } from '../files/cms.js';
 import { M2020_709 } from '../files/print.js';
 
-const PRESS_NAME = 'Atelier naive press (built-in four-ink model, not a characterised printing condition)';
+const PRESS_NAME = 'nPhoto naive press (built-in four-ink model, not a characterised printing condition)';
 const isProof = (l) => l.kind === 'adjustment' && l.adjustment?.type === 'proof' && !l.parentId;
 const isIcc = (p) => /\.(icc|icm)$/i.test(p);
 

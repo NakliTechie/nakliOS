@@ -7,13 +7,13 @@ export const LOREWELL = 'books';
 
 /** What each host or Lorewell code means for the person, in words they can act on. */
 const ADVICE = {
-  ENOGRANT: 'Lectella is not allowed to use Lorewell. To allow it, open NakliOS Settings → AI, forget the Lorewell decision for Lectella, and try again.',
-  ENOENT: 'Lorewell does not offer this yet. Update Lorewell, or open it once so NakliOS learns its commands.',
-  ELAUNCH: 'Lorewell did not open to answer. Open Lorewell once, then try again.',
-  ETIMEOUT: 'Lorewell did not answer in time. Try again.',
-  EDENIED: 'The request to Lorewell was not allowed.',
-  ENOTFOUND: 'Lorewell no longer has that book or passage.',
-  EEMPTY: 'Your Lorewell library has no books yet.',
+  ENOGRANT: 'nResearch is not allowed to use nBooks. To allow it, open NakliOS Settings → AI, forget the nBooks decision for nResearch, and try again.',
+  ENOENT: 'nBooks does not offer this yet. Update nBooks, or open it once so NakliOS learns its commands.',
+  ELAUNCH: 'nBooks did not open to answer. Open nBooks once, then try again.',
+  ETIMEOUT: 'nBooks did not answer in time. Try again.',
+  EDENIED: 'The request to nBooks was not allowed.',
+  ENOTFOUND: 'nBooks no longer has that book or passage.',
+  EEMPTY: 'Your nBooks library has no books yet.',
 };
 
 export class LorewellError extends Error {
@@ -32,7 +32,7 @@ export const lorewellReachable = (naklios) => !!(naklios?.capabilities?.hosted &
  * @param {any} naklios @param {string} name without the `books.` prefix @param {object} args
  */
 export async function callLorewell(naklios, name, args) {
-  if (!lorewellReachable(naklios)) throw new LorewellError('EHOST', 'Lorewell is reachable only when Lectella runs inside NakliOS.');
+  if (!lorewellReachable(naklios)) throw new LorewellError('EHOST', 'nBooks is reachable only when nResearch runs inside NakliOS.');
   let out;
   try {
     out = await naklios.experimental_commands.call(`${LOREWELL}.${name}`, args);
@@ -43,7 +43,7 @@ export async function callLorewell(naklios, name, args) {
   }
   if (!out || out.ok === false) {
     // Lorewell's own errors arrive as EFAIL with its message: "No work with id …", "No passage … in …".
-    const msg = String(out?.message ?? 'Lorewell did not answer');
+    const msg = String(out?.message ?? 'nBooks did not answer');
     const code = /\bNo (work|passage)\b/.test(msg) ? 'ENOTFOUND' : (/^([A-Z]{4,}):/.exec(msg)?.[1] ?? out?.code ?? 'EFAIL');
     throw new LorewellError(code, msg.replace(/^[A-Z]{4,}:\s*/, ''));
   }

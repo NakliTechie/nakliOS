@@ -79,7 +79,7 @@ export function mapCrs(crs, ranges = DEFAULT_RANGES) {
       const key = SCALAR[name]; const n = Number(String(value).replace(/^\+/, ''));
       const [lo, hi] = ranges[key] || [-Infinity, Infinity];
       if (typeof value !== 'string' || !Number.isFinite(n)) skipped.push({ setting: name, value: short(value), reason: 'not a number' });
-      else if (n < lo || n > hi) skipped.push({ setting: name, value: short(value), reason: `outside Atelier's range ${lo} to ${hi}` });
+      else if (n < lo || n > hi) skipped.push({ setting: name, value: short(value), reason: `outside nPhoto's range ${lo} to ${hi}` });
       else settings[key] = n;
       continue;
     }
@@ -91,7 +91,7 @@ export function mapCrs(crs, ranges = DEFAULT_RANGES) {
       else skipped.push({ setting: name, value: short(value), reason: 'curve points must be 2+ ascending x,y pairs in 0..255' });
       continue;
     }
-    skipped.push({ setting: name, value: short(value), reason: 'no Atelier equivalent yet' });
+    skipped.push({ setting: name, value: short(value), reason: 'no nPhoto equivalent yet' });
   }
   return { settings, curve: Object.keys(curve).length ? curve : null, skipped, metadata };
 }

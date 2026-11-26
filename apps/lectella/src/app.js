@@ -231,7 +231,7 @@ async function onCaps() {
     if (!askedStorage) {
       askedStorage = true;
       const opts = (c.fsBackends ?? []).map((/** @type {any} */ b) => ({ label: `Use my ${b.label}`, run: () => chooseStorage(b.id).catch(fail) }));
-      banner('Where should Lectella keep its library? Until you choose, it stays in this browser.', { actions: [...opts, { label: 'Keep in this browser', run: () => chooseStorage('browser').catch(fail) }] });
+      banner('Where should nResearch keep its library? Until you choose, it stays in this browser.', { actions: [...opts, { label: 'Keep in this browser', run: () => chooseStorage('browser').catch(fail) }] });
     }
   } else if (where !== 'browser' && !preferBrowser && !disconnected) {
     disconnected = true;
@@ -264,7 +264,7 @@ function drawAi() {
   } else s.textContent = 'Chat needs NakliOS; search works here';
   const send = /** @type {HTMLButtonElement} */ ($('send'));
   send.disabled = !aiOn() || busy;
-  $('chat-hint').textContent = aiOn() ? 'Enter sends · Shift+Enter adds a line' : c.hosted ? 'Pick a model in NakliOS Settings → AI to chat' : 'Open Lectella inside NakliOS to chat with your sources';
+  $('chat-hint').textContent = aiOn() ? 'Enter sends · Shift+Enter adds a line' : c.hosted ? 'Pick a model in NakliOS Settings → AI to chat' : 'Open nResearch inside NakliOS to chat with your sources';
 }
 
 // ── State and drawing ────────────────────────────────────────────────────────────────────────────────
@@ -302,10 +302,10 @@ function draw() {
   $('welcome').hidden = !!nb;
   for (const id of ['nb-head', 'cols', 'tabs']) $(id).hidden = !nb;
   if (!nb) {
-    naklios?.title?.('Lectella');
+    naklios?.title?.('nResearch');
     return;
   }
-  naklios?.title?.(`Lectella — ${nb.name}`);
+  naklios?.title?.(`nResearch — ${nb.name}`);
   $('nb-name').textContent = nb.name;
   $('nb-desc').textContent = nb.description;
   for (const t of document.querySelectorAll('[data-tab]')) t.setAttribute('aria-selected', String(/** @type {HTMLElement} */ (t).dataset.tab === tab));
@@ -543,7 +543,7 @@ async function importFiles(files) {
 /** The notebook a file sent from another app lands in: the open one, else a new "Inbox". */
 async function inboxNotebook() {
   if (current && lib.findNotebook(current)) return current;
-  const nb = lib.findNotebook('Inbox') ?? (await lib.createNotebook({ name: 'Inbox', description: 'Files sent to Lectella from other apps' }));
+  const nb = lib.findNotebook('Inbox') ?? (await lib.createNotebook({ name: 'Inbox', description: 'Files sent to nResearch from other apps' }));
   current = nb.id;
   turns = await lib.chat(nb.id);
   return nb.id;
@@ -559,7 +559,7 @@ async function onSent(grant) {
     const file = await naklios.files.read(grant.token);
     const raw = file.bytes ?? file.data;
     const bytes = raw instanceof Uint8Array ? raw : typeof raw === 'string' ? new TextEncoder().encode(raw) : new Uint8Array(raw);
-    const app = file.sourceAppId === 'books' ? 'Lorewell' : file.sourceAppId || 'another app';
+    const app = file.sourceAppId === 'books' ? 'nBooks' : file.sourceAppId || 'another app';
     const nbId = await inboxNotebook();
     if ((await importBytes(nbId, file.name || grant.name, bytes, `sent from ${app}`)) === 'added') banner(`Added ${file.name || grant.name} from ${app} to “${lib.notebook(nbId).name}”.`);
     draw();
@@ -814,24 +814,24 @@ async function saveAudio() {
  */
 async function editInSonella() {
   if (!openNoteId) return;
-  if (where === 'browser') return banner('Edit in Sonella needs your NakliOS Folder or Crate: choose one in the "Library in" menu, then try again.', { error: true });
+  if (where === 'browser') return banner('Edit in nAudio needs your NakliOS Folder or Crate: choose one in the "Library in" menu, then try again.', { error: true });
   const btn = $('note-sonella');
   btn.disabled = true;
   try {
     const path = `audio/${openNoteId}.wav`;
     const targets = await naklios.files.experimental_targets(path).catch(() => []);
-    if (!targets.some((/** @type {any} */ t) => t.appId === 'sonella' && t.action === 'import')) throw new Error('Sonella is not available to take this file in this NakliOS.');
+    if (!targets.some((/** @type {any} */ t) => t.appId === 'sonella' && t.action === 'import')) throw new Error('nAudio is not available to take this file in this NakliOS.');
     const track = await renderOpenEpisode();
     if (!track) return;
     $('note-saved').textContent = 'Saving the audio…';
     const wav = new Uint8Array(await (await wavOf(track.pcm, track.rate)).arrayBuffer());
     if (wav.length > 64 * 1048576) throw new Error(`This episode is ${(wav.length / 1048576).toFixed(0)} MB, over the 64 MB NakliOS sends between apps. Choose Short or Standard, or use Save audio.`);
     await lib.saveAudio(openNoteId, wav);
-    $('note-saved').textContent = 'Sending to Sonella…';
+    $('note-saved').textContent = 'Sending to nAudio…';
     const sent = await naklios.files.experimental_sendTo('sonella', [path]);
-    $('note-saved').textContent = sent === false ? 'Not sent' : 'Sent to Sonella';
+    $('note-saved').textContent = sent === false ? 'Not sent' : 'Sent to nAudio';
   } catch (e) {
-    banner(`Could not send it to Sonella: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+    banner(`Could not send it to nAudio: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
   } finally {
     btn.disabled = false;
   }
@@ -869,7 +869,7 @@ async function openSource(id, chunk) {
   openSourceId = id;
   setViewerLorewell(s.ref ? { work: s.ref.work, location: s.ref.location } : null);
   $('src-title').textContent = s.title;
-  $('src-meta').textContent = s.ref ? `Passage in Lorewell · cited ${ago(s.added)}` : `${s.chars.toLocaleString()} characters · added ${ago(s.added)}`;
+  $('src-meta').textContent = s.ref ? `Passage in nBooks · cited ${ago(s.added)}` : `${s.chars.toLocaleString()} characters · added ${ago(s.added)}`;
   const box = $('src-text');
   if (chunk !== undefined) {
     const c = (await lib.sourceChunks(id))[chunk];
@@ -1051,15 +1051,15 @@ async function send() {
   /** @type {import('./core.js').ContextItem[]} */
   const items = await lib.contextItems(nbId);
   const notes = [];
-  if (lib.unavailable.length) notes.push(`Left out ${lib.unavailable.length} Lorewell passage${lib.unavailable.length === 1 ? '' : 's'} that could not be read: ${lib.unavailable.join(', ')}.`);
+  if (lib.unavailable.length) notes.push(`Left out ${lib.unavailable.length} nBooks passage${lib.unavailable.length === 1 ? '' : 's'} that could not be read: ${lib.unavailable.join(', ')}.`);
   if (/** @type {HTMLInputElement} */ ($('lorewell-chat')).checked && lorewellReachable(naklios)) {
-    banner('Searching Lorewell for this question…');
+    banner('Searching nBooks for this question…');
     try {
       const found = await lorewellItems(question);
       items.push(...found);
-      notes.push(found.length ? `Added ${found.length} passage${found.length === 1 ? '' : 's'} from Lorewell.` : 'Lorewell had no passage for this question.');
+      notes.push(found.length ? `Added ${found.length} passage${found.length === 1 ? '' : 's'} from nBooks.` : 'nBooks had no passage for this question.');
     } catch (e) {
-      notes.push(`Lorewell was not searched: ${/** @type {any} */ (e)?.message ?? e}`);
+      notes.push(`nBooks was not searched: ${/** @type {any} */ (e)?.message ?? e}`);
     }
   }
   if (notes.length) banner(notes.join(' '));
@@ -1142,7 +1142,7 @@ async function readReference(src) {
     return (await readLorewell(naklios, r.work, r.location, { chars: 6000, context: 1 })).text;
   } catch (e) {
     // A passage id changes when the book file or Lorewell's passage extractor changes; the saved excerpt stands in.
-    if (/** @type {any} */ (e)?.code === 'ENOTFOUND' && r.excerpt) return `${r.excerpt}\n\n[Lorewell no longer finds this passage at the cited place, so this is the excerpt saved when it was cited.]`;
+    if (/** @type {any} */ (e)?.code === 'ENOTFOUND' && r.excerpt) return `${r.excerpt}\n\n[nBooks no longer finds this passage at the cited place, so this is the excerpt saved when it was cited.]`;
     throw e;
   }
 }
@@ -1168,7 +1168,7 @@ async function lorewellSearch() {
   const q = /** @type {HTMLInputElement} */ ($('lw-query')).value.trim();
   const list = $('lw-results');
   if (!q) return;
-  $('lw-status').textContent = 'Searching Lorewell… (the first time, NakliOS asks you to allow it)';
+  $('lw-status').textContent = 'Searching nBooks… (the first time, NakliOS asks you to allow it)';
   list.innerHTML = '';
   let results;
   try {
@@ -1177,7 +1177,7 @@ async function lorewellSearch() {
     $('lw-status').textContent = String(/** @type {any} */ (e)?.message ?? e);
     return;
   }
-  $('lw-status').textContent = results.length ? `${results.length} passage${results.length === 1 ? '' : 's'} in Lorewell` : 'No passage in Lorewell matches that.';
+  $('lw-status').textContent = results.length ? `${results.length} passage${results.length === 1 ? '' : 's'} in nBooks` : 'No passage in nBooks matches that.';
   for (const h of results) {
     const li = document.createElement('li');
     li.innerHTML = `<div class="lw-head"><b>${esc(citeLabel(h))}</b><button type="button" data-command="source.add-reference">Add</button><button type="button" class="lw-read">Read</button></div><p>${esc(h.excerpt ?? '')}</p>`;
@@ -1214,8 +1214,8 @@ async function lorewellSearch() {
 /** Show one Lorewell passage, as a cited chat answer points to it. @param {{ work?: string, location?: string, title: string }} r */
 async function openLorewellPassage(r) {
   $('src-title').textContent = r.title;
-  $('src-meta').textContent = 'Passage in Lorewell';
-  $('src-text').textContent = 'Reading from Lorewell…';
+  $('src-meta').textContent = 'Passage in nBooks';
+  $('src-text').textContent = 'Reading from nBooks…';
   openSourceId = null;
   setViewerLorewell({ work: String(r.work), location: String(r.location) });
   const d = dlg('dlg-source');
@@ -1298,10 +1298,10 @@ const UI = {
     if (!viewerLorewell) return;
     try {
       const out = await openInLorewell(naklios, viewerLorewell.work, viewerLorewell.location);
-      banner(`Opened “${out?.title ?? 'the book'}” in Lorewell at the cited passage.`);
+      banner(`Opened “${out?.title ?? 'the book'}” in nBooks at the cited passage.`);
     } catch (e) {
       // The passage stays readable here; only the jump into Lorewell failed.
-      banner(`Lorewell could not open it: ${/** @type {any} */ (e)?.message ?? e} The passage is shown here instead.`, { error: true });
+      banner(`nBooks could not open it: ${/** @type {any} */ (e)?.message ?? e} The passage is shown here instead.`, { error: true });
     }
   },
   'source.find-lorewell': () => {

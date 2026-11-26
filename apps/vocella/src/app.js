@@ -455,7 +455,7 @@ function applyHostTheme(theme) {
 }
 
 function setTitle() {
-  naklios?.title(reader.cards.length ? `Vocella — ${reader.current().deck.split('::').at(-1)}` : 'Vocella');
+  naklios?.title(reader.cards.length ? `nCards — ${reader.current().deck.split('::').at(-1)}` : 'nCards');
 }
 
 // Start: the catalog draws the shelf; sql.js loads alongside it.

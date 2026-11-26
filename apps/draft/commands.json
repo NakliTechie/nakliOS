@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Draft",
+      "label": "Open in nDoc",
       "extensions": [
         ".md",
         ".txt",
@@ -13,7 +13,7 @@
   "commands": [
     {
       "name": "documents.list",
-      "description": "List the documents in the Draft editor, e.g. \"what documents do I have\".",
+      "description": "List the documents in the nDoc editor, e.g. \"what documents do I have\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -22,7 +22,7 @@
     },
     {
       "name": "document.active",
-      "description": "Say which document is open in the Draft editor, e.g. \"which document am I working on\".",
+      "description": "Say which document is open in the nDoc editor, e.g. \"which document am I working on\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -31,7 +31,7 @@
     },
     {
       "name": "file.save",
-      "description": "Save the document where it lives (NakliOS storage when hosted). A new document is saved under its name in NakliOS storage, or in this browser when not hosted. In the Draft editor, e.g. \"save my document\".",
+      "description": "Save the document where it lives (NakliOS storage when hosted). A new document is saved under its name in NakliOS storage, or in this browser when not hosted. In the nDoc editor, e.g. \"save my document\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -41,7 +41,7 @@
     },
     {
       "name": "file.save_as",
-      "description": "Save under a new name; the copy becomes the document you are editing. kind is naklios (hosted) or browser (standalone: this browser's Draft documents), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as). In the Draft editor, e.g. \"save this as quarterly report\".",
+      "description": "Save under a new name; the copy becomes the document you are editing. kind is naklios (hosted) or browser (standalone: this browser's nDoc documents), default where it is now. A name already taken fails unless replace is true. Saving to this computer needs a person (File > Save as). In the nDoc editor, e.g. \"save this as quarterly report\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -72,7 +72,7 @@
     },
     {
       "name": "file.export",
-      "description": "Export a copy in another format; the document stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads. In the Draft editor, e.g. \"export this as a Word file\".",
+      "description": "Export a copy in another format; the document stays where it is. Hosted, the copy goes to NakliOS storage under exports/; otherwise it downloads. In the nDoc editor, e.g. \"export this as a Word file\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -96,7 +96,7 @@
     },
     {
       "name": "file.open",
-      "description": "Show the Open page: Recent, then the documents in storage, then Browse this computer. In the Draft editor, e.g. \"show me my files\".",
+      "description": "Show the Open page: Recent, then the documents in storage, then Browse this computer. In the nDoc editor, e.g. \"show me my files\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -107,7 +107,7 @@
     },
     {
       "name": "file.new",
-      "description": "Show the New page (blank or a template) in the Draft editor, e.g. \"show the new document page\".",
+      "description": "Show the New page (blank or a template) in the nDoc editor, e.g. \"show the new document page\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -118,7 +118,7 @@
     },
     {
       "name": "file.info",
-      "description": "The current document's name, where it is saved, and whether it has unsaved changes, in the Draft editor, e.g. \"is my document saved\".",
+      "description": "The current document's name, where it is saved, and whether it has unsaved changes, in the nDoc editor, e.g. \"is my document saved\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -127,7 +127,7 @@
     },
     {
       "name": "file.print",
-      "description": "Print the document, or save it as PDF, from the Draft editor, e.g. \"print this\".",
+      "description": "Print the document, or save it as PDF, from the nDoc editor, e.g. \"print this\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -138,7 +138,7 @@
     },
     {
       "name": "document.open",
-      "description": "Open a document in the Draft editor by name, e.g. \"open my budget document\".",
+      "description": "Open a document in the nDoc editor by name, e.g. \"open my budget document\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -156,7 +156,7 @@
     },
     {
       "name": "text.read",
-      "description": "Read the text of the open document in the Draft editor, e.g. \"read my document to me\". A long document comes in parts: when truncated is true, call again with from set to next.",
+      "description": "Read the text of the open document in the nDoc editor, e.g. \"read my document to me\". A long document comes in parts: when truncated is true, call again with from set to next.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -174,7 +174,7 @@
     },
     {
       "name": "outline.read",
-      "description": "List the headings of the open document in the Draft editor, e.g. \"what are the sections of this document\".",
+      "description": "List the headings of the open document in the nDoc editor, e.g. \"what are the sections of this document\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -183,7 +183,7 @@
     },
     {
       "name": "text.find",
-      "description": "Find words in the open document in the Draft editor, e.g. \"where does this document mention the budget\".",
+      "description": "Find words in the open document in the nDoc editor, e.g. \"where does this document mention the budget\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -205,7 +205,7 @@
     },
     {
       "name": "text.replace",
-      "description": "Replace words in the open document in the Draft editor, e.g. \"change Tuesday to Wednesday in my document\". The person may need to accept the change first.",
+      "description": "Replace words in the open document in the nDoc editor, e.g. \"change Tuesday to Wednesday in my document\". The person may need to accept the change first.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -236,7 +236,7 @@
     },
     {
       "name": "text.insert",
-      "description": "Insert text into the open document in the Draft editor; with markdown: true the text is Markdown and becomes headings, paragraphs, lists and tables, e.g. \"add a sentence at the end\".",
+      "description": "Insert text into the open document in the nDoc editor; with markdown: true the text is Markdown and becomes headings, paragraphs, lists and tables, e.g. \"add a sentence at the end\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -261,7 +261,7 @@
     },
     {
       "name": "format.mark",
-      "description": "Make text bold, italic, underlined, struck through, code, superscript, subscript or highlighted in the Draft editor, e.g. \"make the title bold\".",
+      "description": "Make text bold, italic, underlined, struck through, code, superscript, subscript or highlighted in the nDoc editor, e.g. \"make the title bold\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -296,7 +296,7 @@
     },
     {
       "name": "format.style",
-      "description": "Set the paragraph style in the Draft editor: body, title, subtitle or a heading level, e.g. \"make this a heading\".",
+      "description": "Set the paragraph style in the nDoc editor: body, title, subtitle or a heading level, e.g. \"make this a heading\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -332,7 +332,7 @@
     },
     {
       "name": "format.align",
-      "description": "Align paragraphs left, centre, right or justified in the Draft editor, e.g. \"centre the title\".",
+      "description": "Align paragraphs left, centre, right or justified in the nDoc editor, e.g. \"centre the title\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -363,7 +363,7 @@
     },
     {
       "name": "format.link",
-      "description": "Add, change or remove a link on text in the Draft editor, e.g. \"link this to the report\".",
+      "description": "Add, change or remove a link on text in the nDoc editor, e.g. \"link this to the report\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -388,7 +388,7 @@
     },
     {
       "name": "format.list",
-      "description": "Turn paragraphs into a bulleted or numbered list in the Draft editor, or back, e.g. \"make these a numbered list\".",
+      "description": "Turn paragraphs into a bulleted or numbered list in the nDoc editor, or back, e.g. \"make these a numbered list\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -417,7 +417,7 @@
     },
     {
       "name": "footnote.insert",
-      "description": "Add a footnote in the Draft editor, e.g. \"add a footnote citing the source\".",
+      "description": "Add a footnote in the nDoc editor, e.g. \"add a footnote citing the source\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -439,7 +439,7 @@
     },
     {
       "name": "table.insert",
-      "description": "Insert a table in the Draft editor, e.g. \"add a table with three columns\".",
+      "description": "Insert a table in the nDoc editor, e.g. \"add a table with three columns\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -465,7 +465,7 @@
     },
     {
       "name": "table.edit",
-      "description": "Change a table in the Draft editor: add or delete a row or column, toggle the header row, merge or split cells, or delete the table, e.g. \"add a row to the table\".",
+      "description": "Change a table in the nDoc editor: add or delete a row or column, toggle the header row, merge or split cells, or delete the table, e.g. \"add a row to the table\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -497,7 +497,7 @@
     },
     {
       "name": "image.set",
-      "description": "Set a picture's alt text, caption, position or width in the Draft editor, e.g. \"describe the picture for screen readers\".",
+      "description": "Set a picture's alt text, caption, position or width in the nDoc editor, e.g. \"describe the picture for screen readers\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -536,7 +536,7 @@
     },
     {
       "name": "insert.page-break",
-      "description": "Insert a page break in the Draft editor, e.g. \"start a new page here\".",
+      "description": "Insert a page break in the nDoc editor, e.g. \"start a new page here\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -550,7 +550,7 @@
     },
     {
       "name": "insert.contents",
-      "description": "Insert a table of contents built from the headings in the Draft editor, e.g. \"add a table of contents\".",
+      "description": "Insert a table of contents built from the headings in the nDoc editor, e.g. \"add a table of contents\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -568,7 +568,7 @@
     },
     {
       "name": "history.undo",
-      "description": "Undo the last change in the Draft editor, e.g. \"undo that\".",
+      "description": "Undo the last change in the nDoc editor, e.g. \"undo that\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -578,7 +578,7 @@
     },
     {
       "name": "history.redo",
-      "description": "Redo the change just undone in the Draft editor, e.g. \"redo that\".",
+      "description": "Redo the change just undone in the nDoc editor, e.g. \"redo that\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -588,7 +588,7 @@
     },
     {
       "name": "comments.list",
-      "description": "List the comments in the open document in the Draft editor, e.g. \"what comments are there\".",
+      "description": "List the comments in the open document in the nDoc editor, e.g. \"what comments are there\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -597,7 +597,7 @@
     },
     {
       "name": "comment.add",
-      "description": "Add a comment on some text in the Draft editor, e.g. \"comment that this figure needs a source\".",
+      "description": "Add a comment on some text in the nDoc editor, e.g. \"comment that this figure needs a source\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -625,7 +625,7 @@
     },
     {
       "name": "comment.reply",
-      "description": "Reply to a comment in the Draft editor, e.g. \"reply that the source is added\".",
+      "description": "Reply to a comment in the nDoc editor, e.g. \"reply that the source is added\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -649,7 +649,7 @@
     },
     {
       "name": "comment.resolve",
-      "description": "Resolve or reopen a comment in the Draft editor, e.g. \"mark that comment as done\".",
+      "description": "Resolve or reopen a comment in the nDoc editor, e.g. \"mark that comment as done\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -671,7 +671,7 @@
     },
     {
       "name": "comment.delete",
-      "description": "Delete a comment in the Draft editor, e.g. \"remove that comment\".",
+      "description": "Delete a comment in the nDoc editor, e.g. \"remove that comment\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -689,7 +689,7 @@
     },
     {
       "name": "changes.list",
-      "description": "List the suggested changes (tracked changes) in the open document in the Draft editor, e.g. \"what changes are suggested\".",
+      "description": "List the suggested changes (tracked changes) in the open document in the nDoc editor, e.g. \"what changes are suggested\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -698,7 +698,7 @@
     },
     {
       "name": "change.accept",
-      "description": "Accept one suggested change, or all of them, in the Draft editor, e.g. \"accept all the changes\".",
+      "description": "Accept one suggested change, or all of them, in the nDoc editor, e.g. \"accept all the changes\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -716,7 +716,7 @@
     },
     {
       "name": "change.reject",
-      "description": "Reject one suggested change, or all of them, in the Draft editor, e.g. \"reject that change\".",
+      "description": "Reject one suggested change, or all of them, in the nDoc editor, e.g. \"reject that change\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -734,7 +734,7 @@
     },
     {
       "name": "suggesting.set",
-      "description": "Turn suggesting mode (track changes) on or off in the Draft editor, e.g. \"track my changes\".",
+      "description": "Turn suggesting mode (track changes) on or off in the nDoc editor, e.g. \"track my changes\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -751,7 +751,7 @@
     },
     {
       "name": "page.read",
-      "description": "Read the page setup of the open document in the Draft editor, e.g. \"what paper size is this\".",
+      "description": "Read the page setup of the open document in the nDoc editor, e.g. \"what paper size is this\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -760,7 +760,7 @@
     },
     {
       "name": "page.set",
-      "description": "Change the page setup in the Draft editor: paper size, orientation, margins, header, footer, page numbers, e.g. \"use landscape pages\".",
+      "description": "Change the page setup in the nDoc editor: paper size, orientation, margins, header, footer, page numbers, e.g. \"use landscape pages\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -818,7 +818,7 @@
     },
     {
       "name": "document.print",
-      "description": "Print the open document, or save it as PDF, from the Draft editor (alias of file.print), e.g. \"print the document\".",
+      "description": "Print the open document, or save it as PDF, from the nDoc editor (alias of file.print), e.g. \"print the document\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -829,7 +829,7 @@
     },
     {
       "name": "document.export",
-      "description": "Export the open document from the Draft editor and return it to the caller (file.export saves the copy as a file instead) as Markdown, HTML, Draft JSON or Word, e.g. \"give me this as markdown\".",
+      "description": "Export the open document from the nDoc editor and return it to the caller (file.export saves the copy as a file instead) as Markdown, HTML, nDoc JSON or Word, e.g. \"give me this as markdown\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -846,7 +846,7 @@
           },
           "history": {
             "type": "boolean",
-            "description": "Draft JSON only: true to include saved versions and hidden comments. Default false"
+            "description": "nDoc JSON only: true to include saved versions and hidden comments. Default false"
           }
         },
         "required": [
@@ -856,7 +856,7 @@
     },
     {
       "name": "document.new",
-      "description": "Start a new document in the Draft editor, blank or from a template, through the shell's New without showing the New page (alias of file.new), e.g. \"start a new letter\".",
+      "description": "Start a new document in the nDoc editor, blank or from a template, through the shell's New without showing the New page (alias of file.new), e.g. \"start a new letter\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -874,7 +874,7 @@
     },
     {
       "name": "document.delete",
-      "description": "Delete a document in the Draft editor permanently, e.g. \"delete my old draft\".",
+      "description": "Delete a document in the nDoc editor permanently, e.g. \"delete my old draft\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -892,7 +892,7 @@
     },
     {
       "name": "templates.list",
-      "description": "List the document templates in the Draft editor, e.g. \"what templates are there\".",
+      "description": "List the document templates in the nDoc editor, e.g. \"what templates are there\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -901,7 +901,7 @@
     },
     {
       "name": "template.save",
-      "description": "Save the open document as a template in the Draft editor, e.g. \"save this as a template called report\".",
+      "description": "Save the open document as a template in the nDoc editor, e.g. \"save this as a template called report\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -919,7 +919,7 @@
     },
     {
       "name": "assistant.check",
-      "description": "Check the open document for spelling, grammar, style and accessibility issues in the Draft editor, e.g. \"proofread my document\".",
+      "description": "Check the open document for spelling, grammar, style and accessibility issues in the nDoc editor, e.g. \"proofread my document\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -928,7 +928,7 @@
     },
     {
       "name": "assistant.apply",
-      "description": "Apply a fix the writing assistant found in the Draft editor, e.g. \"fix that spelling\".",
+      "description": "Apply a fix the writing assistant found in the nDoc editor, e.g. \"fix that spelling\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -950,7 +950,7 @@
     },
     {
       "name": "panel.open",
-      "description": "Open a panel in the Draft editor: documents, find, settings, writing help, format, insert, review, page setup, assistant, versions, the command palette or help, e.g. \"open the comments\".",
+      "description": "Open a panel in the nDoc editor: documents, find, settings, writing help, format, insert, review, page setup, assistant, versions, the command palette or help, e.g. \"open the comments\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -983,7 +983,7 @@
     },
     {
       "name": "version.save",
-      "description": "Save a named version of the open document in the Draft editor, e.g. \"save a version called first draft\".",
+      "description": "Save a named version of the open document in the nDoc editor, e.g. \"save a version called first draft\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -997,7 +997,7 @@
     },
     {
       "name": "versions.list",
-      "description": "List the saved versions of the open document in the Draft editor, e.g. \"what versions are saved\".",
+      "description": "List the saved versions of the open document in the nDoc editor, e.g. \"what versions are saved\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1006,7 +1006,7 @@
     },
     {
       "name": "version.restore",
-      "description": "Restore a saved version in the Draft editor; the current text is saved as a version first, e.g. \"go back to the first draft\".",
+      "description": "Restore a saved version in the nDoc editor; the current text is saved as a version first, e.g. \"go back to the first draft\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1024,7 +1024,7 @@
     },
     {
       "name": "version.delete",
-      "description": "Delete a saved version in the Draft editor, e.g. \"delete the old version\".",
+      "description": "Delete a saved version in the nDoc editor, e.g. \"delete the old version\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -1042,7 +1042,7 @@
     },
     {
       "name": "compare.version",
-      "description": "Compare the open document with a saved version in the Draft editor, e.g. \"what changed since the first draft\".",
+      "description": "Compare the open document with a saved version in the nDoc editor, e.g. \"what changed since the first draft\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1060,7 +1060,7 @@
     },
     {
       "name": "compare.document",
-      "description": "Compare the open document with another document in the Draft editor, e.g. \"compare this with the old report\".",
+      "description": "Compare the open document with another document in the nDoc editor, e.g. \"compare this with the old report\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1078,7 +1078,7 @@
     },
     {
       "name": "compare.as-suggestions",
-      "description": "Show the difference from a saved version or another document as suggested changes in the Draft editor, e.g. \"show the changes as track changes\".",
+      "description": "Show the difference from a saved version or another document as suggested changes in the nDoc editor, e.g. \"show the changes as track changes\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1096,7 +1096,7 @@
     },
     {
       "name": "sidecar.preset",
-      "description": "Propose a shorter, longer, more formal or plain-English rewrite of a passage in the Draft editor; the person accepts it, e.g. \"make this paragraph shorter\".",
+      "description": "Propose a shorter, longer, more formal or plain-English rewrite of a passage in the nDoc editor; the person accepts it, e.g. \"make this paragraph shorter\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1127,7 +1127,7 @@
     },
     {
       "name": "sidecar.translate",
-      "description": "Propose a translation of a passage in the Draft editor; the person accepts it, e.g. \"translate this into Hindi\".",
+      "description": "Propose a translation of a passage in the nDoc editor; the person accepts it, e.g. \"translate this into Hindi\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1157,7 +1157,7 @@
     },
     {
       "name": "goal.set",
-      "description": "Set a word-count goal for the open document in the Draft editor, e.g. \"set a goal of 2000 words\".",
+      "description": "Set a word-count goal for the open document in the nDoc editor, e.g. \"set a goal of 2000 words\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1174,7 +1174,7 @@
     },
     {
       "name": "goal.read",
-      "description": "Read the word-count goal of the open document in the Draft editor, e.g. \"how close am I to my word goal\".",
+      "description": "Read the word-count goal of the open document in the nDoc editor, e.g. \"how close am I to my word goal\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1183,7 +1183,7 @@
     },
     {
       "name": "format.spacing",
-      "description": "Set line spacing, space before and after, or the first-line indent in the Draft editor, for the selection or the whole document, e.g. \"double-space the document\".",
+      "description": "Set line spacing, space before and after, or the first-line indent in the nDoc editor, for the selection or the whole document, e.g. \"double-space the document\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1225,7 +1225,7 @@
     },
     {
       "name": "format.text",
-      "description": "Set the text colour or size in the Draft editor, e.g. \"make this red\".",
+      "description": "Set the text colour or size in the nDoc editor, e.g. \"make this red\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1262,7 +1262,7 @@
     },
     {
       "name": "format.direction",
-      "description": "Set paragraphs to left-to-right, right-to-left or automatic in the Draft editor, e.g. \"this paragraph is Arabic, make it right to left\".",
+      "description": "Set paragraphs to left-to-right, right-to-left or automatic in the nDoc editor, e.g. \"this paragraph is Arabic, make it right to left\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1292,7 +1292,7 @@
     },
     {
       "name": "list.style",
-      "description": "Change a numbered list's style or restart its numbering in the Draft editor, e.g. \"number this list with roman numerals\".",
+      "description": "Change a numbered list's style or restart its numbering in the nDoc editor, e.g. \"number this list with roman numerals\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1324,7 +1324,7 @@
     },
     {
       "name": "symbol.insert",
-      "description": "Insert a special character in the Draft editor, e.g. \"insert the rupee sign\".",
+      "description": "Insert a special character in the nDoc editor, e.g. \"insert the rupee sign\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1346,7 +1346,7 @@
     },
     {
       "name": "table.cell",
-      "description": "Shade table cells or show or hide their borders in the Draft editor, e.g. \"shade the header row grey\".",
+      "description": "Shade table cells or show or hide their borders in the nDoc editor, e.g. \"shade the header row grey\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1387,7 +1387,7 @@
     },
     {
       "name": "endnote.insert",
-      "description": "Add an endnote in the Draft editor, e.g. \"add an endnote with the source\".",
+      "description": "Add an endnote in the nDoc editor, e.g. \"add an endnote with the source\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1409,7 +1409,7 @@
     },
     {
       "name": "xref.insert",
-      "description": "Insert a cross-reference to a heading in the Draft editor, e.g. \"refer to the methods section here\".",
+      "description": "Insert a cross-reference to a heading in the nDoc editor, e.g. \"refer to the methods section here\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1431,7 +1431,7 @@
     },
     {
       "name": "bookmarks.list",
-      "description": "List the headings that cross-references can point to in the Draft editor, e.g. \"what sections can I refer to\".",
+      "description": "List the headings that cross-references can point to in the nDoc editor, e.g. \"what sections can I refer to\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1440,7 +1440,7 @@
     },
     {
       "name": "page.preview",
-      "description": "Open the print preview with real page breaks in the Draft editor, e.g. \"show me the pages\".",
+      "description": "Open the print preview with real page breaks in the nDoc editor, e.g. \"show me the pages\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1449,7 +1449,7 @@
     },
     {
       "name": "page.guide",
-      "description": "Show or hide the approximate page guide while writing in the Draft editor, e.g. \"show where the pages break\".",
+      "description": "Show or hide the approximate page guide while writing in the nDoc editor, e.g. \"show where the pages break\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1466,7 +1466,7 @@
     },
     {
       "name": "equation.insert",
-      "description": "Insert an equation written in LaTeX in the Draft editor, e.g. \"add the equation E = mc^2\".",
+      "description": "Insert an equation written in LaTeX in the nDoc editor, e.g. \"add the equation E = mc^2\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1492,7 +1492,7 @@
     },
     {
       "name": "equation.set",
-      "description": "Change an equation's LaTeX in the Draft editor, e.g. \"fix the exponent in that equation\".",
+      "description": "Change an equation's LaTeX in the nDoc editor, e.g. \"fix the exponent in that equation\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1515,7 +1515,7 @@
     },
     {
       "name": "citations.import",
-      "description": "Import references from BibTeX or CSL-JSON text into the document's library in the Draft editor, e.g. \"add these references\".",
+      "description": "Import references from BibTeX or CSL-JSON text into the document's library in the nDoc editor, e.g. \"add these references\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1542,7 +1542,7 @@
     },
     {
       "name": "citation.insert",
-      "description": "Cite one or more references from the library in the Draft editor, e.g. \"cite Doe 2020 here\".",
+      "description": "Cite one or more references from the library in the nDoc editor, e.g. \"cite Doe 2020 here\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1570,7 +1570,7 @@
     },
     {
       "name": "bibliography.insert",
-      "description": "Insert a bibliography of the cited works in the Draft editor, e.g. \"add the references list\".",
+      "description": "Insert a bibliography of the cited works in the nDoc editor, e.g. \"add the references list\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1584,7 +1584,7 @@
     },
     {
       "name": "citations.style",
-      "description": "Set the citation style in the Draft editor: APA, Chicago author-date, IEEE or Harvard, e.g. \"use IEEE citations\".",
+      "description": "Set the citation style in the nDoc editor: APA, Chicago author-date, IEEE or Harvard, e.g. \"use IEEE citations\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1607,7 +1607,7 @@
     },
     {
       "name": "citations.list",
-      "description": "List the references in the document's library and where they are cited in the Draft editor, e.g. \"what references do I have\".",
+      "description": "List the references in the document's library and where they are cited in the nDoc editor, e.g. \"what references do I have\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1616,7 +1616,7 @@
     },
     {
       "name": "assistant.languagetool",
-      "description": "Turn on LanguageTool grammar checking through a server running on this computer, or turn it off, in the Draft editor, e.g. \"use my LanguageTool server\".",
+      "description": "Turn on LanguageTool grammar checking through a server running on this computer, or turn it off, in the nDoc editor, e.g. \"use my LanguageTool server\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1630,7 +1630,7 @@
     },
     {
       "name": "assistant.languagetool-test",
-      "description": "Test the connection to a LanguageTool server on this computer from the Draft editor; sends no document text, e.g. \"is LanguageTool running\".",
+      "description": "Test the connection to a LanguageTool server on this computer from the nDoc editor; sends no document text, e.g. \"is LanguageTool running\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1644,7 +1644,7 @@
     },
     {
       "name": "assistant.vale-read",
-      "description": "Read the Vale house-style settings and rules in the Draft editor, e.g. \"what style rules do I have\".",
+      "description": "Read the Vale house-style settings and rules in the nDoc editor, e.g. \"what style rules do I have\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1653,7 +1653,7 @@
     },
     {
       "name": "assistant.vale-set",
-      "description": "Turn Vale house-style checking on or off, or add, change or remove a rule file, in the Draft editor, e.g. \"add a rule against the word utilise\".",
+      "description": "Turn Vale house-style checking on or off, or add, change or remove a rule file, in the nDoc editor, e.g. \"add a rule against the word utilise\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1714,7 +1714,7 @@
     },
     {
       "name": "script.run",
-      "description": "Run several Draft commands in order and return each step's result; a failed step stops the script and earlier steps stay applied. Nested scripts, hard-to-undo commands and document switches are refused, e.g. \"add a heading and a paragraph and make the heading bold\".",
+      "description": "Run several nDoc commands in order and return each step's result; a failed step stops the script and earlier steps stay applied. Nested scripts, hard-to-undo commands and document switches are refused, e.g. \"add a heading and a paragraph and make the heading bold\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1729,7 +1729,7 @@
               "properties": {
                 "command": {
                   "type": "string",
-                  "description": "A Draft command name, e.g. text.insert"
+                  "description": "An nDoc command name, e.g. text.insert"
                 },
                 "input": {
                   "type": "object",
@@ -1749,7 +1749,7 @@
     },
     {
       "name": "assistant.ask",
-      "description": "Ask Draft's assistant to do a job in the open document (write, rewrite, summarise, proofread or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status, e.g. \"ask Draft to write a one-page project brief\".",
+      "description": "Ask the nDoc assistant to do a job in the open document (write, rewrite, summarise, proofread or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status, e.g. \"ask nDoc to write a one-page project brief\".",
       "scope": "write",
       "shows": true,
       "input": {
@@ -1776,7 +1776,7 @@
     },
     {
       "name": "assistant.status",
-      "description": "The state of Draft's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"how is Draft getting on\".",
+      "description": "The state of the nDoc assistant's job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"how is nDoc getting on\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1789,7 +1789,7 @@
     },
     {
       "name": "assistant.stop",
-      "description": "Stop Draft's running assistant job, e.g. \"stop the Draft assistant\".",
+      "description": "Stop the nDoc assistant's running job, e.g. \"stop the nDoc assistant\".",
       "scope": "write",
       "input": {
         "type": "object",

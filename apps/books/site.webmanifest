@@ -1,6 +1,6 @@
 {
-  "name": "Lorewell",
-  "short_name": "Lorewell",
+  "name": "nBooks",
+  "short_name": "nBooks",
   "description": "A private semantic library that helps you read, understand, connect, and remember the books you own.",
   "id": "/",
   "start_url": "/",

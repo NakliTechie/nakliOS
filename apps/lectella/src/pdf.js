@@ -43,7 +43,7 @@ export async function pdfText(bytes, { onPage } = {}) {
       onPage?.(p, doc.numPages);
     }
     const text = pages.filter(Boolean).join('\n\n');
-    if (!text.trim()) throw new Error('This PDF has no text layer (it looks scanned). Lectella cannot read scanned pages yet.');
+    if (!text.trim()) throw new Error('This PDF has no text layer (it looks scanned). nResearch cannot read scanned pages yet.');
     const meta = await doc.getMetadata().catch(() => null);
     const title = String(meta?.info?.Title ?? '').trim();
     return { text, pages: doc.numPages, title };

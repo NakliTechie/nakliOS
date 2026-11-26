@@ -218,7 +218,7 @@
     },
     {
       "name": "list_folder",
-      "description": "List the photos and virtual copies in the workspace with rating, flag, label, keywords, cached EXIF (camera, lens, ISO, focal length, date) and whether Atelier and XMP sidecars exist; filter by any of them or by a collection. EXIF is read once per photo (only the file's start where storage allows) and cached in library.json.",
+      "description": "List the photos and virtual copies in the workspace with rating, flag, label, keywords, cached EXIF (camera, lens, ISO, focal length, date) and whether nPhoto and XMP sidecars exist; filter by any of them or by a collection. EXIF is read once per photo (only the file's start where storage allows) and cached in library.json.",
       "handler": "library.folder",
       "effect": "read",
       "inputSchema": {
@@ -3278,7 +3278,7 @@
     },
     {
       "name": "list_models",
-      "description": "List the on-device AI models (masks, depth, pixel tools): id, download name, licence and its source, approximate size, and status absent | downloading | ready | failed. Also says whether the NakliOS host offers segmentation or depth (it does not today, so Atelier uses its own models).",
+      "description": "List the on-device AI models (masks, depth, pixel tools): id, download name, licence and its source, approximate size, and status absent | downloading | ready | failed. Also says whether the NakliOS host offers segmentation or depth (it does not today, so nPhoto uses its own models).",
       "handler": "model.list",
       "effect": "read",
       "inputSchema": {
@@ -3545,7 +3545,7 @@
     },
     {
       "name": "load_lens_data",
-      "description": "Load lens correction data the person owns from the workspace: a lensfun database (.xml) or Adobe lens profiles (.lcp). Atelier ships no lens data. The data stays in this session; set_lens_profile stores the resolved coefficients on the layer.",
+      "description": "Load lens correction data the person owns from the workspace: a lensfun database (.xml) or Adobe lens profiles (.lcp). nPhoto ships no lens data. The data stays in this session; set_lens_profile stores the resolved coefficients on the layer.",
       "handler": "lens.load",
       "effect": "read",
       "inputSchema": {
@@ -3981,7 +3981,7 @@
     },
     {
       "name": "import_xmp",
-      "description": "Read rating, label, keywords (and, with develop, Camera Raw develop settings) from XMP sidecars that Lightroom, Bridge or another tool wrote beside the photos, into Atelier sidecars.",
+      "description": "Read rating, label, keywords (and, with develop, Camera Raw develop settings) from XMP sidecars that Lightroom, Bridge or another tool wrote beside the photos, into nPhoto sidecars.",
       "handler": "library.import-xmp",
       "effect": "mutate",
       "inputSchema": {
@@ -4011,7 +4011,7 @@
     },
     {
       "name": "import_lightroom_catalog",
-      "description": "Import a Lightroom Classic catalog (.lrcat): ratings, picks, colour labels, keywords, virtual copies, collections and develop settings for the photos it finds in the workspace; reports unmatched paths. Develop settings fill only photos without Atelier settings. dryRun reports without writing. Staged: the person confirms.",
+      "description": "Import a Lightroom Classic catalog (.lrcat): ratings, picks, colour labels, keywords, virtual copies, collections and develop settings for the photos it finds in the workspace; reports unmatched paths. Develop settings fill only photos without nPhoto settings. dryRun reports without writing. Staged: the person confirms.",
       "handler": "library.import-lrcat",
       "effect": "irreversible",
       "inputSchema": {
@@ -4147,7 +4147,7 @@
     },
     {
       "name": "install_looks",
-      "description": "Write Atelier's film looks pack (12 .cube LUTs generated from Atelier's own formula, MIT) to presets/looks/; existing files are kept. The looks then appear in list_presets and the preset menu.",
+      "description": "Write nPhoto's film looks pack (12 .cube LUTs generated from nPhoto's own formula, MIT) to presets/looks/; existing files are kept. The looks then appear in list_presets and the preset menu.",
       "handler": "looks.install",
       "effect": "mutate",
       "inputSchema": {
@@ -4160,7 +4160,7 @@
     },
     {
       "name": "auto_develop",
-      "description": "Auto white balance (grey world in camera space, solved to temperature and tint) and auto tone (exposure, contrast, highlights, shadows, whites, blacks from histogram targets), applied to a RAW layer as one undoable step. Atelier's own targets; not fitted to Lightroom.",
+      "description": "Auto white balance (grey world in camera space, solved to temperature and tint) and auto tone (exposure, contrast, highlights, shadows, whites, blacks from histogram targets), applied to a RAW layer as one undoable step. nPhoto's own targets; not fitted to Lightroom.",
       "handler": "develop.auto",
       "effect": "mutate",
       "inputSchema": {
@@ -4427,7 +4427,7 @@
     },
     {
       "name": "set_soft_proof",
-      "description": "Soft-proof the document: on adds (or updates) a 'proof' adjustment layer on top that shows the printed colour; warning mixes a warning colour where colours fall outside the gamut; off removes it. Press: Atelier's built-in naive four-ink press (tac = total ink limit in percent, 100..400, default 300), or a CMYK ICC output profile from the workspace (profile: path to a .icc or .icm file the person supplies; intent: relative (default), perceptual, saturation or absolute), read with LittleCMS; profile null returns to the naive press. Colours are clipped to Rec.709 before proofing.",
+      "description": "Soft-proof the document: on adds (or updates) a 'proof' adjustment layer on top that shows the printed colour; warning mixes a warning colour where colours fall outside the gamut; off removes it. Press: nPhoto's built-in naive four-ink press (tac = total ink limit in percent, 100..400, default 300), or a CMYK ICC output profile from the workspace (profile: path to a .icc or .icm file the person supplies; intent: relative (default), perceptual, saturation or absolute), read with LittleCMS; profile null returns to the naive press. Colours are clipped to Rec.709 before proofing.",
       "handler": "print.proof",
       "effect": "mutate",
       "inputSchema": {
@@ -4487,7 +4487,7 @@
     },
     {
       "name": "sample_print_color",
-      "description": "Read the document colour at a point (before any soft proof) as CMYK coverages in percent on Atelier's built-in naive press, with the printed colour, the Oklab distance between them and whether it is in gamut.",
+      "description": "Read the document colour at a point (before any soft proof) as CMYK coverages in percent on nPhoto's built-in naive press, with the printed colour, the Oklab distance between them and whether it is in gamut.",
       "handler": "print.sample",
       "effect": "read",
       "inputSchema": {
@@ -4519,7 +4519,7 @@
     },
     {
       "name": "export_cmyk_tiff",
-      "description": "Export the composite (without the soft-proof layer) as a CMYK TIFF: separated on Atelier's built-in naive press (8-bit, no ICC profile, tac total ink), or through a CMYK ICC output profile from the workspace (profile; 8- or 16-bit, the profile embedded, LittleCMS, black point compensation on). Colours are clipped to Rec.709 before separation. Staged: the person confirms before the file is written.",
+      "description": "Export the composite (without the soft-proof layer) as a CMYK TIFF: separated on nPhoto's built-in naive press (8-bit, no ICC profile, tac total ink), or through a CMYK ICC output profile from the workspace (profile; 8- or 16-bit, the profile embedded, LittleCMS, black point compensation on). Colours are clipped to Rec.709 before separation. Staged: the person confirms before the file is written.",
       "handler": "print.export",
       "effect": "irreversible",
       "inputSchema": {
@@ -4636,7 +4636,7 @@
     },
     {
       "name": "set_sync_folder",
-      "description": "Name the shared folder this device syncs its library with: a path in the NakliOS Folder or Crate, or in the folder the person chose (Choose sync folder…). No Atelier account or server is involved.",
+      "description": "Name the shared folder this device syncs its library with: a path in the NakliOS Folder or Crate, or in the folder the person chose (Choose sync folder…). No nPhoto account or server is involved.",
       "handler": "share.set-folder",
       "effect": "mutate",
       "inputSchema": {
@@ -5340,7 +5340,7 @@
     },
     {
       "name": "merge_hdr",
-      "description": "Merge bracketed exposures (2-9 workspace photos of one scene, RAW or JPEG/PNG/WebP) into one high-dynamic-range photo: MTB translation alignment, exposure ratios measured from the frames, a hat-weighted merge in linear light, optional deghosting. By default writes an Atelier document (.atelier) next to the first photo whose layer develops the merge as a float32 linear source (stored as a 32-bit float TIFF beside it, values above 1.0 kept); an output ending .dng writes a 16-bit linear DNG (camera colour matrix) instead. Opens the result with the exposure that matches the middle bracket, ready to tone in Develop. No model. Staged: the person confirms before the file is written.",
+      "description": "Merge bracketed exposures (2-9 workspace photos of one scene, RAW or JPEG/PNG/WebP) into one high-dynamic-range photo: MTB translation alignment, exposure ratios measured from the frames, a hat-weighted merge in linear light, optional deghosting. By default writes an nPhoto document (.atelier) next to the first photo whose layer develops the merge as a float32 linear source (stored as a 32-bit float TIFF beside it, values above 1.0 kept); an output ending .dng writes a 16-bit linear DNG (camera colour matrix) instead. Opens the result with the exposure that matches the middle bracket, ready to tone in Develop. No model. Staged: the person confirms before the file is written.",
       "handler": "merge.hdr",
       "effect": "irreversible",
       "inputSchema": {

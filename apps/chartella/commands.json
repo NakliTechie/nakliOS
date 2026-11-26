@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Chartella",
+      "label": "Open in nBoard",
       "extensions": [
         ".json",
         ".excalidraw",
@@ -1321,7 +1321,7 @@
     {
       "name": "edit.paste",
       "label": "Paste",
-      "description": "Paste shapes (Chartella or Excalidraw clipboard), an image or text at the pointer.",
+      "description": "Paste shapes (nBoard or Excalidraw clipboard), an image or text at the pointer.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2598,7 +2598,7 @@
     {
       "name": "ai.diagram",
       "label": "Diagram from text",
-      "description": "Describe a flowchart, mind map or sequence and get editable shapes and bound arrows on this page. The model writes Mermaid; Chartella's own layout places it. Runs inside NakliOS on the model chosen in Settings → AI. Returns { ids }.",
+      "description": "Describe a flowchart, mind map or sequence and get editable shapes and bound arrows on this page. The model writes Mermaid; nBoard's own layout places it. Runs inside NakliOS on the model chosen in Settings → AI. Returns { ids }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2847,7 +2847,7 @@
     {
       "name": "assistant.ask",
       "label": "Ask",
-      "description": "Ask Chartella's assistant to do a job in the open board (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "description": "Ask nBoard's assistant to do a job in the open board (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2876,7 +2876,7 @@
     {
       "name": "assistant.status",
       "label": "Assistant status",
-      "description": "The state of Chartella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "description": "The state of nBoard's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2891,7 +2891,7 @@
     {
       "name": "assistant.stop",
       "label": "Stop the assistant",
-      "description": "Stop Chartella's running assistant job.",
+      "description": "Stop nBoard's running assistant job.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2927,7 +2927,7 @@
     },
     {
       "code": "bad-file",
-      "meaning": "The file is not a board Chartella can read."
+      "meaning": "The file is not a board nBoard can read."
     },
     {
       "code": "unsupported",
@@ -2935,7 +2935,7 @@
     },
     {
       "code": "bad-colour",
-      "meaning": "A colour is not in a form Chartella accepts (#rrggbb, #rgb, #rrggbbaa or transparent)."
+      "meaning": "A colour is not in a form nBoard accepts (#rrggbb, #rgb, #rrggbbaa or transparent)."
     },
     {
       "code": "out-of-range",

@@ -263,7 +263,7 @@ const singleRaw = (d) => {
 
   async function loadDocument(s, path) {
     const file = await readJson(s, path);
-    if (file?.format !== 'atelier-document' || !file.document) fail('invalid', `${path} is not an Atelier document`, 'fix_argument', 'open_photo');
+    if (file?.format !== 'atelier-document' || !file.document) fail('invalid', `${path} is not an nPhoto document`, 'fix_argument', 'open_photo');
     const doc = structuredClone(file.document);
     const entries = Object.entries(file.buffers || {});
     const r = entries.length || doc.layers.some((l) => l.kind === 'raw' || l.kind === 'image') ? renderer() : ctx.renderer;
@@ -315,7 +315,7 @@ const singleRaw = (d) => {
     if (!FORMATS[fmt]) fail('invalid', `format must be one of ${Object.keys(FORMATS).join(', ')}`, 'fix_argument', 'export_image');
     if (layers && LAYERED_FORMATS.includes(fmt)) fail('invalid', 'layers: true writes one flat file per layer; choose jpeg, png, webp, avif or tiff16', 'fix_argument', 'export_image');
     if (LAYERED_FORMATS.includes(fmt) && maxEdge) fail('unsupported', `${fmt} export writes the document at full size; leave maxEdge out`, 'fix_argument', 'export_image');
-    if (LAYERED_FORMATS.includes(fmt) && cs !== 'srgb') fail('unsupported', `${fmt} export is sRGB only, because Atelier raster layers are 8-bit sRGB`, 'fix_argument', 'export_image');
+    if (LAYERED_FORMATS.includes(fmt) && cs !== 'srgb') fail('unsupported', `${fmt} export is sRGB only, because nPhoto raster layers are 8-bit sRGB`, 'fix_argument', 'export_image');
     if (fmt === 'avif' && cs !== 'srgb') fail('unsupported', 'AVIF export is sRGB only: the browser encoder takes no ICC profile', 'fix_argument', 'export_image');
     if (cs === 'rec2020' && fmt !== 'tiff16') fail('unsupported', 'rec2020 export needs 16 bits; use tiff16', 'fix_argument', 'export_image');
     if (!['tiff16', ...LAYERED_FORMATS].includes(fmt) && !(await canEncode(FORMATS[fmt].mime))) fail('unsupported', `this browser cannot encode ${fmt}; choose jpeg, png or tiff16`, 'fix_argument', 'export_image');
@@ -605,7 +605,7 @@ const singleRaw = (d) => {
     const s = store();
     const layers = a.layerIds.map((id) => rawLayer(id, 'apply_preset'));
     const p = await readPreset(s, a.preset);
-    if (!Object.keys(p.settings).length && !Object.keys(p.objects).length) fail('unsupported', `${p.path} holds no setting Atelier renders; skipped: ${p.skipped.map((x) => x.setting).join(', ') || 'none'}`, 'change_target', 'list_presets');
+    if (!Object.keys(p.settings).length && !Object.keys(p.objects).length) fail('unsupported', `${p.path} holds no setting nPhoto renders; skipped: ${p.skipped.map((x) => x.setting).join(', ') || 'none'}`, 'change_target', 'list_presets');
     await change(ctx, `apply_preset ${baseName(p.path)}`, (doc) => {
       for (const l of layers) {
         const x = doc.layers.find((y) => y.id === l.id);

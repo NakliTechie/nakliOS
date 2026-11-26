@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ductella</title>
+<title>nVector</title>
 <meta name="description" content="A vector editor in one HTML file: pen, paths, booleans, Shape Builder and type, with SVG as the native format on your own disk.">
 <meta name="color-scheme" content="light">
-<meta property="og:title" content="Ductella">
+<meta property="og:title" content="nVector">
 <meta property="og:description" content="A vector editor in one HTML file: pen, Pathfinder, Shape Builder and type, with plain SVG on your own disk.">
 <meta property="og:url" content="https://naklios.dev/apps/ductella/">
 <meta property="og:type" content="website">
@@ -198,7 +198,7 @@ select { max-width: 150px; }
 <body>
 <div id="app">
   <header id="menubar">
-    <div class="brand" title="Ductella">Ductella</div>
+    <div class="brand" title="nVector">nVector</div>
     <nav id="menus" aria-label="Menus"></nav>
     <button id="palette-btn" class="nakli-btn small" data-cmd="app.palette" title="Command palette (⌘K)">⌘K</button>
   </header>
@@ -2300,7 +2300,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
       add("file.load-svg", "Load SVG text", "File", { scope: "destructive", params: { svg: str("Complete SVG document text", { required: true }), name: str("File name to show") }, menu: false });
       add("file.place", "Place image…", "File", { key: "Cmd+Shift+P", person: true });
       add("file.export", "Export…", "File", { key: "Cmd+E", scope: "read" });
-      add("file.export-svg", "Export SVG", "File", { scope: "read", params: { clean: bool("Strip Ductella editor data"), decimals: num("Round numbers to N decimals"), stripIds: bool("Remove unreferenced ids"), minify: bool("Drop comments and whitespace"), styling: str("Write styling as presentation attributes or inline CSS; omit to keep as drawn", { enum: ["attributes", "css"] }), artboard: num("Artboard index; omit for the whole document"), download: bool("Download the file (default true); false returns the text") } });
+      add("file.export-svg", "Export SVG", "File", { scope: "read", params: { clean: bool("Strip nVector editor data"), decimals: num("Round numbers to N decimals"), stripIds: bool("Remove unreferenced ids"), minify: bool("Drop comments and whitespace"), styling: str("Write styling as presentation attributes or inline CSS; omit to keep as drawn", { enum: ["attributes", "css"] }), artboard: num("Artboard index; omit for the whole document"), download: bool("Download the file (default true); false returns the text") } });
       add("file.export-raster", "Export PNG, JPEG or WebP", "File", { scope: "read", params: { format: str("png | jpeg | webp", { enum: ["png", "jpeg", "webp"] }), scale: num("1, 2 or 3"), artboards: P("array", "Artboard indices; omit for all"), download: bool("Download (default true); false returns [{name, type, size, dataUrl}]") } });
       add("file.export-pdf", "Export PDF", "File", { scope: "read", params: { artboards: P("array", "Artboard indices; omit for all"), download: bool("Download (default true); false returns {name, type, size, dataUrl}") } });
       add("doc.read", "Read document SVG", "File", { scope: "read", menu: false });
@@ -2557,11 +2557,11 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
     const entries = [...groups.values()].map((g) => ({
       name: g.name,
       scope: g.scope,
-      description: `Ductella ${g.cat.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label.replace("…", "")})`).join(", ")}. Call help.read for a command's parameters.`,
+      description: `nVector ${g.cat.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label.replace("…", "")})`).join(", ")}. Call help.read for a command's parameters.`,
       input: {
         type: "object",
         properties: {
-          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which Ductella command to run" },
+          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which nVector command to run" },
           params: { type: "object", description: "The command's own parameters (see help.read)" }
         },
         required: ["command"]
@@ -2571,12 +2571,12 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
     entries.push({
       name: "help.read",
       scope: "read",
-      description: "List Ductella commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (file.read) to see the drawing.",
-      input: { type: "object", properties: { command: { type: "string", description: "A Ductella command id; omit to list all" } } },
+      description: "List nVector commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (file.read) to see the drawing.",
+      input: { type: "object", properties: { command: { type: "string", description: "An nVector command id; omit to list all" } } },
       commands: []
     });
     for (const e of entries) if (!RAIL_NAMES.includes(e.name)) throw new Error(`Rail entry ${e.name} is missing from RAIL_NAMES in src/host.js`);
-    if (entries.length > RAIL_LIMIT) throw new Error(`The NakliOS rail takes at most ${RAIL_LIMIT} commands; Ductella would register ${entries.length}`);
+    if (entries.length > RAIL_LIMIT) throw new Error(`The NakliOS rail takes at most ${RAIL_LIMIT} commands; nVector would register ${entries.length}`);
     return entries;
   }
   function railCommands() {
@@ -12379,7 +12379,7 @@ ${text}`;
     lastWritten = text;
     lastBackend = globalThis.naklios?.capabilities?.fsBackend ?? "default";
     afterLoad2(removed);
-    setHostTitle(`${app.doc.name} · Ductella`);
+    setHostTitle(`${app.doc.name} · nVector`);
     hostStore.writeState({ last: path }).catch(() => {
     });
   }
@@ -12402,7 +12402,7 @@ ${text}`;
     lastBackend = globalThis.naklios?.capabilities?.fsBackend ?? "default";
     lastWritten = text;
     doc.dirty = false;
-    setHostTitle(`${doc.name} · Ductella`);
+    setHostTitle(`${doc.name} · nVector`);
     hostStore.writeState({ last: doc.hostPath }).catch(() => {
     });
     app.emit("doc", "saved");
@@ -12462,7 +12462,7 @@ ${text}`;
     if ((event?.op === "rename" || event?.op === "move") && event.from === doc.hostPath && event.to) {
       doc.hostPath = event.to;
       doc.name = fileName(event.to);
-      setHostTitle(`${doc.name} · Ductella`);
+      setHostTitle(`${doc.name} · nVector`);
       return;
     }
     if (event?.path !== doc.hostPath) return;
@@ -12555,7 +12555,7 @@ ${text}`;
     markIsolation();
     view.renderBoards();
     view.fit(app.doc.meta.artboards[0]);
-    document.title = `${app.doc.name} · Ductella`;
+    document.title = `${app.doc.name} · nVector`;
     if (removed?.length) Toast.show(`Removed for safety: ${removed.join(", ")}`, { duration: 5e3, kind: "info" });
     app.emit("doc", "load");
   }
@@ -12611,7 +12611,7 @@ ${text}`;
       await Export.svg(doc.serialize(), { filename: doc.name });
     }
     doc.dirty = false;
-    document.title = `${doc.name} · Ductella`;
+    document.title = `${doc.name} · nVector`;
     Toast.show(`Saved ${doc.name}`, { duration: 1800, kind: "success" });
     app.emit("doc", "saved");
     return true;
@@ -14755,7 +14755,7 @@ ${text}`;
       return;
     }
     if (!items.length) {
-      listEl.replaceChildren(h("p", { class: "hint", text: "No drawings yet. Draw something; Ductella saves it here as you work." }));
+      listEl.replaceChildren(h("p", { class: "hint", text: "No drawings yet. Draw something; nVector saves it here as you work." }));
       return;
     }
     listEl.replaceChildren(...items.map((it) => h("div", { class: "pal-item", role: "option", tabindex: "0", onclick: () => {
@@ -14780,7 +14780,7 @@ ${text}`;
       } },
       h("h2", { text: "Save as" }),
       h("label", { class: "field" }, h("span", { text: "Name" }), name),
-      h("p", { class: "hint", text: "Saved as an SVG file in NakliOS storage, under Ductella’s drawings." }),
+      h("p", { class: "hint", text: "Saved as an SVG file in NakliOS storage, under nVector’s drawings." }),
       h("div", { class: "nakli-actions" }, h("button", { type: "button", class: "nakli-btn", text: "Cancel", onclick: close }), h("button", { class: "nakli-btn primary", text: "Save" }))
     );
     const ov2 = h("div", { class: "nakli-overlay", onkeydown: (e) => {
@@ -15496,7 +15496,7 @@ ${text}`;
       const handle = await item.getAsFileSystemHandle?.();
       const file = item.getAsFile();
       if (!/\.svg$/i.test(file?.name ?? "") && file?.type !== "image/svg+xml") {
-        Toast.show("Ductella opens SVG files. Use File › Place image for pictures.", { duration: 3e3 });
+        Toast.show("nVector opens SVG files. Use File › Place image for pictures.", { duration: 3e3 });
         return;
       }
       afterLoad(app.doc.loadText(await file.text(), { name: file.name, fileHandle: handle?.kind === "file" ? handle : null }));
@@ -15522,10 +15522,10 @@ ${text}`;
       onTheme: applyHostTheme,
       onCapabilities: () => onHostCapabilities(afterLoad).catch((e) => Toast.show(`NakliOS storage: ${e.message}`, { kind: "error", duration: 5e3 })),
       beforeClose: () => flushHostSave(),
-      title: `${app.doc.name} · Ductella`
+      title: `${app.doc.name} · nVector`
     });
     app.on("doc", (kind) => {
-      if (kind === "load" || kind === "saved") setHostTitle(`${app.doc.name} · Ductella`);
+      if (kind === "load" || kind === "saved") setHostTitle(`${app.doc.name} · nVector`);
     });
     if (!hosted()) Workspace.recall("last-folder").then(async (ws) => {
       if (ws && await Workspace.permission(ws) === "granted") {

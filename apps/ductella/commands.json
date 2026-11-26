@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Ductella",
+      "label": "Open in nVector",
       "extensions": [
         ".svg"
       ],
@@ -14,7 +14,7 @@
   "commands": [
     {
       "name": "file.destructive",
-      "description": "Ductella file (destructive). Pass command and params; commands: file.new (New document), file.open-path (Open drawing by path), file.load-svg (Load SVG text). Call help.read for a command's parameters.",
+      "description": "nVector file (destructive). Pass command and params; commands: file.new (New document), file.open-path (Open drawing by path), file.load-svg (Load SVG text). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -26,7 +26,7 @@
               "file.open-path",
               "file.load-svg"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -40,7 +40,7 @@
     },
     {
       "name": "file.write",
-      "description": "Ductella file (write). Pass command and params; commands: file.save (Save). Call help.read for a command's parameters.",
+      "description": "nVector file (write). Pass command and params; commands: file.save (Save). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -50,7 +50,7 @@
             "enum": [
               "file.save"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -64,7 +64,7 @@
     },
     {
       "name": "file.read",
-      "description": "Ductella file (read). Pass command and params; commands: file.export (Export), file.export-svg (Export SVG), file.export-raster (Export PNG, JPEG or WebP), file.export-pdf (Export PDF), doc.read (Read document SVG), doc.outline (Read document outline), doc.history (Read undo history). Call help.read for a command's parameters.",
+      "description": "nVector file (read). Pass command and params; commands: file.export (Export), file.export-svg (Export SVG), file.export-raster (Export PNG, JPEG or WebP), file.export-pdf (Export PDF), doc.read (Read document SVG), doc.outline (Read document outline), doc.history (Read undo history). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -80,7 +80,7 @@
               "doc.outline",
               "doc.history"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -94,7 +94,7 @@
     },
     {
       "name": "edit.write",
-      "description": "Ductella edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.paste (Paste), edit.paste-in-place (Paste in place), edit.duplicate (Duplicate). Call help.read for a command's parameters.",
+      "description": "nVector edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.paste (Paste), edit.paste-in-place (Paste in place), edit.duplicate (Duplicate). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -108,7 +108,7 @@
               "edit.paste-in-place",
               "edit.duplicate"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -122,7 +122,7 @@
     },
     {
       "name": "edit.destructive",
-      "description": "Ductella edit (destructive). Pass command and params; commands: edit.cut (Cut), edit.delete (Delete). Call help.read for a command's parameters.",
+      "description": "nVector edit (destructive). Pass command and params; commands: edit.cut (Cut), edit.delete (Delete). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -133,7 +133,7 @@
               "edit.cut",
               "edit.delete"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -147,7 +147,7 @@
     },
     {
       "name": "edit.read",
-      "description": "Ductella edit (read). Pass command and params; commands: edit.copy (Copy), edit.select-all (Select all), edit.deselect (Deselect), select.set (Select objects). Call help.read for a command's parameters.",
+      "description": "nVector edit (read). Pass command and params; commands: edit.copy (Copy), edit.select-all (Select all), edit.deselect (Deselect), select.set (Select objects). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -160,7 +160,7 @@
               "edit.deselect",
               "select.set"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -174,7 +174,7 @@
     },
     {
       "name": "view.read",
-      "description": "Ductella view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit artboard in window), view.fit-all (Fit all in window), view.actual (Actual size), view.outline (Outline mode), view.rulers (Show rulers), view.grid (Show grid), view.snap-grid (Snap to grid), view.snap-pixel (Snap to pixel), view.smart-guides (Smart guides), view.guides (Show guides), view.grid-size (Grid size). Call help.read for a command's parameters.",
+      "description": "nVector view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit artboard in window), view.fit-all (Fit all in window), view.actual (Actual size), view.outline (Outline mode), view.rulers (Show rulers), view.grid (Show grid), view.snap-grid (Snap to grid), view.snap-pixel (Snap to pixel), view.smart-guides (Smart guides), view.guides (Show guides), view.grid-size (Grid size). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -196,7 +196,7 @@
               "view.guides",
               "view.grid-size"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -210,7 +210,7 @@
     },
     {
       "name": "view.write",
-      "description": "Ductella view (write). Pass command and params; commands: view.add-guide (Add guide), view.clear-guides (Clear guides). Call help.read for a command's parameters.",
+      "description": "nVector view (write). Pass command and params; commands: view.add-guide (Add guide), view.clear-guides (Clear guides). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -221,7 +221,7 @@
               "view.add-guide",
               "view.clear-guides"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -235,7 +235,7 @@
     },
     {
       "name": "object.write",
-      "description": "Ductella object (write). Pass command and params; commands: obj.group (Group), obj.ungroup (Ungroup), obj.lock (Lock selection), obj.unlock-all (Unlock all), obj.hide (Hide selection), obj.show-all (Show all), obj.bring-front (Bring to front), obj.forward (Bring forward), obj.backward (Send backward), obj.send-back (Send to back), obj.transform (Transform), obj.move (Move), obj.nudge-left (Nudge left), obj.nudge-right (Nudge right), obj.nudge-up (Nudge up), obj.nudge-down (Nudge down), obj.nudge-left-10 (Nudge left 10), obj.nudge-right-10 (Nudge right 10), obj.nudge-up-10 (Nudge up 10), obj.nudge-down-10 (Nudge down 10), obj.rotate (Rotate), obj.scale (Scale), obj.align (Align), obj.distribute (Distribute). Call help.read for a command's parameters.",
+      "description": "nVector object (write). Pass command and params; commands: obj.group (Group), obj.ungroup (Ungroup), obj.lock (Lock selection), obj.unlock-all (Unlock all), obj.hide (Hide selection), obj.show-all (Show all), obj.bring-front (Bring to front), obj.forward (Bring forward), obj.backward (Send backward), obj.send-back (Send to back), obj.transform (Transform), obj.move (Move), obj.nudge-left (Nudge left), obj.nudge-right (Nudge right), obj.nudge-up (Nudge up), obj.nudge-down (Nudge down), obj.nudge-left-10 (Nudge left 10), obj.nudge-right-10 (Nudge right 10), obj.nudge-up-10 (Nudge up 10), obj.nudge-down-10 (Nudge down 10), obj.rotate (Rotate), obj.scale (Scale), obj.align (Align), obj.distribute (Distribute). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -268,7 +268,7 @@
               "obj.align",
               "obj.distribute"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -282,7 +282,7 @@
     },
     {
       "name": "object.read",
-      "description": "Ductella object (read). Pass command and params; commands: obj.isolate (Enter isolation mode), obj.exit-isolation (Exit isolation mode), obj.set-key (Set key object). Call help.read for a command's parameters.",
+      "description": "nVector object (read). Pass command and params; commands: obj.isolate (Enter isolation mode), obj.exit-isolation (Exit isolation mode), obj.set-key (Set key object). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -294,7 +294,7 @@
               "obj.exit-isolation",
               "obj.set-key"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -308,7 +308,7 @@
     },
     {
       "name": "path.write",
-      "description": "Ductella path (write). Pass command and params; commands: path.join (Join), path.average (Average), path.simplify (Simplify), path.smooth (Smooth), path.outline-stroke (Outline Stroke), path.offset (Offset Path), path.reverse (Reverse path direction), path.create (Create path), path.compound (Make compound path), path.release-compound (Release compound path), path.fill-rule (Fill rule), path.clip (Make clipping mask), path.release-clip (Release clipping mask), path.convert-anchors (Convert selected anchors). Call help.read for a command's parameters.",
+      "description": "nVector path (write). Pass command and params; commands: path.join (Join), path.average (Average), path.simplify (Simplify), path.smooth (Smooth), path.outline-stroke (Outline Stroke), path.offset (Offset Path), path.reverse (Reverse path direction), path.create (Create path), path.compound (Make compound path), path.release-compound (Release compound path), path.fill-rule (Fill rule), path.clip (Make clipping mask), path.release-clip (Release clipping mask), path.convert-anchors (Convert selected anchors). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -331,7 +331,7 @@
               "path.release-clip",
               "path.convert-anchors"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -345,7 +345,7 @@
     },
     {
       "name": "pathfinder.write",
-      "description": "Ductella pathfinder (write). Pass command and params; commands: path.unite (Unite), path.minus-front (Minus Front), path.intersect (Intersect), path.exclude (Exclude). Call help.read for a command's parameters.",
+      "description": "nVector pathfinder (write). Pass command and params; commands: path.unite (Unite), path.minus-front (Minus Front), path.intersect (Intersect), path.exclude (Exclude). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -358,7 +358,7 @@
               "path.intersect",
               "path.exclude"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -372,7 +372,7 @@
     },
     {
       "name": "path.destructive",
-      "description": "Ductella path (destructive). Pass command and params; commands: path.delete-anchors (Delete selected anchors). Call help.read for a command's parameters.",
+      "description": "nVector path (destructive). Pass command and params; commands: path.delete-anchors (Delete selected anchors). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -382,7 +382,7 @@
             "enum": [
               "path.delete-anchors"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -396,7 +396,7 @@
     },
     {
       "name": "shape.write",
-      "description": "Ductella shape (write). Pass command and params; commands: shape.rect (Rectangle), shape.ellipse (Ellipse), shape.polygon (Polygon), shape.star (Star), shape.line (Line), shape.params (Shape parameters), shape.expand (Expand shape). Call help.read for a command's parameters.",
+      "description": "nVector shape (write). Pass command and params; commands: shape.rect (Rectangle), shape.ellipse (Ellipse), shape.polygon (Polygon), shape.star (Star), shape.line (Line), shape.params (Shape parameters), shape.expand (Expand shape). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -412,7 +412,7 @@
               "shape.params",
               "shape.expand"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -426,7 +426,7 @@
     },
     {
       "name": "style.write",
-      "description": "Ductella style (write). Pass command and params; commands: style.fill (Fill colour), style.stroke (Stroke colour), style.swap (Swap fill and stroke), style.default (Default fill and stroke), style.none (Set active to none), style.stroke-options (Stroke options), style.opacity (Opacity and blend), style.gradient (Gradient), style.copy-appearance (Copy appearance from), swatch.add (New swatch), swatch.apply (Apply swatch), swatch.edit (Edit swatch), swatch.add-palette (Add palette to swatches). Call help.read for a command's parameters.",
+      "description": "nVector style (write). Pass command and params; commands: style.fill (Fill colour), style.stroke (Stroke colour), style.swap (Swap fill and stroke), style.default (Default fill and stroke), style.none (Set active to none), style.stroke-options (Stroke options), style.opacity (Opacity and blend), style.gradient (Gradient), style.copy-appearance (Copy appearance from), swatch.add (New swatch), swatch.apply (Apply swatch), swatch.edit (Edit swatch), swatch.add-palette (Add palette to swatches). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -448,7 +448,7 @@
               "swatch.edit",
               "swatch.add-palette"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -462,7 +462,7 @@
     },
     {
       "name": "style.read",
-      "description": "Ductella style (read). Pass command and params; commands: style.toggle-active (Toggle fill/stroke focus). Call help.read for a command's parameters.",
+      "description": "nVector style (read). Pass command and params; commands: style.toggle-active (Toggle fill/stroke focus). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -472,7 +472,7 @@
             "enum": [
               "style.toggle-active"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -486,7 +486,7 @@
     },
     {
       "name": "style.destructive",
-      "description": "Ductella style (destructive). Pass command and params; commands: swatch.delete (Delete swatch). Call help.read for a command's parameters.",
+      "description": "nVector style (destructive). Pass command and params; commands: swatch.delete (Delete swatch). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -496,7 +496,7 @@
             "enum": [
               "swatch.delete"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -510,7 +510,7 @@
     },
     {
       "name": "type.write",
-      "description": "Ductella type (write). Pass command and params; commands: type.point (Point type), type.area (Area type), type.on-path (Type on selected path), type.text (Set text), type.style (Character and paragraph), type.path-offset (Type on path start), type.flip (Flip type on path), type.outlines (Create Outlines). Call help.read for a command's parameters.",
+      "description": "nVector type (write). Pass command and params; commands: type.point (Point type), type.area (Area type), type.on-path (Type on selected path), type.text (Set text), type.style (Character and paragraph), type.path-offset (Type on path start), type.flip (Flip type on path), type.outlines (Create Outlines). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -527,7 +527,7 @@
               "type.flip",
               "type.outlines"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -541,7 +541,7 @@
     },
     {
       "name": "artboard.write",
-      "description": "Ductella artboard (write). Pass command and params; commands: artboard.add (New artboard), artboard.update (Edit artboard), artboard.move (Reorder artboard). Call help.read for a command's parameters.",
+      "description": "nVector artboard (write). Pass command and params; commands: artboard.add (New artboard), artboard.update (Edit artboard), artboard.move (Reorder artboard). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -553,7 +553,7 @@
               "artboard.update",
               "artboard.move"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -567,7 +567,7 @@
     },
     {
       "name": "artboard.destructive",
-      "description": "Ductella artboard (destructive). Pass command and params; commands: artboard.delete (Delete artboard). Call help.read for a command's parameters.",
+      "description": "nVector artboard (destructive). Pass command and params; commands: artboard.delete (Delete artboard). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -577,7 +577,7 @@
             "enum": [
               "artboard.delete"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -591,7 +591,7 @@
     },
     {
       "name": "artboard.read",
-      "description": "Ductella artboard (read). Pass command and params; commands: artboard.select (Go to artboard). Call help.read for a command's parameters.",
+      "description": "nVector artboard (read). Pass command and params; commands: artboard.select (Go to artboard). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -601,7 +601,7 @@
             "enum": [
               "artboard.select"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -615,7 +615,7 @@
     },
     {
       "name": "layer.write",
-      "description": "Ductella layer (write). Pass command and params; commands: layer.new (New layer), layer.new-sub (New sublayer), layer.rename (Rename), layer.reorder (Move in layers), layer.toggle-visible (Show or hide), layer.toggle-lock (Lock or unlock). Call help.read for a command's parameters.",
+      "description": "nVector layer (write). Pass command and params; commands: layer.new (New layer), layer.new-sub (New sublayer), layer.rename (Rename), layer.reorder (Move in layers), layer.toggle-visible (Show or hide), layer.toggle-lock (Lock or unlock). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -630,7 +630,7 @@
               "layer.toggle-visible",
               "layer.toggle-lock"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -644,7 +644,7 @@
     },
     {
       "name": "layer.destructive",
-      "description": "Ductella layer (destructive). Pass command and params; commands: layer.delete (Delete layer). Call help.read for a command's parameters.",
+      "description": "nVector layer (destructive). Pass command and params; commands: layer.delete (Delete layer). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -654,7 +654,7 @@
             "enum": [
               "layer.delete"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -668,7 +668,7 @@
     },
     {
       "name": "layer.read",
-      "description": "Ductella layer (read). Pass command and params; commands: layer.target (Set current layer). Call help.read for a command's parameters.",
+      "description": "nVector layer (read). Pass command and params; commands: layer.target (Set current layer). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -678,7 +678,7 @@
             "enum": [
               "layer.target"
             ],
-            "description": "Which Ductella command to run"
+            "description": "Which nVector command to run"
           },
           "params": {
             "type": "object",
@@ -692,14 +692,14 @@
     },
     {
       "name": "help.read",
-      "description": "List Ductella commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (file.read) to see the drawing.",
+      "description": "List nVector commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (file.read) to see the drawing.",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
-            "description": "A Ductella command id; omit to list all"
+            "description": "An nVector command id; omit to list all"
           }
         }
       }

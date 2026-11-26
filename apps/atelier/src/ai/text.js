@@ -31,7 +31,7 @@ export function textAi({ settings = () => readByok(), naklios = globalThis.nakli
         return r?.choices?.[0]?.message?.content ?? '';
       }
       const s = own();
-      if (!s) throw Object.assign(new Error('no AI is set up: turn on your own key in AI settings, or use Atelier in NakliOS with AI on'), { code: 'unsupported' });
+      if (!s) throw Object.assign(new Error('no AI is set up: turn on your own key in AI settings, or use nPhoto in NakliOS with AI on'), { code: 'unsupported' });
       const res = await fetchFn(`${s.endpoint.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(s.key ? { Authorization: `Bearer ${s.key}` } : {}) },

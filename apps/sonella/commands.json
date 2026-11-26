@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Sonella",
+      "label": "Open in nAudio",
       "extensions": [
         ".wav",
         ".mp3",
@@ -22,7 +22,7 @@
   "commands": [
     {
       "name": "file.destructive",
-      "description": "Sonella file (destructive). Pass command and params; commands: file.open-path (Open audio by path), file.load-bytes (Load audio from base64). Call help.read for a command's parameters.",
+      "description": "nAudio file (destructive). Pass command and params; commands: file.open-path (Open audio by path), file.load-bytes (Load audio from base64). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -33,7 +33,7 @@
               "file.open-path",
               "file.load-bytes"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -47,7 +47,7 @@
     },
     {
       "name": "file.write",
-      "description": "Sonella file (write). Pass command and params; commands: file.save-project (Save project to a path), file.export-audio (Export audio), file.metadata (Edit metadata), file.export-lossless (Export selection without re-encoding (MP3, AAC)), file.export-loudness (Export to loudness targets), label.import (Import labels (Audacity text)), label.export (Export labels (Audacity text)), file.export-multiple (Export multiple). Call help.read for a command's parameters.",
+      "description": "nAudio file (write). Pass command and params; commands: file.save-project (Save project to a path), file.export-audio (Export audio), file.metadata (Edit metadata), file.export-lossless (Export selection without re-encoding (MP3, AAC)), file.export-loudness (Export to loudness targets), label.import (Import labels (Audacity text)), label.export (Export labels (Audacity text)), file.export-multiple (Export multiple). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -64,7 +64,7 @@
               "label.export",
               "file.export-multiple"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -78,7 +78,7 @@
     },
     {
       "name": "file.read",
-      "description": "Sonella file (read). Pass command and params; commands: doc.state (Read project state), doc.history (Read undo history), file.loudness-presets (List loudness targets by platform). Call help.read for a command's parameters.",
+      "description": "nAudio file (read). Pass command and params; commands: doc.state (Read project state), doc.history (Read undo history), file.loudness-presets (List loudness targets by platform). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -90,7 +90,7 @@
               "doc.history",
               "file.loudness-presets"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -104,7 +104,7 @@
     },
     {
       "name": "edit.write",
-      "description": "Sonella edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.cut (Cut), edit.paste (Paste), edit.delete (Delete), edit.silence (Silence audio), edit.trim (Trim to selection), edit.duplicate (Duplicate to new track), edit.split (Split at cursor or selection), edit.split-delete (Split delete), edit.split-new (Split to new track), clip.stretch (Stretch clip (keep pitch)), clip.join (Join clips), clip.detach-silences (Detach at silences), clip.move (Move clip), clip.group (Group clips), clip.ungroup (Ungroup clips), edit.ripple-delete-all (Ripple delete across all tracks), edit.draw (Draw samples), label.add (Add label at selection), label.set (Edit label), label.remove (Remove label), edit.history-goto (Go to a history step). Call help.read for a command's parameters.",
+      "description": "nAudio edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.cut (Cut), edit.paste (Paste), edit.delete (Delete), edit.silence (Silence audio), edit.trim (Trim to selection), edit.duplicate (Duplicate to new track), edit.split (Split at cursor or selection), edit.split-delete (Split delete), edit.split-new (Split to new track), clip.stretch (Stretch clip (keep pitch)), clip.join (Join clips), clip.detach-silences (Detach at silences), clip.move (Move clip), clip.group (Group clips), clip.ungroup (Ungroup clips), edit.ripple-delete-all (Ripple delete across all tracks), edit.draw (Draw samples), label.add (Add label at selection), label.set (Edit label), label.remove (Remove label), edit.history-goto (Go to a history step). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -136,7 +136,7 @@
               "label.remove",
               "edit.history-goto"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -150,7 +150,7 @@
     },
     {
       "name": "edit.read",
-      "description": "Sonella edit (read). Pass command and params; commands: edit.copy (Copy), edit.sync-lock (Sync-lock tracks on or off). Call help.read for a command's parameters.",
+      "description": "nAudio edit (read). Pass command and params; commands: edit.copy (Copy), edit.sync-lock (Sync-lock tracks on or off). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -161,7 +161,7 @@
               "edit.copy",
               "edit.sync-lock"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -175,7 +175,7 @@
     },
     {
       "name": "select.read",
-      "description": "Sonella select (read). Pass command and params; commands: select.set (Set selection), select.all (Select all), select.none (Select none), select.add (Add to selection (another region)), select.zero-crossings (Snap selection to zero crossings), label.select (Select a label's span). Call help.read for a command's parameters.",
+      "description": "nAudio select (read). Pass command and params; commands: select.set (Set selection), select.all (Select all), select.none (Select none), select.add (Add to selection (another region)), select.zero-crossings (Snap selection to zero crossings), label.select (Select a label's span). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -190,7 +190,7 @@
               "select.zero-crossings",
               "label.select"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -204,7 +204,7 @@
     },
     {
       "name": "view.read",
-      "description": "Sonella view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit project in window), view.zoom-selection (Zoom to selection), view.draw-tool (Draw tool on or off), view.envelope-tool (Envelope tool on or off), view.track-height (Set track height), view.db-scale (Waveform in dB on or off), view.vertical-zoom (Vertical zoom), view.spectrogram (Spectrogram view on or off), view.time-format (Time format). Call help.read for a command's parameters.",
+      "description": "nAudio view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit project in window), view.zoom-selection (Zoom to selection), view.draw-tool (Draw tool on or off), view.envelope-tool (Envelope tool on or off), view.track-height (Set track height), view.db-scale (Waveform in dB on or off), view.vertical-zoom (Vertical zoom), view.spectrogram (Spectrogram view on or off), view.time-format (Time format). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -224,7 +224,7 @@
               "view.spectrogram",
               "view.time-format"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -238,7 +238,7 @@
     },
     {
       "name": "transport.read",
-      "description": "Sonella transport (read). Pass command and params; commands: transport.play (Play / Stop), transport.pause (Pause), transport.stop (Stop), transport.loop (Loop selection on or off), transport.home (Cursor to start), transport.end (Cursor to end), transport.seek (Move the playback cursor), transport.play-at-speed (Play at speed), transport.state (Read playback state). Call help.read for a command's parameters.",
+      "description": "nAudio transport (read). Pass command and params; commands: transport.play (Play / Stop), transport.pause (Pause), transport.stop (Stop), transport.loop (Loop selection on or off), transport.home (Cursor to start), transport.end (Cursor to end), transport.seek (Move the playback cursor), transport.play-at-speed (Play at speed), transport.state (Read playback state). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -256,7 +256,7 @@
               "transport.play-at-speed",
               "transport.state"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -270,7 +270,7 @@
     },
     {
       "name": "tracks.write",
-      "description": "Sonella tracks (write). Pass command and params; commands: track.new (New stereo track), track.remove (Remove track), track.set (Set track gain, pan, mute or solo), track.mix-render (Mix and render to new track), track.resample (Change project sample rate), track.to-mono (Stereo track to mono), track.split-stereo (Split stereo to mono tracks), track.swap-channels (Swap stereo channels), track.effects (Real-time effects), track.align (Align tracks), track.sync (Sync tracks by their audio), track.surround (Surround output), clip.envelope (Set a clip's volume envelope). Call help.read for a command's parameters.",
+      "description": "nAudio tracks (write). Pass command and params; commands: track.new (New stereo track), track.remove (Remove track), track.set (Set track gain, pan, mute or solo), track.mix-render (Mix and render to new track), track.resample (Change project sample rate), track.to-mono (Stereo track to mono), track.split-stereo (Split stereo to mono tracks), track.swap-channels (Swap stereo channels), track.effects (Real-time effects), track.align (Align tracks), track.sync (Sync tracks by their audio), track.surround (Surround output), clip.envelope (Set a clip's volume envelope). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -292,7 +292,7 @@
               "track.surround",
               "clip.envelope"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -306,7 +306,7 @@
     },
     {
       "name": "effect.write",
-      "description": "Sonella effect (write). Pass command and params; commands: effect.amplify (Amplify), effect.normalize (Normalize), effect.loudness-normalization (Loudness Normalization), effect.fade-in (Fade In), effect.fade-out (Fade Out), effect.adjustable-fade (Adjustable Fade), effect.studio-fade-out (Studio Fade Out), effect.compressor (Compressor), effect.limiter (Limiter), effect.noise-gate (Noise Gate), effect.filter-curve (Filter Curve EQ), effect.graphic-eq (Graphic EQ), effect.bass-treble (Bass and Treble), effect.high-pass (High-Pass Filter), effect.low-pass (Low-Pass Filter), effect.notch (Notch Filter), effect.noise-reduction (Noise Reduction), effect.click-removal (Click Removal), effect.clip-fix (Clip Fix), effect.repair (Repair), effect.invert (Invert), effect.reverse (Reverse), effect.repeat (Repeat), effect.spectral-edit (Spectral Edit), effect.spectral-repair (Spectral Repair), effect.de-hum (De-hum), effect.de-esser (De-esser), effect.de-reverb (De-reverb), effect.mouth-noise (Breath, Click and Plosive Control), effect.match-eq (Match EQ), effect.change-speed (Change Speed), effect.change-tempo (Change Tempo), effect.change-pitch (Change Pitch), effect.speech-leveler (Speech Leveler), effect.voice-profile (Take voice profile), effect.auto-duck (Auto Duck), effect.mic-bleed (Mic Bleed Reduction), effect.truncate-silence (Truncate Silence), effect.crossfade-clips (Crossfade Clips), effect.ai-noise-suppression (AI Noise Suppression (RNNoise)), preset.apply (Apply effect preset), cleanup.apply (Speech cleanup). Call help.read for a command's parameters.",
+      "description": "nAudio effect (write). Pass command and params; commands: effect.amplify (Amplify), effect.normalize (Normalize), effect.loudness-normalization (Loudness Normalization), effect.fade-in (Fade In), effect.fade-out (Fade Out), effect.adjustable-fade (Adjustable Fade), effect.studio-fade-out (Studio Fade Out), effect.compressor (Compressor), effect.limiter (Limiter), effect.noise-gate (Noise Gate), effect.filter-curve (Filter Curve EQ), effect.graphic-eq (Graphic EQ), effect.bass-treble (Bass and Treble), effect.high-pass (High-Pass Filter), effect.low-pass (Low-Pass Filter), effect.notch (Notch Filter), effect.noise-reduction (Noise Reduction), effect.click-removal (Click Removal), effect.clip-fix (Clip Fix), effect.repair (Repair), effect.invert (Invert), effect.reverse (Reverse), effect.repeat (Repeat), effect.spectral-edit (Spectral Edit), effect.spectral-repair (Spectral Repair), effect.de-hum (De-hum), effect.de-esser (De-esser), effect.de-reverb (De-reverb), effect.mouth-noise (Breath, Click and Plosive Control), effect.match-eq (Match EQ), effect.change-speed (Change Speed), effect.change-tempo (Change Tempo), effect.change-pitch (Change Pitch), effect.speech-leveler (Speech Leveler), effect.voice-profile (Take voice profile), effect.auto-duck (Auto Duck), effect.mic-bleed (Mic Bleed Reduction), effect.truncate-silence (Truncate Silence), effect.crossfade-clips (Crossfade Clips), effect.ai-noise-suppression (AI Noise Suppression (RNNoise)), preset.apply (Apply effect preset), cleanup.apply (Speech cleanup). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -357,7 +357,7 @@
               "preset.apply",
               "cleanup.apply"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -371,7 +371,7 @@
     },
     {
       "name": "effect.read",
-      "description": "Sonella effect (read). Pass command and params; commands: effect.noise-profile (Get Noise Profile), effect.preview (Preview effect), effect.voice-profiles (List voice profiles), preset.save (Save effect preset), preset.list (List effect presets), preset.remove (Remove effect preset), cleanup.analyse (Analyse speech for cleanup), cleanup.preview (Preview speech cleanup). Call help.read for a command's parameters.",
+      "description": "nAudio effect (read). Pass command and params; commands: effect.noise-profile (Get Noise Profile), effect.preview (Preview effect), effect.voice-profiles (List voice profiles), preset.save (Save effect preset), preset.list (List effect presets), preset.remove (Remove effect preset), cleanup.analyse (Analyse speech for cleanup), cleanup.preview (Preview speech cleanup). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -388,7 +388,7 @@
               "cleanup.analyse",
               "cleanup.preview"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -402,7 +402,7 @@
     },
     {
       "name": "generate.write",
-      "description": "Sonella generate (write). Pass command and params; commands: generate.silence (Silence), generate.tone (Tone, chirp or noise). Call help.read for a command's parameters.",
+      "description": "nAudio generate (write). Pass command and params; commands: generate.silence (Silence), generate.tone (Tone, chirp or noise). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -413,7 +413,7 @@
               "generate.silence",
               "generate.tone"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -427,7 +427,7 @@
     },
     {
       "name": "analyze.read",
-      "description": "Sonella analyze (read). Pass command and params; commands: analyze.loudness (Measure loudness (EBU R128)), analyze.spectrum (Plot Spectrum). Call help.read for a command's parameters.",
+      "description": "nAudio analyze (read). Pass command and params; commands: analyze.loudness (Measure loudness (EBU R128)), analyze.spectrum (Plot Spectrum). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -438,7 +438,7 @@
               "analyze.loudness",
               "analyze.spectrum"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -452,7 +452,7 @@
     },
     {
       "name": "analyze.write",
-      "description": "Sonella analyze (write). Pass command and params; commands: analyze.beat-finder (Beat Finder), analyze.label-sounds (Label Sounds), analyze.find-clipping (Find Clipping). Call help.read for a command's parameters.",
+      "description": "nAudio analyze (write). Pass command and params; commands: analyze.beat-finder (Beat Finder), analyze.label-sounds (Label Sounds), analyze.find-clipping (Find Clipping). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -464,7 +464,7 @@
               "analyze.label-sounds",
               "analyze.find-clipping"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -478,7 +478,7 @@
     },
     {
       "name": "ai.read",
-      "description": "Sonella ai (read). Pass command and params; commands: ai.status (AI model status). Call help.read for a command's parameters.",
+      "description": "nAudio ai (read). Pass command and params; commands: ai.status (AI model status). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -488,7 +488,7 @@
             "enum": [
               "ai.status"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -502,7 +502,7 @@
     },
     {
       "name": "macros.read",
-      "description": "Sonella macros (read). Pass command and params; commands: macro.save (Save chain as macro), macro.list (List macros), macro.rename (Rename macro), macro.remove (Remove macro). Call help.read for a command's parameters.",
+      "description": "nAudio macros (read). Pass command and params; commands: macro.save (Save chain as macro), macro.list (List macros), macro.rename (Rename macro), macro.remove (Remove macro). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -515,7 +515,7 @@
               "macro.rename",
               "macro.remove"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -529,7 +529,7 @@
     },
     {
       "name": "macros.write",
-      "description": "Sonella macros (write). Pass command and params; commands: macro.run (Run macro on selection), macro.batch (Batch: run macro on files). Call help.read for a command's parameters.",
+      "description": "nAudio macros (write). Pass command and params; commands: macro.run (Run macro on selection), macro.batch (Batch: run macro on files). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -540,7 +540,7 @@
               "macro.run",
               "macro.batch"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -554,7 +554,7 @@
     },
     {
       "name": "transcript.write",
-      "description": "Sonella transcript (write). Pass command and params; commands: transcript.transcribe (Transcribe to labels), transcript.import (Import transcript (SRT, VTT, Whisper JSON)), transcript.clear (Clear transcript), transcript.delete-words (Delete words (and their audio)), cutlist.find (Find fillers and coughs), cutlist.approve (Approve cut-list entries), cutlist.apply (Cut approved entries). Call help.read for a command's parameters.",
+      "description": "nAudio transcript (write). Pass command and params; commands: transcript.transcribe (Transcribe to labels), transcript.import (Import transcript (SRT, VTT, Whisper JSON)), transcript.clear (Clear transcript), transcript.delete-words (Delete words (and their audio)), cutlist.find (Find fillers and coughs), cutlist.approve (Approve cut-list entries), cutlist.apply (Cut approved entries). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -570,7 +570,7 @@
               "cutlist.approve",
               "cutlist.apply"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -584,7 +584,7 @@
     },
     {
       "name": "transcript.read",
-      "description": "Sonella transcript (read). Pass command and params; commands: transcript.read (Read transcript). Call help.read for a command's parameters.",
+      "description": "nAudio transcript (read). Pass command and params; commands: transcript.read (Read transcript). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -594,7 +594,7 @@
             "enum": [
               "transcript.read"
             ],
-            "description": "Which Sonella command to run"
+            "description": "Which nAudio command to run"
           },
           "params": {
             "type": "object",
@@ -608,14 +608,14 @@
     },
     {
       "name": "help.read",
-      "description": "List Sonella commands with their parameter schemas and scopes, or describe one command. Start with doc.state (file.read) to see the project: tracks, clips, labels and selection.",
+      "description": "List nAudio commands with their parameter schemas and scopes, or describe one command. Start with doc.state (file.read) to see the project: tracks, clips, labels and selection.",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
-            "description": "A Sonella command id; omit to list all"
+            "description": "An nAudio command id; omit to list all"
           }
         }
       }
@@ -689,7 +689,7 @@
     },
     {
       "name": "assistant.ask",
-      "description": "Ask Sonella's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "description": "Ask nAudio's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -718,7 +718,7 @@
     },
     {
       "name": "assistant.status",
-      "description": "The state of Sonella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "description": "The state of nAudio's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -731,7 +731,7 @@
     },
     {
       "name": "assistant.stop",
-      "description": "Stop Sonella's running assistant job.",
+      "description": "Stop nAudio's running assistant job.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -744,7 +744,7 @@
     },
     {
       "name": "script.run",
-      "description": "Run Sonella commands in order as one undo step: steps [{ command, input }], command a dotted id such as select.set or effect.fade-in. A string \"$N.key\" in an input is step N's result field (1-based), e.g. \"$1.track\". Returns each step's result. If a step fails, nothing changes. Hard-to-undo, person-only and file commands run on their own, not in a script. At most 200 steps.",
+      "description": "Run nAudio commands in order as one undo step: steps [{ command, input }], command a dotted id such as select.set or effect.fade-in. A string \"$N.key\" in an input is step N's result field (1-based), e.g. \"$1.track\". Returns each step's result. If a step fails, nothing changes. Hard-to-undo, person-only and file commands run on their own, not in a script. At most 200 steps.",
       "scope": "write",
       "input": {
         "type": "object",

@@ -50,7 +50,7 @@ export function register(bus, ctx) {
   bus.register('tether.capture', async (a, opts) => {
     const t = ctx.tether;
     if (!t) fail('unsupported', usbAvailable() ? 'no camera is connected; the person connects one with Connect camera' : 'this browser has no WebUSB (navigator.usb); tethering works in Chrome or Edge', 'use_ui_control', 'connect_camera');
-    if (!t.info.canCapture) fail('unsupported', `${t.info.model} does not list InitiateCapture among its PTP operations; it needs a vendor operation Atelier does not send yet`, 'change_target', 'camera_status');
+    if (!t.info.canCapture) fail('unsupported', `${t.info.model} does not list InitiateCapture among its PTP operations; it needs a vendor operation nPhoto does not send yet`, 'change_target', 'camera_status');
     const s = ctx.storage(); if (!s) fail('unsupported', 'no workspace folder is open', 'use_ui_control', 'grant_folder');
     const folder = (a.folder ?? `tether/${new Date().toISOString().slice(0, 10)}`).replace(/^\/+|\/+$/g, '');
     if (folder.split('/').some((p) => p === '..' || p === '.')) fail('invalid', 'folder must stay inside the workspace', 'fix_argument', 'tether_capture');

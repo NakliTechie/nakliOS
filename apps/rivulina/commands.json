@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Import into Rivulina",
+      "label": "Import into nPodcasts",
       "extensions": [
         ".opml",
         ".xml"
@@ -25,7 +25,7 @@
     {
       "name": "settings.open",
       "label": "Settings",
-      "description": "Open the settings dialog: fetch routes for blocked feeds, the Podcast Index key, the refresh interval, and the sections other parts of Rivulina add. Optional section scrolls to one part.",
+      "description": "Open the settings dialog: fetch routes for blocked feeds, the Podcast Index key, the refresh interval, and the sections other parts of nPodcasts add. Optional section scrolls to one part.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -79,7 +79,7 @@
     {
       "name": "settings.refresh_interval",
       "label": "Refresh interval",
-      "description": "Set how often Rivulina checks every feed while it is open, in minutes (5 to 1440). A feed's own interval and ttl still apply.",
+      "description": "Set how often nPodcasts checks every feed while it is open, in minutes (5 to 1440). A feed's own interval and ttl still apply.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1628,7 +1628,7 @@
     {
       "name": "search.podcast_index",
       "label": "Search Podcast Index",
-      "description": "Search the Podcast Index directory with the key and secret saved in Rivulina settings. Each call is signed on this device and sent through your egress Worker, because Podcast Index refuses direct browser calls. Returns title, author, feed address, artwork address, genre and ids.",
+      "description": "Search the Podcast Index directory with the key and secret saved in nPodcasts settings. Each call is signed on this device and sent through your egress Worker, because Podcast Index refuses direct browser calls. Returns title, author, feed address, artwork address, genre and ids.",
       "scope": "read",
       "input": {
         "type": "object",

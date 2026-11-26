@@ -275,7 +275,7 @@ export function exportPath(path, format, folder = 'exports') {
 export const EXPORT_KEYS = ['format', 'quality', 'maxEdge', 'colorSpace'];
 export function checkExportSettings(s) {
   const extra = Object.keys(s).filter((k) => !EXPORT_KEYS.includes(k));
-  if (extra.length) return { status: 'unsupported', message: `not built yet: ${extra.join(', ')}; Atelier exports apply ${EXPORT_KEYS.join(', ')}` };
+  if (extra.length) return { status: 'unsupported', message: `not built yet: ${extra.join(', ')}; nPhoto exports apply ${EXPORT_KEYS.join(', ')}` };
   if (!s.format || !(s.format in FORMATS)) return { status: 'invalid', message: `format must be one of ${Object.keys(FORMATS).join(', ')}` };
   if (s.quality != null && !(Number.isInteger(s.quality) && s.quality >= 1 && s.quality <= 100)) return { status: 'invalid', message: 'quality is an integer 1 to 100' };
   if (s.maxEdge != null && !(Number.isInteger(s.maxEdge) && s.maxEdge >= 16)) return { status: 'invalid', message: 'maxEdge is an integer of at least 16' };

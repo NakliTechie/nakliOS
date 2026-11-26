@@ -94,7 +94,7 @@ bus.dispatch = async (name, args = {}, opts = {}) => {
 // host owns the Folder or Crate connection.
 async function grantFolder() {
   if (naklios?.capabilities?.hosted && naklios.capabilities.fs) { naklios.openSettings?.('storage'); return; }
-  if (!window.showDirectoryPicker) { mounted?.say('This browser cannot open a folder; Atelier keeps files in this browser.'); return; }
+  if (!window.showDirectoryPicker) { mounted?.say('This browser cannot open a folder; nPhoto keeps files in this browser.'); return; }
   try { ctx.folder = await window.showDirectoryPicker({ mode: 'readwrite' }); await ctx.pickStorage(); } catch { /* the person cancelled */ }
 }
 
@@ -156,7 +156,7 @@ function applyTheme(theme) {
 // A RAW photo opens in Develop; any other image opens in Composite, where its layer can be edited.
 async function importBytes(fileName, bytes, caller, { open = true } = {}) {
   const s = ctx.storage();
-  if (!s) throw new Error('Atelier has no storage to copy the photo into');
+  if (!s) throw new Error('nPhoto has no storage to copy the photo into');
   const name = String(fileName || 'photo').split('/').pop().replace(/[\\:*?"<>|]/g, '_') || 'photo';
   const dot = name.lastIndexOf('.'); const stemName = dot > 0 ? name.slice(0, dot) : name; const ext = dot > 0 ? name.slice(dot) : '';
   let path = `photos/imported/${name}`;
@@ -177,7 +177,7 @@ async function importFiles(files) {
   const list = [...(files || [])];
   const ok = list.filter((f) => [...RAW_EXT, ...IMAGE_EXT].includes(extOf(f.name)));
   const skipped = list.filter((f) => !ok.includes(f));
-  if (!ok.length) { mounted.say(list.length ? `${skipped.map((f) => f.name).join(', ')}: Atelier opens JPEG, PNG, WebP, AVIF, GIF, TIFF, PSD and camera RAW files.` : 'No file was chosen.'); return null; }
+  if (!ok.length) { mounted.say(list.length ? `${skipped.map((f) => f.name).join(', ')}: nPhoto opens JPEG, PNG, WebP, AVIF, GIF, TIFF, PSD and camera RAW files.` : 'No file was chosen.'); return null; }
   let first = null;
   try {
     for (const f of ok) {   // copy every photo; open the first, the rest wait in the filmstrip

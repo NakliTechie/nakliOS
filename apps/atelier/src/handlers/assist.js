@@ -28,7 +28,7 @@ export function checkDescription(j) {
 export function register(bus, ctx) {
   const ai = () => {
     const a = ctx.aiText ? ctx.aiText() : textAi();
-    if (!a.available) fail('unsupported', 'no AI is set up: turn on your own key in AI settings, or use Atelier in NakliOS with AI on; Atelier works fully without it', 'use_ui_control', 'get_capabilities');
+    if (!a.available) fail('unsupported', 'no AI is set up: turn on your own key in AI settings, or use nPhoto in NakliOS with AI on; nPhoto works fully without it', 'use_ui_control', 'get_capabilities');
     return a;
   };
   async function jpegOf(doc, maxEdge = 768) {
@@ -103,7 +103,7 @@ export function register(bus, ctx) {
       const bad = validate(schema, params);
       if (bad) fail('invalid', `the AI suggested ${bad.field} = ${JSON.stringify(bad.sent)}, outside ${JSON.stringify(bad.allowed)}; nothing applied`, 'fix_argument', 'ai_suggest_develop');
       const unrendered = Object.keys(params).filter((k) => !DEVELOP_RENDERED.includes(k));
-      if (unrendered.length) fail('unsupported', `the AI suggested settings Atelier does not render (${unrendered.join(', ')}); nothing applied`, 'fix_argument', 'ai_suggest_develop');
+      if (unrendered.length) fail('unsupported', `the AI suggested settings nPhoto does not render (${unrendered.join(', ')}); nothing applied`, 'fix_argument', 'ai_suggest_develop');
       const r = await bus.dispatch('set_develop', { revision: rev0, layerId: l.id, params }, { door, caller: `AI assistant (${engine.route})` });
       if (r.status !== 'ok') fail(r.status, r.error?.message ?? (r.status === 'stale' ? 'the document changed while the AI answered; nothing applied' : 'set_develop refused the suggestion'), 'get_state', 'get_develop');
       return { layerId: l.id, applied: params, route: engine.route, model: engine.label, undo: 'one undo step' };

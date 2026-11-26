@@ -157,7 +157,7 @@ export function createDurability({ naklios, bus, ctx, dialogs, notice = () => {}
     let decided; asking = new Promise((r) => { decided = r; });
     let choice = 'later';
     try {
-      choice = await dialogs.ask('Changed outside Atelier', `${watch.path} changed in another app or window. This window has edits that are not saved yet.`, [
+      choice = await dialogs.ask('Changed outside nPhoto', `${watch.path} changed in another app or window. This window has edits that are not saved yet.`, [
         { label: 'Reload (drop my edits)', value: 'reload', danger: true },
         { label: 'Later', value: 'later' },
         { label: 'Keep mine', value: 'keep', primary: true },

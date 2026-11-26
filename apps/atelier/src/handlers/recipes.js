@@ -94,7 +94,7 @@ export function register(bus, ctx) {
     const bad = validate(schema, params);
     if (bad) fail('outcome_unknown', `auto develop produced an out-of-range ${bad.field}`, 'get_state', 'get_develop');
     await change(ctx, 'auto_develop', (d) => { const x = d.layers.find((y) => y.id === l.id); x.develop = { ...x.develop, ...params }; });
-    return { layerId: l.id, applied: params, notes, method: 'grey world in camera space (white balance) and histogram targets (tone); Atelier formulas, not fitted to Lightroom' };
+    return { layerId: l.id, applied: params, notes, method: 'grey world in camera space (white balance) and histogram targets (tone); nPhoto formulas, not fitted to Lightroom' };
   });
 
   // ---- L38: red eye inside a box (or a click and radius) on a retouch layer ----

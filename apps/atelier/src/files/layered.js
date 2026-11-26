@@ -188,7 +188,7 @@ export function tiffToPlan(pages) {
   let meta = null;
   try { const j = JSON.parse(pages[0].description || ''); if (j?.format === LAYERED_TIFF) meta = j; } catch { /* not ours */ }
   for (const p of pages) if (p.icc) { let desc = '?'; try { desc = parseIcc(p.icc).description; } catch { /* unreadable */ } if (!/srgb/i.test(desc || '')) { notes.push(`embedded profile "${desc}" ignored; pixels read as sRGB`); break; } }
-  if (pages.some((p) => p.bits === 16)) notes.push('16-bit pages reduced to 8-bit (Atelier raster layers are 8-bit)');
+  if (pages.some((p) => p.bits === 16)) notes.push('16-bit pages reduced to 8-bit (nPhoto raster layers are 8-bit)');
   if (pages[0].photoshopLayers) notes.push('Photoshop layer data (TIFF tag 37724) is not read; the pages open instead');
   if (meta) {
     const layers = meta.layers.map((m) => {

@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lectella</title>
+<title>nResearch</title>
 <meta name="description" content="A research notebook: add your sources, write notes, and ask questions answered from your sources with citations. Your files stay on your disk.">
-<meta property="og:title" content="Lectella">
+<meta property="og:title" content="nResearch">
 <meta property="og:description" content="A research notebook: add your sources, write notes, and ask questions answered from your sources with citations.">
 <meta property="og:url" content="https://naklios.dev/apps/lectella/">
 <style>
@@ -151,7 +151,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <h1>Lectella</h1>
+    <h1>nResearch</h1>
     <div class="status">
       <label class="small">Library in <select id="where" data-command="storage.choose"><option>This browser</option></select></label>
       <span id="ai-status"></span>
@@ -182,7 +182,7 @@
       </div>
       <div class="cols" id="cols" hidden>
         <section class="col" data-col="sources" aria-label="Sources">
-          <h3><span class="grow">Sources</span><button data-command="source.find-lorewell" id="lorewell-btn" hidden title="Search your Lorewell library and cite passages without copying the books">From Lorewell</button><button data-command="source.add">Add source</button></h3>
+          <h3><span class="grow">Sources</span><button data-command="source.find-lorewell" id="lorewell-btn" hidden title="Search your nBooks library and cite passages without copying the books">From nBooks</button><button data-command="source.add">Add source</button></h3>
           <div class="scroll" id="sources-drop">
             <label class="sr" for="search">Search this notebook</label>
             <input type="search" id="search" data-command="notebook.search" placeholder="Search sources and notes">
@@ -198,7 +198,7 @@
             <label class="sr" for="question">Ask a question about this notebook</label>
             <textarea id="question" placeholder="Ask a question about your sources" rows="2"></textarea>
             <div class="row">
-              <label class="small" id="lorewell-chat-row" hidden><input type="checkbox" id="lorewell-chat" data-command="chat.lorewell"> Also search Lorewell</label>
+              <label class="small" id="lorewell-chat-row" hidden><input type="checkbox" id="lorewell-chat" data-command="chat.lorewell"> Also search nBooks</label>
               <span class="grow muted small" id="chat-hint">Enter sends · Shift+Enter adds a line</span>
               <button id="stop" hidden>Stop</button>
               <button class="primary" id="send" data-command="chat.ask">Send</button>
@@ -265,7 +265,7 @@
       <button class="primary" value="close">Close</button>
       <button type="button" class="danger left" data-command="source.remove">Remove</button>
       <button type="button" data-command="source.rename">Rename</button>
-      <button type="button" id="src-lorewell" data-command="source.open-lorewell" hidden>Open in Lorewell</button>
+      <button type="button" id="src-lorewell" data-command="source.open-lorewell" hidden>Open in nBooks</button>
     </div>
   </form>
 </dialog>
@@ -289,7 +289,7 @@
       <button type="button" id="note-listen" data-command="note.listen">Listen</button>
       <button type="button" id="note-present" data-command="note.present" hidden>Present</button>
       <button type="button" id="note-save-audio" data-command="note.save-audio" hidden title="Save as a small Ogg (Opus) file">Save audio</button>
-      <button type="button" id="note-sonella" data-command="note.edit-sonella" hidden title="Trim, level, or export MP3 and other formats in Sonella">Edit in Sonella</button>
+      <button type="button" id="note-sonella" data-command="note.edit-sonella" hidden title="Trim, level, or export MP3 and other formats in nAudio">Edit in nAudio</button>
       <span class="muted small" id="note-saved"></span>
     </div>
   </form>
@@ -297,10 +297,10 @@
 
 <dialog id="dlg-lorewell" class="wide">
   <form method="dialog">
-    <div class="d-head"><h2>From Lorewell</h2></div>
+    <div class="d-head"><h2>From nBooks</h2></div>
     <div class="d-body">
-      <p class="muted small" style="margin:0">Search the books in your Lorewell library. <b>Add</b> cites a passage in this notebook; the book stays in Lorewell, and Lectella reads the passage from it when it needs it. The first search asks you once to let Lectella use Lorewell.</p>
-      <div class="row-flex"><label class="sr" for="lw-query">Search Lorewell</label><input type="search" id="lw-query" placeholder="Words or a question"><button type="button" class="primary" id="lw-go">Search</button></div>
+      <p class="muted small" style="margin:0">Search the books in your nBooks library. <b>Add</b> cites a passage in this notebook; the book stays in nBooks, and nResearch reads the passage from it when it needs it. The first search asks you once to let nResearch use nBooks.</p>
+      <div class="row-flex"><label class="sr" for="lw-query">Search nBooks</label><input type="search" id="lw-query" placeholder="Words or a question"><button type="button" class="primary" id="lw-go">Search</button></div>
       <p class="muted small" id="lw-status" style="margin:0"></p>
       <ul class="lw-results" id="lw-results"></ul>
     </div>

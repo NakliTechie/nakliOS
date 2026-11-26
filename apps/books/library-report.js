@@ -328,7 +328,7 @@ export function buildLibraryReport({
 
 export function formatLibraryReport(report) {
   const lines = [
-    '# Lorewell library report',
+    '# nBooks library report',
     '',
     `Generated: ${report.generatedAt}`,
     report.library?.rootName

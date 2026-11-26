@@ -28,7 +28,7 @@ const LABELS = { vignette_amount: 'Vignette', vignette_midpoint: 'Midpoint', gra
 const LOCAL = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation'];
 const ASPECTS = { original: null, '1:1': [1, 1], '4:5': [4, 5], '5:4': [5, 4], '3:2': [3, 2], '2:3': [2, 3], '16:9': [16, 9] };
 const title = (k) => LABELS[k] || k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
-const NOT_RENDERED = 'Not rendered yet: Atelier does not apply this setting, so the control is off. It turns on when get_develop lists it as rendered.';
+const NOT_RENDERED = 'Not rendered yet: nPhoto does not apply this setting, so the control is off. It turns on when get_develop lists it as rendered.';
 
 export function baseRaw(doc) {
   if (!doc) return null;
@@ -165,7 +165,7 @@ export function createDevelopPanel(root, ui) {
     const path = await ui.dialogs.raw({ title: 'Load lens data', body: h('div', { class: 'form' },
       files.length ? h('label', { class: 'field' }, h('span', {}, 'File'), sel) : null,
       h('label', { class: 'field' }, h('span', {}, files.length ? 'Or a path' : 'Path'), txt),
-      h('p', { class: 'hint' }, 'A lensfun database (.xml) or Adobe lens profile (.lcp) that you own, inside your folder. Atelier ships no lens data.')),
+      h('p', { class: 'hint' }, 'A lensfun database (.xml) or Adobe lens profile (.lcp) that you own, inside your folder. nPhoto ships no lens data.')),
     actions: [{ label: 'Cancel', value: null }, { label: 'Load', primary: true, value: () => txt.value.trim() || sel.value || null }] });
     if (!path) return;
     const r = await send('load_lens_data', { path });

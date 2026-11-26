@@ -77,14 +77,14 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
   const openPhotoPicker = () => photoInput.click();
   const folderLabel = () => (hostCaps().hosted && hostCaps().fs ? 'Storage…' : 'Open folder');
   header.replaceChildren(
-    h('h1', {}, 'Atelier'), modes,
+    h('h1', {}, 'nPhoto'), modes,
     h('button', { dataset: { command: 'undo' }, title: 'Ctrl+Z', onclick: () => sender.send('undo') }, 'Undo'),
     h('button', { dataset: { command: 'redo' }, title: 'Ctrl+Shift+Z', onclick: () => sender.send('redo') }, 'Redo'),
     h('span', { class: 'grow' }), storageLabel,
     h('button', { dataset: { command: 'open_photo' }, title: 'Open one or more photos from your disk (or drop them on the canvas)', onclick: openPhotoPicker }, 'Open photo…'), photoInput,
     h('button', { dataset: { person: 'grant_folder' }, title: 'Choose a folder on your disk for photos and documents', onclick: () => grantFolder() }, folderLabel()),
     h('button', { dataset: { command: 'new_document' }, onclick: newDocument }, 'New'),
-    h('button', { dataset: { command: 'save_document' }, title: 'Ctrl+S (Atelier also saves on its own)', onclick: () => saveNow() }, 'Save'),
+    h('button', { dataset: { command: 'save_document' }, title: 'Ctrl+S (nPhoto also saves on its own)', onclick: () => saveNow() }, 'Save'),
     h('button', { class: 'primary', dataset: { command: 'export_image' }, onclick: () => openExport() }, 'Export…'),
   );
 
@@ -110,7 +110,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     let args = {};
     if (!sidecar && !doc.path) {
       const name = h('input', { type: 'text', value: (doc.title || 'Untitled').replace(/\.[^.]+$/, ''), 'aria-label': 'Document name', autofocus: true });
-      const v = await dialogs.raw({ title: 'Save document', body: h('div', { class: 'form' }, h('label', { class: 'field' }, h('span', {}, 'Name'), name), h('p', { class: 'hint' }, `Saved as documents/<name>.atelier in ${ctx.storage()?.label ?? 'your storage'}. Atelier keeps saving it there as you work.`)),
+      const v = await dialogs.raw({ title: 'Save document', body: h('div', { class: 'form' }, h('label', { class: 'field' }, h('span', {}, 'Name'), name), h('p', { class: 'hint' }, `Saved as documents/<name>.atelier in ${ctx.storage()?.label ?? 'your storage'}. nPhoto keeps saving it there as you work.`)),
         actions: [{ label: 'Cancel', value: null }, { label: 'Save', primary: true, value: () => name.value.trim().replace(/[\\/:*?"<>|]/g, '_') }] });
       if (v == null) return;
       if (!v) { say('Give the document a name to save it.'); return; }
@@ -272,7 +272,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     document.body.dataset.mode = dev ? 'develop' : 'composite';
     for (const b of modes.children) { const on = b.dataset.mode === ctx.view.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
     const s = ctx.storage();
-    storageLabel.textContent = s ? s.label : 'No storage'; storageLabel.title = 'Where Atelier keeps your photos and documents';
+    storageLabel.textContent = s ? s.label : 'No storage'; storageLabel.title = 'Where nPhoto keeps your photos and documents';
     devRoot.hidden = !dev; layRoot.hidden = dev;
     if (dev) develop.update(); else { layers.render(); engineUI.render(); }
     empty.hidden = !!doc || !!engineError || !loadingEl.hidden;
@@ -289,7 +289,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
       h('button', { class: 'primary', dataset: { staged: st.id, decision: 'confirm', person: 'confirm_staged' } }, 'Confirm'),
       h('button', { dataset: { staged: st.id, decision: 'discard', person: 'discard_staged' } }, 'Discard'))));
     $('#mode').textContent = dev ? 'Develop' : 'Composite';
-    if (engineError) { status.textContent = `Atelier needs WebGPU to show and edit photos: ${engineError.message} ${engineError.remedy ?? ''}`; return; }
+    if (engineError) { status.textContent = `nPhoto needs WebGPU to show and edit photos: ${engineError.message} ${engineError.remedy ?? ''}`; return; }
     const where = caps.hosted && window.parent !== window ? 'In NakliOS' : 'Standalone';
     const base = `${where} · ${doc ? `${doc.title} · ${doc.width} × ${doc.height}` : 'no document'} · revision ${bus.state.revision}`;
     status.textContent = lastNote ? `${base} · ${lastNote}` : base;
@@ -298,7 +298,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
   // ---- WebGPU missing ----
   if (engineError) {
     const m = $('#gpu-msg'); m.hidden = false;
-    m.replaceChildren(h('h2', {}, 'Atelier needs WebGPU'), h('p', {}, engineError.message), h('p', {}, 'Open Atelier in a current Chrome, Edge or Safari with WebGPU turned on. Your files stay where they are; nothing is lost.'));
+    m.replaceChildren(h('h2', {}, 'nPhoto needs WebGPU'), h('p', {}, engineError.message), h('p', {}, 'Open nPhoto in a current Chrome, Edge or Safari with WebGPU turned on. Your files stay where they are; nothing is lost.'));
   }
 
   tools.drawBar();
@@ -340,10 +340,10 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     const row = (k, t) => h('div', { class: 'help-row' }, h('kbd', {}, k), h('span', {}, t));
     return dialogs.raw({ title: 'Getting started', body: h('div', { class: 'form help' },
       h('ol', {},
-        h('li', {}, 'Open photo… or drop photos on the canvas. Photos are copied into Atelier’s storage; your originals stay as they are.'),
+        h('li', {}, 'Open photo… or drop photos on the canvas. Photos are copied into nPhoto’s storage; your originals stay as they are.'),
         h('li', {}, 'Develop adjusts one photo (exposure, colour, tone curve, lens). Composite builds a picture from layers.'),
         h('li', {}, 'In Composite, Add adjustment adds a layer whose sliders appear above the panel when you select it.'),
-        h('li', {}, 'Atelier saves as you work. The first Save asks for a name.'),
+        h('li', {}, 'nPhoto saves as you work. The first Save asks for a name.'),
         h('li', {}, 'Export… writes a JPEG, PNG, WebP, AVIF or TIFF; with this browser’s storage it also downloads a copy.')),
       h('h4', {}, 'Keyboard'),
       row('Ctrl+1 / Ctrl+2', 'Develop / Composite'), row('Ctrl+Z / Ctrl+Shift+Z', 'Undo / Redo'), row('Ctrl+S', 'Save'), row('Ctrl+K', 'Search commands'),

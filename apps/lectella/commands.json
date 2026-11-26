@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Add to Lectella",
+      "label": "Add to nResearch",
       "extensions": [
         ".pdf",
         ".md",
@@ -14,7 +14,7 @@
   "commands": [
     {
       "name": "notebook.list",
-      "description": "List the notebooks in Lectella, newest first, with how many sources and notes each holds.",
+      "description": "List the notebooks in nResearch, newest first, with how many sources and notes each holds.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -131,7 +131,7 @@
     },
     {
       "name": "source.add-reference",
-      "description": "Cite a passage from a Lorewell book in a notebook without copying the book: Lectella keeps the work id and location and reads the passage from Lorewell when it needs it.",
+      "description": "Cite a passage from an nBooks book in a notebook without copying the book: nResearch keeps the work id and location and reads the passage from nBooks when it needs it.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -142,11 +142,11 @@
           },
           "work": {
             "type": "string",
-            "description": "Lorewell workId, from books.library.search"
+            "description": "nBooks workId, from books.library.search"
           },
           "location": {
             "type": "string",
-            "description": "Lorewell passageId, from location.passageId in books.library.search"
+            "description": "nBooks passageId, from location.passageId in books.library.search"
           },
           "title": {
             "type": "string",
