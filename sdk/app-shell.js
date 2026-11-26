@@ -1404,15 +1404,30 @@
       { id: 'export', label: 'Export' },
       { id: 'print', label: 'Print', key: 'file.print', run: function () { print(); } },
     ];
+    // doc.pages: the app's own File page entries (spec 6.2), for example Recover or Import. An entry is
+    // { id, label, after (a built-in page id; default the end), command (its app command, for the tip and parity),
+    //   run() (an action: the File page closes first) or render(el, close) (draws its own page) }.
+    function appPages() { return (Array.isArray(doc.pages) ? doc.pages : []).filter(function (p) { return p && p.id && p.label && (p.run || p.render); }); }
+    function appPage(id) { return appPages().filter(function (p) { return p.id === id; })[0] || null; }
+    function navButton(p, current) {
+      var b = h('button', { type: 'button', 'aria-current': p.id === current ? 'page' : null, title: p.key ? tip(p.label, p.key) : p.command ? tip(p.label, p.command) : p.label, 'data-page': p.id,
+        onclick: function () { if (p.app && !p.render) { hideBackstage(); p.run(); } else if (p.run && !p.app) p.run(); else showBackstage(p.id); } },
+        [p.icon ? icon(p.icon) : null, h('span', { text: p.label }), p.key ? h('kbd', { text: keyLabel(shortcutOf(p.key)) }) : null]);
+      if (p.app) b.setAttribute(p.command ? 'data-command' : 'data-parity', p.command || 'person: an app entry on the File page');
+      return b;
+    }
     function buildNav(current) {
       bsNav.textContent = '';
+      var extra = appPages().map(function (p) { return { id: p.id, label: p.label, command: p.command, run: p.run, render: p.render, after: p.after, app: true }; });
+      var placed = {};
+      function after(id) { extra.forEach(function (x) { if (x.after === id && !placed[x.id]) { placed[x.id] = 1; bsNav.append(navButton(x, current)); } }); }
       PAGES.forEach(function (p) {
-        if (p.id === 'export' && !(doc.exports && doc.exports.length)) return;
-        if (p.id === 'print' && !doc.print) return;
-        var b = h('button', { type: 'button', 'aria-current': p.id === current ? 'page' : null, title: p.key ? tip(p.label, p.key) : p.label, onclick: function () { if (p.run) p.run(); else showBackstage(p.id); } },
-          [p.icon ? icon(p.icon) : null, h('span', { text: p.label }), p.key ? h('kbd', { text: keyLabel(shortcutOf(p.key)) }) : null]);
-        bsNav.append(b);
+        if (p.id === 'export' && !(doc.exports && doc.exports.length)) { after(p.id); return; }
+        if (p.id === 'print' && !doc.print) { after(p.id); return; }
+        bsNav.append(navButton(p, current));
+        after(p.id);
       });
+      extra.forEach(function (x) { if (!placed[x.id]) bsNav.append(navButton(x, current)); });
     }
     function row(nameText, detail, onclick) {
       return h('button', { class: 'nsh-row', type: 'button', onclick: onclick }, [h('b', { text: nameText }), detail ? h('small', { text: detail }) : null]);
@@ -1464,7 +1479,9 @@
       bs.hidden = false;
       buildNav(page);
       bsPage.textContent = '';
-      if (page === 'new') pageNew();
+      var own = appPage(page);
+      if (own && own.render) { bsPage.append(h('h2', { text: own.label })); try { own.render(bsPage, hideBackstage); } catch (e) { setError(e, 'open'); } }
+      else if (page === 'new') pageNew();
       else if (page === 'export') pageExport();
       else pageOpen();
       var cur = bsNav.querySelector('[aria-current="page"]') || bsNav.querySelector('button');
