@@ -102,7 +102,7 @@ export function resizePlane(d, w, h, W, H) {
 // "Edited with Atelier on-device AI: Sky (edited), Relight (edited)."
 export function editedNote(doc) {
   const names = (doc?.layers || []).filter((l) => l.aiEdit && l.visible !== false).map((l) => l.name);
-  return names.length ? `Edited with Atelier on-device AI: ${names.join(', ')}.` : null;
+  return names.length ? `Edited with nPhoto on-device AI: ${names.join(', ')}.` : null;
 }
 
 // Refines a coarse sky mask (u8, from a panoptic model that marks whole regions) by colour: the sky's

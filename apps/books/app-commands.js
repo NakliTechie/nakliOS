@@ -13,7 +13,7 @@ export const PASSAGE_MAX_CHARS = 12000;
 export const COMMAND_DEFINITIONS = [
   {
     name:'library.list',
-    description:'List the works in the Lorewell library with work id, title, authors and formats, sorted by title, paged.',
+    description:'List the works in the nBooks library with work id, title, authors and formats, sorted by title, paged.',
     scope:'read',
     input:{
       type:'object',
@@ -55,7 +55,7 @@ export const COMMAND_DEFINITIONS = [
   },
   {
     name:'reader.open',
-    description:'Open one passage in Lorewell\'s reader and bring Lorewell to the front, so the person can read it in place.',
+    description:'Open one passage in the nBooks reader and bring nBooks to the front, so the person can read it in place.',
     scope:'read',
     // The host brings Lorewell's window forward when this call succeeds (nakliOS commands.json field `shows`).
     shows:true,

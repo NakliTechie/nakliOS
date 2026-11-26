@@ -141,7 +141,7 @@ export function createSession(transport, { chunk = 1 << 20 } = {}) {
     async capture({ timeoutMs = 30000 } = {}) {
       if (!open) throw new PtpError('no session is open', RC.SessionNotOpen);
       // Pictures are announced only on the interrupt pipe, so a transport without one cannot capture.
-      if (transport.hasEvents === false) throw new PtpError('this camera has no event (interrupt) endpoint, so Atelier cannot learn when a picture is ready');
+      if (transport.hasEvents === false) throw new PtpError('this camera has no event (interrupt) endpoint, so nPhoto cannot learn when a picture is ready');
       const id = tid + 1;
       await transaction(OP.InitiateCapture, [0, 0]);
       const handles = []; const end = Date.now() + timeoutMs;

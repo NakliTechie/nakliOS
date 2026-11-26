@@ -125,7 +125,7 @@ export function readEmbeddings(text, model) {
 }
 export function embeddingsText(map, model) {
   const photos = {}; for (const [p, e] of [...map].sort((a, b) => a[0].localeCompare(b[0]))) photos[p] = { key: e.key, v: toB64(e.v) };
-  return `${JSON.stringify({ format: 'atelier-embeddings', model: model.id, revision: model.revision, note: 'CLIP image embeddings Atelier made on this device for keyword suggestions and find-similar; delete freely, they are rebuilt.', photos })}\n`;
+  return `${JSON.stringify({ format: 'atelier-embeddings', model: model.id, revision: model.revision, note: 'CLIP image embeddings nPhoto made on this device for keyword suggestions and find-similar; delete freely, they are rebuilt.', photos })}\n`;
 }
 // FNV-1a 32-bit of a string, as hex (the sidecar key).
 export function hash32(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }

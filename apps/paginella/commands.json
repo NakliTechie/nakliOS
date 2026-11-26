@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Paginella",
+      "label": "Open in nLayout",
       "extensions": [
         ".naklidoc"
       ],
@@ -12,7 +12,7 @@
     },
     {
       "action": "import",
-      "label": "Place in Paginella",
+      "label": "Place in nLayout",
       "extensions": [
         ".md",
         ".txt",
@@ -26,7 +26,7 @@
     },
     {
       "action": "import",
-      "label": "Place image in Paginella",
+      "label": "Place image in nLayout",
       "extensions": [
         ".jpg",
         ".jpeg",
@@ -45,7 +45,7 @@
   "commands": [
     {
       "name": "file.destructive",
-      "description": "Paginella file (destructive). Pass command and params; commands: file.new (New document), file.open-doc (Open document by id), file.load (Load .naklidoc data), file.close (Close document). Call help.read for a command's parameters.",
+      "description": "nLayout file (destructive). Pass command and params; commands: file.new (New document), file.open-doc (Open document by id), file.load (Load .naklidoc data), file.close (Close document). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -58,7 +58,7 @@
               "file.load",
               "file.close"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -72,7 +72,7 @@
     },
     {
       "name": "file.read",
-      "description": "Paginella file (read). Pass command and params; commands: file.list (List documents), file.download (Download .naklidoc), links.list (Links), font.list (List fonts). Call help.read for a command's parameters.",
+      "description": "nLayout file (read). Pass command and params; commands: file.list (List documents), file.download (Download .naklidoc), links.list (Links), font.list (List fonts). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -85,7 +85,7 @@
               "links.list",
               "font.list"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -99,7 +99,7 @@
     },
     {
       "name": "file.write",
-      "description": "Paginella file (write). Pass command and params; commands: file.save (Save), file.save-as (Save as), file.place-data (Place image data), file.package (Package), links.relink-data (Relink image data), font.add-data (Add font data). Call help.read for a command's parameters.",
+      "description": "nLayout file (write). Pass command and params; commands: file.save (Save), file.save-as (Save as), file.place-data (Place image data), file.package (Package), links.relink-data (Relink image data), font.add-data (Add font data). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -114,7 +114,7 @@
               "links.relink-data",
               "font.add-data"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -128,7 +128,7 @@
     },
     {
       "name": "export.read",
-      "description": "Paginella export (read). Pass command and params; commands: export.pdf (Export PDF), export.png (Export page as PNG), export.sheaf (Open PDF in Sheaf). Call help.read for a command's parameters.",
+      "description": "nLayout export (read). Pass command and params; commands: export.pdf (Export PDF), export.png (Export page as PNG), export.sheaf (Open PDF in Sheaf). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -140,7 +140,7 @@
               "export.png",
               "export.sheaf"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -154,7 +154,7 @@
     },
     {
       "name": "export.write",
-      "description": "Paginella export (write). Pass command and params; commands: export.profile-data (Set CMYK output profile data). Call help.read for a command's parameters.",
+      "description": "nLayout export (write). Pass command and params; commands: export.profile-data (Set CMYK output profile data). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -164,7 +164,7 @@
             "enum": [
               "export.profile-data"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -178,7 +178,7 @@
     },
     {
       "name": "document.read",
-      "description": "Paginella document (read). Pass command and params; commands: doc.outline (Read document outline), doc.read (Read document JSON), doc.preflight (Preflight), doc.history (Read undo history). Call help.read for a command's parameters.",
+      "description": "nLayout document (read). Pass command and params; commands: doc.outline (Read document outline), doc.read (Read document JSON), doc.preflight (Preflight), doc.history (Read undo history). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -191,7 +191,7 @@
               "doc.preflight",
               "doc.history"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -205,7 +205,7 @@
     },
     {
       "name": "document.write",
-      "description": "Paginella document (write). Pass command and params; commands: doc.setup (Document setup). Call help.read for a command's parameters.",
+      "description": "nLayout document (write). Pass command and params; commands: doc.setup (Document setup). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -215,7 +215,7 @@
             "enum": [
               "doc.setup"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -229,7 +229,7 @@
     },
     {
       "name": "edit.write",
-      "description": "Paginella edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.paste (Paste), edit.duplicate (Duplicate), text.replace (Change text). Call help.read for a command's parameters.",
+      "description": "nLayout edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.paste (Paste), edit.duplicate (Duplicate), text.replace (Change text). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -243,7 +243,7 @@
               "edit.duplicate",
               "text.replace"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -257,7 +257,7 @@
     },
     {
       "name": "edit.destructive",
-      "description": "Paginella edit (destructive). Pass command and params; commands: edit.cut (Cut), edit.delete (Delete). Call help.read for a command's parameters.",
+      "description": "nLayout edit (destructive). Pass command and params; commands: edit.cut (Cut), edit.delete (Delete). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -268,7 +268,7 @@
               "edit.cut",
               "edit.delete"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -282,7 +282,7 @@
     },
     {
       "name": "edit.read",
-      "description": "Paginella edit (read). Pass command and params; commands: edit.copy (Copy), edit.select-all (Select all on page), edit.deselect (Deselect), select.set (Select frames), edit.find (Find and change), text.find (Find text). Call help.read for a command's parameters.",
+      "description": "nLayout edit (read). Pass command and params; commands: edit.copy (Copy), edit.select-all (Select all on page), edit.deselect (Deselect), select.set (Select frames), edit.find (Find and change), text.find (Find text). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -297,7 +297,7 @@
               "edit.find",
               "text.find"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -311,7 +311,7 @@
     },
     {
       "name": "pages.write",
-      "description": "Paginella pages (write). Pass command and params; commands: page.add (Add page), page.duplicate (Duplicate page), page.move (Move page), page.apply-master (Apply master), section.set (Numbering and section), master.new (New master), master.rename (Rename master), master.override (Override master item). Call help.read for a command's parameters.",
+      "description": "nLayout pages (write). Pass command and params; commands: page.add (Add page), page.duplicate (Duplicate page), page.move (Move page), page.apply-master (Apply master), section.set (Numbering and section), master.new (New master), master.rename (Rename master), master.override (Override master item). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -328,7 +328,7 @@
               "master.rename",
               "master.override"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -342,7 +342,7 @@
     },
     {
       "name": "pages.destructive",
-      "description": "Paginella pages (destructive). Pass command and params; commands: page.delete (Delete page), section.remove (Remove section start), master.delete (Delete master). Call help.read for a command's parameters.",
+      "description": "nLayout pages (destructive). Pass command and params; commands: page.delete (Delete page), section.remove (Remove section start), master.delete (Delete master). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -354,7 +354,7 @@
               "section.remove",
               "master.delete"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -368,7 +368,7 @@
     },
     {
       "name": "pages.read",
-      "description": "Paginella pages (read). Pass command and params; commands: page.go (Go to page), page.next (Next page), page.prev (Previous page), master.edit (Edit master). Call help.read for a command's parameters.",
+      "description": "nLayout pages (read). Pass command and params; commands: page.go (Go to page), page.next (Next page), page.prev (Previous page), master.edit (Edit master). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -381,7 +381,7 @@
               "page.prev",
               "master.edit"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -395,7 +395,7 @@
     },
     {
       "name": "object.write",
-      "description": "Paginella object (write). Pass command and params; commands: frame.text (Text frame), frame.rect (Rectangle), frame.ellipse (Ellipse), frame.line (Line), frame.image (Image frame), frame.update (Frame options), frame.link (Thread text frames), frame.unlink (Break thread after frame), frame.autoflow (Autoflow story), frame.align (Align), frame.distribute (Distribute), frame.group (Group), frame.ungroup (Ungroup), frame.lock (Lock or unlock), frame.front (Bring to front), frame.back (Send to back), frame.fit (Fit image). Call help.read for a command's parameters.",
+      "description": "nLayout object (write). Pass command and params; commands: frame.text (Text frame), frame.rect (Rectangle), frame.ellipse (Ellipse), frame.line (Line), frame.image (Image frame), frame.update (Frame options), frame.link (Thread text frames), frame.unlink (Break thread after frame), frame.autoflow (Autoflow story), frame.align (Align), frame.distribute (Distribute), frame.group (Group), frame.ungroup (Ungroup), frame.lock (Lock or unlock), frame.front (Bring to front), frame.back (Send to back), frame.fit (Fit image). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -421,7 +421,7 @@
               "frame.back",
               "frame.fit"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -435,7 +435,7 @@
     },
     {
       "name": "type.read",
-      "description": "Paginella type (read). Pass command and params; commands: text.read (Read story text), text.edit (Edit story), text.glyphs (Glyphs), style.list (List styles). Call help.read for a command's parameters.",
+      "description": "nLayout type (read). Pass command and params; commands: text.read (Read story text), text.edit (Edit story), text.glyphs (Glyphs), style.list (List styles). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -448,7 +448,7 @@
               "text.glyphs",
               "style.list"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -462,7 +462,7 @@
     },
     {
       "name": "type.write",
-      "description": "Paginella type (write). Pass command and params; commands: text.set (Set story text), text.append (Append paragraphs), text.para-style (Apply paragraph style), text.char-style (Apply character style), text.char-format (Character overrides), text.para-format (Paragraph overrides), text.insert-var (Insert variable), text.clear-overrides (Clear overrides), style.para-set (Paragraph style), style.char-set (Character style). Call help.read for a command's parameters.",
+      "description": "nLayout type (write). Pass command and params; commands: text.set (Set story text), text.append (Append paragraphs), text.para-style (Apply paragraph style), text.char-style (Apply character style), text.char-format (Character overrides), text.para-format (Paragraph overrides), text.insert-var (Insert variable), text.clear-overrides (Clear overrides), style.para-set (Paragraph style), style.char-set (Character style). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -481,7 +481,7 @@
               "style.para-set",
               "style.char-set"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -495,7 +495,7 @@
     },
     {
       "name": "type.destructive",
-      "description": "Paginella type (destructive). Pass command and params; commands: style.para-delete (Delete paragraph style), style.char-delete (Delete character style). Call help.read for a command's parameters.",
+      "description": "nLayout type (destructive). Pass command and params; commands: style.para-delete (Delete paragraph style), style.char-delete (Delete character style). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -506,7 +506,7 @@
               "style.para-delete",
               "style.char-delete"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -520,7 +520,7 @@
     },
     {
       "name": "swatches.write",
-      "description": "Paginella swatches (write). Pass command and params; commands: swatch.set (Swatch), swatch.palette (Add Rangrez palette). Call help.read for a command's parameters.",
+      "description": "nLayout swatches (write). Pass command and params; commands: swatch.set (Swatch), swatch.palette (Add Rangrez palette). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -531,7 +531,7 @@
               "swatch.set",
               "swatch.palette"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -545,7 +545,7 @@
     },
     {
       "name": "swatches.destructive",
-      "description": "Paginella swatches (destructive). Pass command and params; commands: swatch.delete (Delete swatch). Call help.read for a command's parameters.",
+      "description": "nLayout swatches (destructive). Pass command and params; commands: swatch.delete (Delete swatch). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -555,7 +555,7 @@
             "enum": [
               "swatch.delete"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -569,7 +569,7 @@
     },
     {
       "name": "swatches.read",
-      "description": "Paginella swatches (read). Pass command and params; commands: swatch.palettes (List palettes). Call help.read for a command's parameters.",
+      "description": "nLayout swatches (read). Pass command and params; commands: swatch.palettes (List palettes). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -579,7 +579,7 @@
             "enum": [
               "swatch.palettes"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -593,7 +593,7 @@
     },
     {
       "name": "view.read",
-      "description": "Paginella view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit page), view.actual (Actual size), view.toggle (Show or hide), view.preview (Preview mode). Call help.read for a command's parameters.",
+      "description": "nLayout view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit page), view.actual (Actual size), view.toggle (Show or hide), view.preview (Preview mode). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -608,7 +608,7 @@
               "view.toggle",
               "view.preview"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -622,7 +622,7 @@
     },
     {
       "name": "view.write",
-      "description": "Paginella view (write). Pass command and params; commands: guide.add (Add guide). Call help.read for a command's parameters.",
+      "description": "nLayout view (write). Pass command and params; commands: guide.add (Add guide). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -632,7 +632,7 @@
             "enum": [
               "guide.add"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -646,7 +646,7 @@
     },
     {
       "name": "view.destructive",
-      "description": "Paginella view (destructive). Pass command and params; commands: guide.clear (Clear guides). Call help.read for a command's parameters.",
+      "description": "nLayout view (destructive). Pass command and params; commands: guide.clear (Clear guides). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -656,7 +656,7 @@
             "enum": [
               "guide.clear"
             ],
-            "description": "Which Paginella command to run"
+            "description": "Which nLayout command to run"
           },
           "params": {
             "type": "object",
@@ -670,14 +670,14 @@
     },
     {
       "name": "help.read",
-      "description": "List Paginella commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (document.read) to see pages, frames and stories.",
+      "description": "List nLayout commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (document.read) to see pages, frames and stories.",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
-            "description": "A Paginella command id; omit to list all"
+            "description": "An nLayout command id; omit to list all"
           }
         }
       }

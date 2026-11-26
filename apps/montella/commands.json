@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Montella",
+      "label": "Open in nVideo",
       "extensions": [
         ".mp4",
         ".m4v",
@@ -912,7 +912,7 @@
     },
     {
       "name": "script.run",
-      "description": "Run a list of Montella commands as one edit: steps [{command, input}]. A string \"$N.key\" in an input is the value `key` from step N's result (1-based), for example \"$1.clipId\". The whole script is one undo step; if any step fails, nothing changes and the error names the step.",
+      "description": "Run a list of nVideo commands as one edit: steps [{command, input}]. A string \"$N.key\" in an input is the value `key` from step N's result (1-based), for example \"$1.clipId\". The whole script is one undo step; if any step fails, nothing changes and the error names the step.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1202,14 +1202,14 @@
     },
     {
       "name": "media.import",
-      "description": "Import a media file from Montella's NakliOS storage (for example \"media/clip.mp4\"); in quick mode it also goes on the main track. Returns the media id.",
+      "description": "Import a media file from nVideo's NakliOS storage (for example \"media/clip.mp4\"); in quick mode it also goes on the main track. Returns the media id.",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {
           "path": {
             "type": "string",
-            "description": "Path in Montella's storage"
+            "description": "Path in nVideo's storage"
           }
         },
         "required": [
@@ -1581,7 +1581,7 @@
     },
     {
       "name": "assistant.ask",
-      "description": "Ask Montella's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
+      "description": "Ask nVideo's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1610,7 +1610,7 @@
     },
     {
       "name": "assistant.status",
-      "description": "The state of Montella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
+      "description": "The state of nVideo's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1625,7 +1625,7 @@
     },
     {
       "name": "assistant.stop",
-      "description": "Stop Montella's running assistant job.",
+      "description": "Stop nVideo's running assistant job.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1670,11 +1670,11 @@
     },
     {
       "code": "bad-project",
-      "meaning": "The file is not a valid Montella project."
+      "meaning": "The file is not a valid nVideo project."
     },
     {
       "code": "bad-colour",
-      "meaning": "A colour is not in a form Montella accepts (#rrggbb or rgb())."
+      "meaning": "A colour is not in a form nVideo accepts (#rrggbb or rgb())."
     },
     {
       "code": "out-of-range",

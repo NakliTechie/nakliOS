@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sonella</title>
+<title>nAudio</title>
 <meta name="description" content="An audio editor in one HTML file: open WAV, MP3, FLAC and OGG from your own disk, cut, fix and level them, and save them back without uploading a byte.">
 <meta name="color-scheme" content="light">
-<meta property="og:title" content="Sonella">
+<meta property="og:title" content="nAudio">
 <meta property="og:description" content="An audio editor in one HTML file. Your recordings stay on your disk.">
 <meta property="og:url" content="https://naklios.dev/apps/sonella/">
 <meta property="og:type" content="website">
@@ -189,7 +189,7 @@ body.drop #tracks { outline: 3px dashed var(--accent); outline-offset: -6px; }
 <body>
 <div id="app">
   <header id="menubar">
-    <div class="brand" title="Sonella">Sonella</div>
+    <div class="brand" title="nAudio">nAudio</div>
     <nav id="menus" aria-label="Menus"></nav>
     <button id="palette-btn" class="nakli-btn small" data-command="app.palette" data-parity="view" title="Search commands (⌘⇧P or Alt+Q)" aria-label="Search commands">⌘⇧P</button>
   </header>
@@ -5153,7 +5153,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
           });
         }
       };
-      LOUDNESS_NOTE = "With the limiter on, Sonella reaches the target even when a peak is in the way. If the target still cannot be reached under the ceiling, or the limiter is off, Sonella says so after applying.";
+      LOUDNESS_NOTE = "With the limiter on, nAudio reaches the target even when a peak is in the way. If the target still cannot be reached under the ceiling, or the limiter is off, nAudio says so after applying.";
       loudnessNormalization = {
         id: "loudness-normalization",
         label: "Loudness Normalization",
@@ -5189,7 +5189,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
             }
           }
           const short = Math.round((p.target - after.integrated) * 10) / 10, reachedTarget = Math.abs(after.integrated - p.target) <= 0.5;
-          const reason = reachedTarget ? void 0 : !p.limit && base > room ? `the true-peak ceiling of ${p.ceiling} dBTP allows only ${Math.round(room * 10) / 10} dB of gain and the limiter is off; turn the limiter on to reach ${p.target} LUFS` : `the limiter cannot reach ${p.target} LUFS under the ${p.ceiling} dBTP ceiling (Sonella adds at most 6 dB of gain past the plain target gain to make up for limiting); lower the target or raise the ceiling`;
+          const reason = reachedTarget ? void 0 : !p.limit && base > room ? `the true-peak ceiling of ${p.ceiling} dBTP allows only ${Math.round(room * 10) / 10} dB of gain and the limiter is off; turn the limiter on to reach ${p.target} LUFS` : `the limiter cannot reach ${p.target} LUFS under the ${p.ceiling} dBTP ceiling (nAudio adds at most 6 dB of gain past the plain target gain to make up for limiting); lower the target or raise the ceiling`;
           if (ctx) ctx.report = { measured: m.integrated, truePeak: m.truePeak, gain: Math.round(gain * 10) / 10, limited, result: after.integrated, resultTruePeak: after.truePeak, target: p.target, reachedTarget, ...reachedTarget ? {} : { shortBy: short, reason } };
           return out;
         }
@@ -5755,7 +5755,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
       add("macro.rename", "Rename macro…", "Macros", { scope: "view", params: { name: str("Macro name"), to: str("New name") }, row: "X27" });
       add("macro.remove", "Remove macro…", "Macros", { scope: "view", params: { name: str("Macro name") }, row: "X27" });
       add("macro.run", "Run macro on selection…", "Macros", { params: { ...range, name: str("Macro name (or give steps)"), steps }, row: "X27" });
-      add("script.run", "Run a script of commands", "Macros", { menu: false, row: "A6", description: `Run Sonella commands in order as one undo step: steps [{ command, input }], command a dotted id such as select.set or effect.fade-in. A string "$N.key" in an input is step N's result field (1-based), e.g. "$1.track". Returns each step's result. If a step fails, nothing changes. Hard-to-undo, person-only and file commands run on their own, not in a script. At most 200 steps.`, params: {
+      add("script.run", "Run a script of commands", "Macros", { menu: false, row: "A6", description: `Run nAudio commands in order as one undo step: steps [{ command, input }], command a dotted id such as select.set or effect.fade-in. A string "$N.key" in an input is step N's result field (1-based), e.g. "$1.track". Returns each step's result. If a step fails, nothing changes. Hard-to-undo, person-only and file commands run on their own, not in a script. At most 200 steps.`, params: {
         steps: arr('[{ command: "effect.fade-in", input: { start: 0, end: 2 } }, …]', { required: true, items: { type: "object", properties: { command: { type: "string" }, input: { type: "object" } }, required: ["command"] } }),
         label: str('Undo label (default "Script (N steps)")')
       } });
@@ -7860,7 +7860,7 @@ ${text}`;
   }
   var AUDIO_EXT = /\.(wav|wave|mp3|flac|ogg|oga|opus|m4a|aac|aif|aiff|aifc)$/i;
   function requireAudio(src, file) {
-    if (!src.length) throw Object.assign(new Error(`${file.name} holds no audio Sonella could decode`), { code: "DECODE_FAILED" });
+    if (!src.length) throw Object.assign(new Error(`${file.name} holds no audio nAudio could decode`), { code: "DECODE_FAILED" });
     return src;
   }
   async function decodeFile(file, { targetRate = null, onProgress, id, origin } = {}) {
@@ -8275,7 +8275,7 @@ ${text}`;
       const p = this.getProject();
       await this.#ensure(p.sampleRate);
       await Promise.race([this.ctx.resume(), new Promise((r) => setTimeout(r, 1500))]);
-      if (this.ctx.state !== "running") throw Object.assign(new Error("The browser has not allowed sound yet. Click anywhere in Sonella, then play again."), { code: "REFUSED" });
+      if (this.ctx.state !== "running") throw Object.assign(new Error("The browser has not allowed sound yet. Click anywhere in nAudio, then play again."), { code: "REFUSED" });
       this.gen++;
       this.node?.port.postMessage({ type: "reset", gen: this.gen });
       for (const n of this.nodes ?? []) try {
@@ -8509,7 +8509,7 @@ ${text}`;
 
   // src/agentface.js
   var AGENT_PROMPT = [
-    'Sonella edits one audio project. Tracks (mono or stereo, each with gain in dB, pan, mute and solo) hold clips: pieces of source audio placed on the timeline. Labels mark points or regions; transcript words are labels of kind "word" and the cut list uses labels of kind "cut".',
+    'nAudio edits one audio project. Tracks (mono or stereo, each with gain in dB, pan, mute and solo) hold clips: pieces of source audio placed on the timeline. Labels mark points or regions; transcript words are labels of kind "word" and the cut list uses labels of kind "cut".',
     "Every time is in seconds from the start of the project. Track, clip and label ids (t1, c3, l2) come from doc.describe; never guess them.",
     "Most edits act on a range: pass start, end and tracks to the command itself (effects, fades, edit.trim, edit.delete, edit.silence), or set the selection first with select.set { start, end, tracks }. A command given no range uses the current selection; an effect with nothing selected fails with NO_SELECTION. Omitting tracks means the selected tracks, or every track.",
     "Effects are effect.<id> (effect.amplify, effect.normalize, effect.fade-in, effect.fade-out, effect.compressor, effect.limiter, effect.high-pass, effect.noise-reduction, effect.loudness-normalization, effect.truncate-silence and more; find_command lists the rest), each with its own parameters. Noise reduction needs a profile first: effect.noise-profile on a stretch of room tone only, then effect.noise-reduction on the range to clean. cleanup.analyse proposes a whole speech-cleanup chain and cleanup.apply runs it as one step.",
@@ -8583,9 +8583,9 @@ ${text}`;
     { name: "file.open", scope: "read", shortcut: "Mod+O", description: "Show the Open page: Recent, then the projects in storage, then Browse this computer.", input: OBJ() },
     { name: "file.new", scope: "write", shortcut: "Mod+Alt+N", description: "Show the New page (blank or a template).", input: OBJ() },
     { name: "file.info", scope: "read", description: "The current project's name, where it is saved, and whether it has unsaved changes.", input: OBJ() },
-    { name: "assistant.ask", scope: "write", shows: true, shortcut: "Mod+Shift+Y", description: "Ask Sonella's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.", input: OBJ({ request: { type: "string", minLength: 1, description: "What to do, in plain words" }, skill: { type: "string", enum: AGENT_SKILLS.map((s) => s.id) } }, ["request"]) },
-    { name: "assistant.status", scope: "read", description: "The state of Sonella's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.", input: OBJ({ job: { type: "string" } }) },
-    { name: "assistant.stop", scope: "write", description: "Stop Sonella's running assistant job.", input: OBJ({ job: { type: "string" } }) }
+    { name: "assistant.ask", scope: "write", shows: true, shortcut: "Mod+Shift+Y", description: "Ask nAudio's assistant to do a job in the open project (for example build, rewrite or format it). It opens the Ask pane, starts at once and returns a job id; follow it with assistant.status.", input: OBJ({ request: { type: "string", minLength: 1, description: "What to do, in plain words" }, skill: { type: "string", enum: AGENT_SKILLS.map((s) => s.id) } }, ["request"]) },
+    { name: "assistant.status", scope: "read", description: "The state of nAudio's assistant job (the latest when job is omitted): running, done, failed, stopped or limit, with its last steps and summary.", input: OBJ({ job: { type: "string" } }) },
+    { name: "assistant.stop", scope: "write", description: "Stop nAudio's running assistant job.", input: OBJ({ job: { type: "string" } }) }
   ];
   var OWN_RAIL = ["script.run", "view.snapshot", "doc.describe", "file.export"];
   var SHELL_OWNS = ["file.save", "file.open", "file.new"];
@@ -8790,11 +8790,11 @@ ${text}`;
     const entries = [...groups.values()].map((g) => ({
       name: g.name,
       scope: g.scope,
-      description: `Sonella ${g.cat.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label.replace("…", "")})`).join(", ")}. Call help.read for a command's parameters.`,
+      description: `nAudio ${g.cat.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label.replace("…", "")})`).join(", ")}. Call help.read for a command's parameters.`,
       input: {
         type: "object",
         properties: {
-          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which Sonella command to run" },
+          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which nAudio command to run" },
           params: { type: "object", description: "The command's own parameters (see help.read)" }
         },
         required: ["command"]
@@ -8804,8 +8804,8 @@ ${text}`;
     entries.push({
       name: "help.read",
       scope: "read",
-      description: "List Sonella commands with their parameter schemas and scopes, or describe one command. Start with doc.state (file.read) to see the project: tracks, clips, labels and selection.",
-      input: { type: "object", properties: { command: { type: "string", description: "A Sonella command id; omit to list all" } } },
+      description: "List nAudio commands with their parameter schemas and scopes, or describe one command. Start with doc.state (file.read) to see the project: tracks, clips, labels and selection.",
+      input: { type: "object", properties: { command: { type: "string", description: "An nAudio command id; omit to list all" } } },
       commands: []
     });
     for (const s of SHELL_RAIL) entries.push({ ...s, shell: true, commands: SHELL_OWNS.includes(s.name) ? [s.name] : [] });
@@ -8814,7 +8814,7 @@ ${text}`;
       entries.push({ name: id, scope: railScope(c), description: describeCommand(c), input: paramSchema(c), commands: [id] });
     }
     for (const e of entries) if (!RAIL_NAMES.includes(e.name)) throw new Error(`Rail entry ${e.name} is missing from RAIL_NAMES in src/host.js`);
-    if (entries.length > RAIL_LIMIT) throw new Error(`The NakliOS rail takes at most ${RAIL_LIMIT} commands; Sonella would register ${entries.length}`);
+    if (entries.length > RAIL_LIMIT) throw new Error(`The NakliOS rail takes at most ${RAIL_LIMIT} commands; nAudio would register ${entries.length}`);
     return entries;
   }
   function railCommands(shellCommands = []) {
@@ -9409,7 +9409,7 @@ ${text}`;
     }
     for (const orphan of (await recoverySlots()).filter((x) => !x.held)) {
       const claimed = await claim(orphan.slot, async () => {
-        const ok = await ConfirmDialog.show({ title: "Restore unsaved work?", message: `Sonella closed with unsaved edits to "${orphan.title}" (${new Date(orphan.at).toLocaleString()}). Restore them?`, confirmLabel: "Restore", cancelLabel: "Discard" });
+        const ok = await ConfirmDialog.show({ title: "Restore unsaved work?", message: `nAudio closed with unsaved edits to "${orphan.title}" (${new Date(orphan.at).toLocaleString()}). Restore them?`, confirmLabel: "Restore", cancelLabel: "Discard" });
         if (!ok) {
           await removeSlot(orphan.slot).catch(() => {
           });
@@ -9450,7 +9450,7 @@ ${text}`;
       const r = await openProjectBytes(new Uint8Array(await file.arrayBuffer()), { name: file.name.replace(/\.naklidoc$/i, "") });
       app.projectHandle = handle;
       if (handle) rememberRecent(handle, "project");
-      if (!r.editLogIntact) Toast.show("This project's edit log does not verify: it was changed outside Sonella. The audio opened normally.", { kind: "info", duration: 6e3 });
+      if (!r.editLogIntact) Toast.show("This project's edit log does not verify: it was changed outside nAudio. The audio opened normally.", { kind: "info", duration: 6e3 });
       return r;
     } finally {
       Toast.dismiss("load");
@@ -9531,7 +9531,7 @@ ${text}`;
   }
   async function loadFile(file, { asTrack = false, handle = null, confirmed = false } = {}) {
     if (/\.naklidoc$/i.test(file.name)) return openProjectFile(file, handle, { confirmed });
-    if (!AUDIO_EXT.test(file.name) && !/^audio\//.test(file.type)) throw fail("REFUSED", `${file.name} is not an audio file Sonella opens (WAV, MP3, FLAC, OGG, Opus, M4A/AAC, AIFF)`);
+    if (!AUDIO_EXT.test(file.name) && !/^audio\//.test(file.type)) throw fail("REFUSED", `${file.name} is not an audio file nAudio opens (WAV, MP3, FLAC, OGG, Opus, M4A/AAC, AIFF)`);
     const replace = !asTrack || app.project.tracks.length === 0;
     if (replace && !confirmed && app.dirty && app.project.tracks.length) {
       const ok = await ConfirmDialog.show({ title: "Replace the open project?", message: "The open project has unsaved edits. Opening a file replaces it. Your audio files on disk are never changed.", confirmLabel: "Open anyway", cancelLabel: "Keep project", destructive: true });
@@ -9568,7 +9568,7 @@ ${text}`;
       }
       Toast.dismiss(id);
       const cut = wavTruncation(new Uint8Array(await file.slice(0, 65536).arrayBuffer()), file.size);
-      const warning = cut ? `${file.name} ends early: its header promises ${cut.declared} frames and the file holds ${cut.available}. Sonella opened the ${cut.available} whole frames.` : null;
+      const warning = cut ? `${file.name} ends early: its header promises ${cut.declared} frames and the file holds ${cut.available}. nAudio opened the ${cut.available} whole frames.` : null;
       if (warning) Toast.show(warning, { kind: "error", duration: 8e3 });
       return { track: tid, source: src.id, seconds: r6(src.length / src.sampleRate), sampleRate: src.sampleRate, channels: src.channels, ...warning ? { warning } : {} };
     } catch (e) {
@@ -9588,7 +9588,7 @@ ${text}`;
     if (!hosted() && window.showOpenFilePicker && window.self === window.top) {
       let handles;
       try {
-        handles = await window.showOpenFilePicker({ multiple: asTrack, types: [{ description: "Audio or Sonella project", accept: { "audio/*": [".wav", ".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff", ".aifc"], "application/zip": [".naklidoc"] } }] });
+        handles = await window.showOpenFilePicker({ multiple: asTrack, types: [{ description: "Audio or nAudio project", accept: { "audio/*": [".wav", ".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff", ".aifc"], "application/zip": [".naklidoc"] } }] });
       } catch (e) {
         if (e.name === "AbortError") return null;
         throw e;
@@ -10187,7 +10187,7 @@ ${text}`;
     playheadEl = h("div", { class: "playhead", "aria-hidden": "true" });
     lanes.append(playheadEl);
     if (!emptyEl) {
-      emptyEl = EmptyState.create({ icon: "waveform", title: "No audio open", message: "Drop a WAV, MP3, FLAC or OGG file here, or open one. Sonella never uploads or changes your files.", primaryAction: { label: "Open audio…", onClick: () => exec("file.open") }, secondaryAction: { label: "Keyboard shortcuts", onClick: () => exec("app.help") } });
+      emptyEl = EmptyState.create({ icon: "waveform", title: "No audio open", message: "Drop a WAV, MP3, FLAC or OGG file here, or open one. nAudio never uploads or changes your files.", primaryAction: { label: "Open audio…", onClick: () => exec("file.open") }, secondaryAction: { label: "Keyboard shortcuts", onClick: () => exec("app.help") } });
       emptyEl.mount($2("empty"));
       const [open2, keys] = $2("empty").querySelectorAll("button");
       open2?.setAttribute("data-command", "file.open");
@@ -11203,7 +11203,7 @@ ${text}`;
       }
     };
     shell = ns.mount({
-      app: { id: "sonella", name: "Sonella", ext: ".naklidoc", mime: "application/zip", opens: OPENS, folder: PROJECTS, binary: true, docNoun: "project" },
+      app: { id: "sonella", name: "nAudio", ext: ".naklidoc", mime: "application/zip", opens: OPENS, folder: PROJECTS, binary: true, docNoun: "project" },
       doc: {
         blank: quiet(() => {
           newProject();
@@ -11215,7 +11215,7 @@ ${text}`;
           return new Blob([bytes], { type: "application/zip" });
         },
         load: quiet(async (file) => {
-          if (!/\.naklidoc$/i.test(file.name) && !AUDIO_EXT.test(file.name) && !String(file.type).startsWith("audio/")) throw new Error(`Sonella opens .naklidoc projects and WAV, MP3, FLAC, OGG, Opus, M4A and AIFF audio, not ${file.name}`);
+          if (!/\.naklidoc$/i.test(file.name) && !AUDIO_EXT.test(file.name) && !String(file.type).startsWith("audio/")) throw new Error(`nAudio opens .naklidoc projects and WAV, MP3, FLAC, OGG, Opus, M4A and AIFF audio, not ${file.name}`);
           await loadFile(file, { confirmed: true });
         }),
         exports: [
@@ -12507,7 +12507,7 @@ ${text}`;
       }
     });
     bind("ai.remove", async () => {
-      const ok = await ConfirmDialog.show({ title: "Remove the noise model?", message: "Sonella keeps working without it; the classical Noise Reduction effect needs no model.", confirmLabel: "Remove", cancelLabel: "Keep", destructive: true });
+      const ok = await ConfirmDialog.show({ title: "Remove the noise model?", message: "nAudio keeps working without it; the classical Noise Reduction effect needs no model.", confirmLabel: "Remove", cancelLabel: "Keep", destructive: true });
       if (!ok) return null;
       return remove();
     });
@@ -12659,7 +12659,7 @@ ${text}`;
       const t = decodeEntities(lines.slice(i + 1).join(" ").replace(/<[^>]+>/g, "")).trim();
       for (const w of spreadWords(t, a * 1e3, b * 1e3)) words.push({ text: w.text, start: w.start / 1e3, end: w.end / 1e3 });
     }
-    if (!words.length) throw Object.assign(new Error("No timed text found; Sonella reads SRT, WebVTT and Whisper JSON transcripts"), { code: "BAD_PARAM" });
+    if (!words.length) throw Object.assign(new Error("No timed text found; nAudio reads SRT, WebVTT and Whisper JSON transcripts"), { code: "BAD_PARAM" });
     return { words, exact: false, format: fmt3 };
   }
   var ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -12796,10 +12796,10 @@ ${text}`;
   var localEngine = (p) => ({ engine: "local", model: SPEECH.name, run: (x) => transcribeLocal(x, { language: p.language }) });
   async function engineFor(p, source) {
     const ai = hostAi();
-    if (p.engine === "host" && !ai?.experimental_transcribe) throw fail("REFUSED", "The host speech model needs Sonella inside NakliOS with Local AI on");
+    if (p.engine === "host" && !ai?.experimental_transcribe) throw fail("REFUSED", "The host speech model needs nAudio inside NakliOS with Local AI on");
     if (ai?.experimental_transcribe && p.engine !== "local") return { engine: "naklios", run: (x) => ai.experimental_transcribe(x) };
     if (!(await speechStatus()).downloaded) {
-      if (!isUi3(source)) throw fail("REFUSED", `Transcription needs a speech model. Inside NakliOS with Local AI on, Sonella uses the host's model. Otherwise ask the person to run Transcript › Download speech model (about ${speechMB()} MB, once), or import a transcript instead (Transcript › Import transcript: Whisper JSON, SRT or WebVTT).`);
+      if (!isUi3(source)) throw fail("REFUSED", `Transcription needs a speech model. Inside NakliOS with Local AI on, nAudio uses the host's model. Otherwise ask the person to run Transcript › Download speech model (about ${speechMB()} MB, once), or import a transcript instead (Transcript › Import transcript: Whisper JSON, SRT or WebVTT).`);
       if (!await askDownload()) return null;
     }
     return localEngine(p);
@@ -12829,7 +12829,7 @@ ${text}`;
           const why = String(err?.message ?? err).replace(/[.\s]+$/, "");
           if (eng.engine !== "naklios" || p.engine === "host") throw err;
           if (i > 0) throw fail("REFUSED", `The host speech model stopped at segment ${i + 1} of ${segs.length} (${why}); nothing changed`);
-          if (!(await speechStatus()).downloaded && !(isUi3(source) && await askDownload())) throw fail("REFUSED", `${why}. Or use Sonella's own speech model: Transcript › Download speech model (about ${speechMB()} MB, once).`);
+          if (!(await speechStatus()).downloaded && !(isUi3(source) && await askDownload())) throw fail("REFUSED", `${why}. Or use nAudio's own speech model: Transcript › Download speech model (about ${speechMB()} MB, once).`);
           hostRefused = why;
           eng = localEngine(p);
           r = await eng.run(x.slice(s, e));
@@ -12967,7 +12967,7 @@ ${text}`;
     bind("transcript.transcribe", (p, source) => transcribe(p, source));
     bind("transcript.download-model", async () => await askDownload() ? speechStatus() : null);
     bind("transcript.remove-model", async () => {
-      const ok = await ConfirmDialog.show({ title: "Remove the speech model?", message: "Sonella keeps working without it: inside NakliOS, Transcribe uses the host's model, and a transcript file imports anywhere.", confirmLabel: "Remove", cancelLabel: "Keep", destructive: true });
+      const ok = await ConfirmDialog.show({ title: "Remove the speech model?", message: "nAudio keeps working without it: inside NakliOS, Transcribe uses the host's model, and a transcript file imports anywhere.", confirmLabel: "Remove", cancelLabel: "Keep", destructive: true });
       if (!ok) return null;
       return removeSpeech();
     });
@@ -14035,7 +14035,7 @@ ${text}`;
       c = chain(gain, tg, ceiling);
       const out = await renderExport({ a, b, format, bitDepth: p.bitDepth, bitrate: p.bitrate, transform: c.fn, label: tg.name });
       const got = out.report.integratedLufs, reachedTarget = Math.abs((got ?? -99) - tg.lufs) <= 0.5;
-      const reason = reachedTarget ? void 0 : c.limit ? `the limiter cannot reach ${tg.lufs} LUFS under the ${tg.peak} dBTP ceiling (Sonella adds at most 6 dB of gain past the plain target gain to make up for limiting)` : `the exported mix measured ${got ?? "too quiet to measure"} LUFS after a plain gain of ${Math.round(gain * 10) / 10} dB`;
+      const reason = reachedTarget ? void 0 : c.limit ? `the limiter cannot reach ${tg.lufs} LUFS under the ${tg.peak} dBTP ceiling (nAudio adds at most 6 dB of gain past the plain target gain to make up for limiting)` : `the exported mix measured ${got ?? "too quiet to measure"} LUFS after a plain gain of ${Math.round(gain * 10) / 10} dB`;
       out.report = { ...out.report, target: { id: tg.id, lufs: tg.lufs, peak: tg.peak }, reachedTarget, ...reachedTarget ? {} : { shortBy: Math.round((tg.lufs - (got ?? -99)) * 10) / 10, reason } };
       const r = await deliverExport(out, `${base}-${tg.id}.${EXPORT_EXT[format]}`, { format, download: p.download, quiet: true });
       files.push({ ...r, target: { id: tg.id, lufs: tg.lufs, peak: tg.peak }, gainDb: Math.round(gain * 10) / 10, limited: c.limit, reachedTarget, ...reachedTarget ? {} : { reason } });
@@ -14656,7 +14656,7 @@ ${text}`;
       e.preventDefault();
       const audio = files.filter((f) => AUDIO_EXT.test(f.name) || f.type.startsWith("audio/") || /\.naklidoc$/i.test(f.name));
       if (!audio.length) {
-        Toast.show("Sonella opens WAV, MP3, FLAC, OGG, Opus, M4A/AAC and AIFF files, and .naklidoc projects.", { duration: 3e3 });
+        Toast.show("nAudio opens WAV, MP3, FLAC, OGG, Opus, M4A/AAC and AIFF files, and .naklidoc projects.", { duration: 3e3 });
         return;
       }
       if (audio.length === 1 && /\.naklidoc$/i.test(audio[0].name) && shell) {

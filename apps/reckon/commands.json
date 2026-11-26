@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Reckon",
+      "label": "Open in nSheet",
       "extensions": [
         ".csv",
         ".xlsx",
@@ -13,7 +13,7 @@
   "commands": [
     {
       "name": "sheets.list",
-      "description": "List the sheets in the open Reckon workbook, e.g. \"what sheets are in my spreadsheet\".",
+      "description": "List the sheets in the open nSheet workbook, e.g. \"what sheets are in my spreadsheet\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -22,7 +22,7 @@
     },
     {
       "name": "range.read",
-      "description": "Read the values and formulas in a range of the Reckon spreadsheet, e.g. \"what is in A1 to C10 on Sheet1\".",
+      "description": "Read the values and formulas in a range of the nSheet spreadsheet, e.g. \"what is in A1 to C10 on Sheet1\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -40,7 +40,7 @@
     },
     {
       "name": "range.write",
-      "description": "Write values or formulas into the Reckon spreadsheet, e.g. \"put 42 in B2 on Sheet1\".",
+      "description": "Write values or formulas into the nSheet spreadsheet, e.g. \"put 42 in B2 on Sheet1\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -67,7 +67,7 @@
     },
     {
       "name": "formula.eval",
-      "description": "Work out a formula without changing the Reckon spreadsheet, e.g. \"what is the sum of A1 to A9 on Sheet1\".",
+      "description": "Work out a formula without changing the nSheet spreadsheet, e.g. \"what is the sum of A1 to A9 on Sheet1\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -90,7 +90,7 @@
     },
     {
       "name": "recalc",
-      "description": "Recompute every formula in the Reckon workbook, e.g. \"recalculate my spreadsheet\".",
+      "description": "Recompute every formula in the nSheet workbook, e.g. \"recalculate my spreadsheet\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -99,7 +99,7 @@
     },
     {
       "name": "workbook.read",
-      "description": "Summarise the Reckon workbook for an agent: each sheet with its used range, data blocks and their header rows, frozen panes, hidden rows and columns, charts, pivot tables, conditional formatting and validation rules, notes, named ranges and the selection, e.g. \"what is in my spreadsheet and where\".",
+      "description": "Summarise the nSheet workbook for an agent: each sheet with its used range, data blocks and their header rows, frozen panes, hidden rows and columns, charts, pivot tables, conditional formatting and validation rules, notes, named ranges and the selection, e.g. \"what is in my spreadsheet and where\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -116,7 +116,7 @@
     {
       "name": "sheet.add",
       "label": "Add sheet",
-      "description": "Add a sheet to the Reckon workbook, e.g. \"add a sheet called Summary\".",
+      "description": "Add a sheet to the nSheet workbook, e.g. \"add a sheet called Summary\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -137,7 +137,7 @@
     {
       "name": "sheet.rename",
       "label": "Rename sheet",
-      "description": "Rename a sheet in the Reckon workbook, e.g. \"rename Sheet1 to Sales\".",
+      "description": "Rename a sheet in the nSheet workbook, e.g. \"rename Sheet1 to Sales\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -162,7 +162,7 @@
     {
       "name": "sheet.delete",
       "label": "Delete sheet",
-      "description": "Delete a sheet from the Reckon workbook (undo restores it), e.g. \"delete the Scratch sheet\".",
+      "description": "Delete a sheet from the nSheet workbook (undo restores it), e.g. \"delete the Scratch sheet\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -1292,7 +1292,7 @@
     {
       "name": "workbook.export",
       "label": "Export",
-      "description": "Export the Reckon workbook as csv (one sheet), xlsx, ods or the reckon json file and return the file in the result, with a list of anything the format could not hold, e.g. \"give me Sheet1 as a csv file\".",
+      "description": "Export the nSheet workbook as csv (one sheet), xlsx, ods or the reckon json file and return the file in the result, with a list of anything the format could not hold, e.g. \"give me Sheet1 as a csv file\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1340,7 +1340,7 @@
     {
       "name": "script.run",
       "label": "Run script",
-      "description": "Run a list of Reckon commands as one change with one undo step, where a later step can use the results of earlier steps and a failing step leaves the workbook unchanged, e.g. \"add a Summary sheet, write a table on it and make the header bold\".",
+      "description": "Run a list of nSheet commands as one change with one undo step, where a later step can use the results of earlier steps and a failing step leaves the workbook unchanged, e.g. \"add a Summary sheet, write a table on it and make the header bold\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1365,7 +1365,7 @@
     },
     {
       "name": "script.run_destructive",
-      "description": "Run a list of Reckon commands as one change with one undo step, including steps that delete or replace work, which the person reviews every time, e.g. \"delete the old Draft sheet and rename Final to Summary\".",
+      "description": "Run a list of nSheet commands as one change with one undo step, including steps that delete or replace work, which the person reviews every time, e.g. \"delete the old Draft sheet and rename Final to Summary\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -2077,7 +2077,7 @@
     {
       "name": "version.delete",
       "label": "Delete version",
-      "description": "Delete a saved version after the person confirms it in Reckon, e.g. \"delete the version called Draft\".",
+      "description": "Delete a saved version after the person confirms it in nSheet, e.g. \"delete the version called Draft\".",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -2095,7 +2095,7 @@
     },
     {
       "name": "range.subscribe",
-      "description": "Watch a range of the Reckon spreadsheet as a live source, so Reckon posts its new values on the reckon channel whenever a cell in it changes, e.g. \"keep me updated on A1 to C10 on Sheet1\".",
+      "description": "Watch a range of the nSheet spreadsheet as a live source, so nSheet posts its new values on the reckon channel whenever a cell in it changes, e.g. \"keep me updated on A1 to C10 on Sheet1\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2132,7 +2132,7 @@
     },
     {
       "name": "review.status",
-      "description": "Tell whether a change Reckon staged for the person's review is still pending, was committed or discarded, or was dropped because the sheet changed, e.g. \"did the person accept my change\".",
+      "description": "Tell whether a change nSheet staged for the person's review is still pending, was committed or discarded, or was dropped because the sheet changed, e.g. \"did the person accept my change\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2150,7 +2150,7 @@
     },
     {
       "name": "doc.describe",
-      "description": "Describe the whole Reckon workbook in one compact answer for planning: each sheet with its used range, data blocks with their header row and first rows, charts, tables, pivot tables, rules, named ranges and the selection, e.g. \"what is in this workbook\".",
+      "description": "Describe the whole nSheet workbook in one compact answer for planning: each sheet with its used range, data blocks with their header row and first rows, charts, tables, pivot tables, rules, named ranges and the selection, e.g. \"what is in this workbook\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2186,7 +2186,7 @@
     },
     {
       "name": "assistant.ask",
-      "description": "Ask Reckon's assistant to do a job in the open workbook, such as building a budget sheet with totals and a chart; it opens the Ask pane, starts at once and returns a job id to check on later, e.g. \"ask Reckon to build a monthly budget\".",
+      "description": "Ask the nSheet assistant to do a job in the open workbook, such as building a budget sheet with totals and a chart; it opens the Ask pane, starts at once and returns a job id to check on later, e.g. \"ask nSheet to build a monthly budget\".",
       "scope": "write",
       "shows": true,
       "input": {
@@ -2213,7 +2213,7 @@
     },
     {
       "name": "assistant.status",
-      "description": "The state of Reckon's assistant job (the latest when job is left out): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"is Reckon done with the budget\".",
+      "description": "The state of the nSheet assistant's job (the latest when job is left out): running, done, failed, stopped or limit, with its last steps and summary, e.g. \"is nSheet done with the budget\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2228,7 +2228,7 @@
     },
     {
       "name": "assistant.stop",
-      "description": "Stop Reckon's running assistant job, e.g. \"stop what Reckon is doing\".",
+      "description": "Stop the nSheet assistant's running job, e.g. \"stop what nSheet is doing\".",
       "scope": "write",
       "input": {
         "type": "object",

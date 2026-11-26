@@ -57,7 +57,7 @@ export function createRuntime({ models = MODELS, storage = () => null, caches = 
   }
   async function writeConsentNow() {
     const s = storage();
-    if (s) await s.write(CONSENT_FILE, new TextEncoder().encode(`${JSON.stringify({ note: 'On-device models the person chose to download (Atelier, spec 002 §9.4).', consented: consent }, null, 2)}\n`));
+    if (s) await s.write(CONSENT_FILE, new TextEncoder().encode(`${JSON.stringify({ note: 'On-device models the person chose to download (nPhoto, spec 002 §9.4).', consented: consent }, null, 2)}\n`));
   }
 
   // The Cache Storage entries holding a model: every cached request under huggingface.co/<repo>/resolve/.

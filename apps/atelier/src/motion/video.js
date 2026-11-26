@@ -58,7 +58,7 @@ async function elementPlayer(bytes, file, ext) {
   video.muted = true; video.preload = 'auto'; video.playsInline = true; video.src = url;
   try {
     await new Promise((res, rej) => {
-      const timer = setTimeout(() => rej(new Error(`${file} did not load in 15 s (Chrome loads media only once the tab has been visible; bring Atelier to the front, or use a WebM file)`)), 15000);
+      const timer = setTimeout(() => rej(new Error(`${file} did not load in 15 s (Chrome loads media only once the tab has been visible; bring nPhoto to the front, or use a WebM file)`)), 15000);
       video.onloadeddata = () => { clearTimeout(timer); res(); };
       video.onerror = () => { clearTimeout(timer); rej(new Error(`the browser cannot decode ${file} (${video.error?.message || 'unsupported codec'})`)); };
     });

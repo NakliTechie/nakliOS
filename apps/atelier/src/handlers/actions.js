@@ -91,7 +91,7 @@ export function register(bus, ctx) {
     const path = name.includes('/') || name.endsWith('.json') ? name : pathOf(name);
     if (!(await s.exists(path))) fail('invalid', `no action ${name}`, 'fix_argument', 'list_actions');
     let j; try { j = JSON.parse(await s.readText(path)); } catch (e) { fail('invalid', `${path} is not valid JSON: ${e.message}`, 'fix_argument', 'list_actions'); }
-    if (j?.format !== 'atelier-action' || !Array.isArray(j.steps)) fail('invalid', `${path} is not an Atelier action`, 'fix_argument', 'list_actions');
+    if (j?.format !== 'atelier-action' || !Array.isArray(j.steps)) fail('invalid', `${path} is not an nPhoto action`, 'fix_argument', 'list_actions');
     for (const st of j.steps) if (!recordable(st.command)) fail('unsupported', `${path}: step ${st.command} is not a replayable command`, 'fix_argument', 'list_actions');
     return { path, steps: j.steps };
   }

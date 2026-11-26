@@ -21,7 +21,7 @@ export function checkPlugin(p, manifest) {
   if (!Array.isArray(p.commands) || !p.commands.length) return 'commands lists the commands the plugin calls';
   for (const c of p.commands) {
     const t = manifest.tools.find((x) => x.name === c);
-    if (!t) return `${c} is not an Atelier command`;
+    if (!t) return `${c} is not an nPhoto command`;
     if (t.personOnly) return `${c} is person-only; a plugin cannot call it`;
     if (c === 'run_plugin') return 'a plugin cannot run plugins';
   }

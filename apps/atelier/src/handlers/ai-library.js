@@ -211,7 +211,7 @@ export function register(bus, ctx) {
         }
         cache[p].faces.forEach((f, i) => faces.push({ path: p, face: i, box: f.box, eyesClosed: f.eyes.closed, v: f.v }));
       }
-      if (added) await s.write(FACES_FILE, new TextEncoder().encode(`${JSON.stringify({ format: 'atelier-faces', note: 'Faces and SFace identity vectors Atelier found on this device; delete freely, they are rebuilt.', photos: cache })}\n`));
+      if (added) await s.write(FACES_FILE, new TextEncoder().encode(`${JSON.stringify({ format: 'atelier-faces', note: 'Faces and SFace identity vectors nPhoto found on this device; delete freely, they are rebuilt.', photos: cache })}\n`));
       const groups = F.groupFaces(faces, a.threshold ?? 0.363);
       return { groups, photos: paths.length, faces: faces.length, closedEyes: [...new Set(faces.filter((f) => f.eyesClosed).map((f) => f.path))], analysed: added };
     });

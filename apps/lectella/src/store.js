@@ -149,8 +149,8 @@ export class Library {
   async load() {
     if (await this.fs.exists('library.json')) {
       const parsed = JSON.parse(await this.fs.read('library.json'));
-      if (!parsed || !Array.isArray(parsed.notebooks)) throw new Error('library.json is not a Lectella library');
-      if (parsed.version > LIBRARY_VERSION) throw new Error(`library.json is version ${parsed.version}; this Lectella reads version ${LIBRARY_VERSION}`);
+      if (!parsed || !Array.isArray(parsed.notebooks)) throw new Error('library.json is not an nResearch library');
+      if (parsed.version > LIBRARY_VERSION) throw new Error(`library.json is version ${parsed.version}; this nResearch reads version ${LIBRARY_VERSION}`);
       this.data = { version: LIBRARY_VERSION, notebooks: parsed.notebooks, sources: parsed.sources ?? [], notes: parsed.notes ?? [] };
     }
     return this;
@@ -341,7 +341,7 @@ export class Library {
       id: uid('src'),
       title: [String(title ?? '').trim() || 'Untitled book', label].filter(Boolean).join(' · '),
       kind: 'lorewell',
-      origin: 'reference in Lorewell',
+      origin: 'reference in nBooks',
       added: Date.now(),
       chars,
       // The short excerpt is kept so the citation still shows something if the book's passage ids change.

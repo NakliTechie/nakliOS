@@ -194,7 +194,7 @@ export const OPUS_BITRATE = 32000;
 export async function oggOpusOf(pcm, rate) {
   const mb = await import(new URL('../vendor/mediabunny-1.62.1/mediabunny.min.mjs', import.meta.url).href);
   if (!(await mb.canEncodeAudio('opus', { numberOfChannels: 1, sampleRate: rate, bitrate: OPUS_BITRATE }))) {
-    throw new Error('This browser cannot encode Opus. Use Edit in Sonella to export another format.');
+    throw new Error('This browser cannot encode Opus. Use Edit in nAudio to export another format.');
   }
   const output = new mb.Output({ format: new mb.OggOutputFormat(), target: new mb.BufferTarget() });
   // A plain bitrate: `new Quality(n)` is a quality level, not bits per second, and asked the encoder for Infinity bps.

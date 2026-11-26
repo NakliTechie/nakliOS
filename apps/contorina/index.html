@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contorina</title>
+<title>nDesign</title>
 <meta name="description" content="A design tool in one HTML file: frames, auto layout, components and styles. Your files stay on your disk.">
-<meta property="og:title" content="Contorina">
+<meta property="og:title" content="nDesign">
 <meta property="og:description" content="A design tool in one HTML file: frames, auto layout, components and styles. Your files stay on your disk.">
 <meta property="og:url" content="https://naklios.dev/apps/contorina/">
 <meta property="og:type" content="website">
@@ -201,8 +201,8 @@ pre.code.small { max-height: 40vh; margin: 0; }
 </style>
 </head>
 <body>
-<div id="app"><p class="booting">Loading Contorina…</p></div>
-<noscript>Contorina needs JavaScript.</noscript>
+<div id="app"><p class="booting">Loading nDesign…</p></div>
+<noscript>nDesign needs JavaScript.</noscript>
 <script>
 /* naklios-sdk:begin ver=2 sha256=52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d */
 /*!
@@ -3995,9 +3995,9 @@ pre.code.small { max-height: 40vh; margin: 0; }
   var NUM_KEYS = ["x", "y", "w", "h", "rotation", "opacity", "strokeWidth", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "minW", "maxW", "minH", "maxH", "vw", "vh", "sides", "points", "inner"];
   var finite = (v, d = 0) => typeof v === "number" && Number.isFinite(v) ? v : d;
   function validateDoc(d) {
-    if (!d || typeof d !== "object") throw new Error("Not a Contorina document");
+    if (!d || typeof d !== "object") throw new Error("Not an nDesign document");
     if (!Array.isArray(d.children) || !d.nodes || typeof d.nodes !== "object") throw new Error("Document lacks children or nodes");
-    if (d.version > FORMAT_VERSION) throw new Error(`Document format ${d.version} is newer than this Contorina (${FORMAT_VERSION})`);
+    if (d.version > FORMAT_VERSION) throw new Error(`Document format ${d.version} is newer than this nDesign (${FORMAT_VERSION})`);
     for (const id of d.children) if (!d.nodes[id]) throw new Error(`Missing node ${id}`);
     const nodes = {};
     for (const [id, raw] of Object.entries(d.nodes)) {
@@ -8083,7 +8083,7 @@ ${kids}${pad}</group>
       const n = doc.nodes[id];
       return walk2(id, mul(shift, n.parent ? worldMatrix(doc, n.parent) : IDENT), 1, "  ");
     }).join("");
-    const note = skipped.size ? `<!-- Contorina: ${[...skipped].join(" and ")} skipped; Vector Drawables cannot hold them. -->
+    const note = skipped.size ? `<!-- nDesign: ${[...skipped].join(" and ")} skipped; Vector Drawables cannot hold them. -->
 ` : "";
     return `<?xml version="1.0" encoding="utf-8"?>
 ${note}<vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -8136,7 +8136,7 @@ ${body}</vector>
   function localStore() {
     let handle = null;
     const hasFSA = typeof showSaveFilePicker === "function";
-    const types = [{ description: "Contorina document", accept: { "application/json": [EXT, ".json"] } }];
+    const types = [{ description: "nDesign document", accept: { "application/json": [EXT, ".json"] } }];
     return {
       kind: "local",
       label: () => "This browser",
@@ -11432,11 +11432,11 @@ ${xo}
     const entries = [...groups.values()].map((g) => ({
       name: g.name,
       scope: g.scope,
-      description: `Contorina ${g.group.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label})`).join(", ")}. Call help.read for a command's parameters.`,
+      description: `nDesign ${g.group.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label})`).join(", ")}. Call help.read for a command's parameters.`,
       input: {
         type: "object",
         properties: {
-          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which Contorina command to run" },
+          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which nDesign command to run" },
           params: { type: "object", description: "The command's own parameters (see help.read)" }
         },
         required: ["command"]
@@ -11444,7 +11444,7 @@ ${xo}
       commands: g.list.map((c) => c.id)
     }));
     for (const e of entries) if (!RAIL_NAMES.includes(e.name)) throw new Error(`Rail entry ${e.name} is missing from RAIL_NAMES in src/host.js`);
-    if (!groups.has("help.read")) entries.push({ name: "help.read", scope: "read", description: "List Contorina commands with their parameter schemas and scopes, or describe one command.", input: { type: "object", properties: { command: { type: "string", description: "A Contorina command id; omit to list all" } } }, commands: [] });
+    if (!groups.has("help.read")) entries.push({ name: "help.read", scope: "read", description: "List nDesign commands with their parameter schemas and scopes, or describe one command.", input: { type: "object", properties: { command: { type: "string", description: "An nDesign command id; omit to list all" } } }, commands: [] });
     return entries;
   }
   function railCommands(run2) {
@@ -11494,7 +11494,7 @@ ${xo}
 
   // src/seed.js
   function seedDoc() {
-    const tx = new Tx(emptyDoc("Welcome to Contorina"));
+    const tx = new Tx(emptyDoc("Welcome to nDesign"));
     tx.setStyle("sBrand", { type: "color", name: "Brand", value: "#0D99FF" });
     tx.setStyle("sInk", { type: "color", name: "Ink", value: "#1E1E1E" });
     tx.setStyle("sTitle", { type: "text", name: "Title", fontSize: 22, fontFamily: "Inter", fontWeight: 700, lineHeight: 1.25 });
@@ -11791,7 +11791,7 @@ ${xo}
       group: "File",
       hidden: true,
       scope: "destructive",
-      description: "Replace the open document with a Contorina document object (undoable).",
+      description: "Replace the open document with an nDesign document object (undoable).",
       params: { doc: { type: "object", required: true } },
       doc(tx, p) {
         const d = validateDoc(structuredClone(p.doc));
@@ -12194,7 +12194,7 @@ ${xo}
     const redoB = h("button.icon", { type: "button", title: `Redo (${keyLabel("Shift+Mod+Z")})`, "aria-label": "Redo", on: { click: () => run("edit.redo") } }, "↷");
     const zoom = h("button.zoom", { type: "button", title: "Zoom to 100% (Shift+0); Shift+1 fits", on: { click: () => run("view.zoom100") } }, "100%");
     const pal = h("button.icon", { type: "button", title: `Search commands (${keyLabel("Mod+K")})`, on: { click: () => run("palette.open") } }, `${keyLabel("Mod+K")}`);
-    bar.append(h("div.tb-left", menuBtn, h("span.brand", "Contorina"), h("div.tools", { role: "toolbar", "aria-label": "Tools" }, toolBtns)), h("div.tb-mid", name), h("div.tb-right", undoB, redoB, zoom, pal));
+    bar.append(h("div.tb-left", menuBtn, h("span.brand", "nDesign"), h("div.tools", { role: "toolbar", "aria-label": "Tools" }, toolBtns)), h("div.tb-mid", name), h("div.tb-right", undoB, redoB, zoom, pal));
     subscribe((what) => {
       toolBtns.forEach((b) => b.classList.toggle("on", b.dataset.tool === state.tool));
       if (document.activeElement !== name) name.value = state.doc.name;
@@ -12332,7 +12332,7 @@ ${xo}
     buildStatus(status);
     createLayers(layers, app);
     createProps(props, app);
-    connectHost({ run: (id, p, o) => run(id, p, o), onTheme: applyHostTheme, onCapabilities: () => onCapabilities(), title: "Contorina" });
+    connectHost({ run: (id, p, o) => run(id, p, o), onTheme: applyHostTheme, onCapabilities: () => onCapabilities(), title: "nDesign" });
     await waitForHostStorage(1500);
     backendKey = keyOfBackend();
     store = pickStore();
@@ -12340,7 +12340,7 @@ ${xo}
     await loadWorking();
     nextFrame(() => run("view.fit"));
     subscribe((what) => {
-      if (what.has("doc") && !what.has("preview")) document.title = `${state.doc.name} · Contorina`;
+      if (what.has("doc") && !what.has("preview")) document.title = `${state.doc.name} · nDesign`;
     });
     const files = globalThis.naklios && globalThis.naklios.files;
     if (files && typeof files.onOpen === "function") files.onOpen((grant) => openGrant(grant, files));
@@ -12379,7 +12379,7 @@ ${xo}
   });
   if (hasDOM) boot().catch((e) => {
     console.error(e);
-    toast(`Contorina failed to start: ${e.message}`, "error");
+    toast(`nDesign failed to start: ${e.message}`, "error");
   });
 })();
 

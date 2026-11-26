@@ -213,7 +213,7 @@ export function galleryHtml(title, items) {
 <main>
 ${cards}
 </main>
-<p style="color:#777;font-size:12px">${items.length} photo${items.length === 1 ? '' : 's'}. Made with Atelier; no scripts, no tracking.</p>
+<p style="color:#777;font-size:12px">${items.length} photo${items.length === 1 ? '' : 's'}. Made with nPhoto; no scripts, no tracking.</p>
 </body></html>
 `;
 }

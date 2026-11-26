@@ -113,7 +113,7 @@ export function register(bus, ctx) {
       const ext = tool === 'merge_hdr' ? (a.output && /\.dng$/i.test(a.output) ? 'dng' : 'atelier') : raw ? 'dng' : 'tif';
       const dir = paths[0].includes('/') ? paths[0].slice(0, paths[0].lastIndexOf('/') + 1) : '';
       const out = a.output ?? `${dir}${stem(paths[0])}-${spec.suffix}.${ext}`;
-      if (!out.toLowerCase().endsWith(`.${ext}`)) fail('invalid', tool === 'merge_hdr' ? 'merge_hdr writes an Atelier document (.atelier, float) or a linear DNG (.dng, 16-bit); output must end in one of those' : `this merge writes a .${ext} file; output must end in .${ext}`, 'fix_argument', tool);
+      if (!out.toLowerCase().endsWith(`.${ext}`)) fail('invalid', tool === 'merge_hdr' ? 'merge_hdr writes an nPhoto document (.atelier, float) or a linear DNG (.dng, 16-bit); output must end in one of those' : `this merge writes a .${ext} file; output must end in .${ext}`, 'fix_argument', tool);
       if (paths.includes(out)) fail('invalid', 'output would replace one of the inputs', 'fix_argument', tool);
       const replaces = await s.exists(out);
       const what = `${replaces ? `REPLACE ${out} with ` : ''}merge ${paths.length} photos (${paths.map(baseName).join(', ')}) into ${tool === 'merge_hdr' ? 'an HDR' : tool === 'merge_panorama' ? 'a panorama' : 'a focus stack'}${replaces ? '' : ` → ${out}`}`;
@@ -131,7 +131,7 @@ export function register(bus, ctx) {
           await s.write(out, file.bytes);
         } finally { ctx.busy = null; }
         const result = {
-          path: out, bytes: file.bytes.length, width: res.width, height: res.height, frames: paths.length, format: file.ext === 'atelier' ? 'Atelier document, float32 linear source (32-bit float TIFF)' : file.ext === 'dng' ? 'linear DNG, 16-bit' : 'TIFF, 16-bit sRGB',
+          path: out, bytes: file.bytes.length, width: res.width, height: res.height, frames: paths.length, format: file.ext === 'atelier' ? 'nPhoto document, float32 linear source (32-bit float TIFF)' : file.ext === 'dng' ? 'linear DNG, 16-bit' : 'TIFF, 16-bit sRGB',
           ...(file.ext === 'atelier' ? { sourceFile: file.files[0].path, maxValue: Math.round(file.max * 1000) / 1000, exposure: file.docExposure } : {}),
           ...(tool === 'merge_hdr' ? { reference: paths[res.reference], exposures: res.exposures.map((t) => Math.round(Math.log2(t) * 100) / 100), shifts: res.shifts, deghostPixels: res.ghostPixels, fallbackPixels: res.fallback } : {}),
           ...(tool === 'merge_panorama' ? { reference: paths[res.reference], projection: res.projection, focal: res.focal && Math.round(res.focal), links: res.edges.map((e) => ({ from: paths[e.from], to: paths[e.to], inliers: e.inliers })), gains: res.gains.map((g) => Math.round(g * 1000) / 1000) } : {}),

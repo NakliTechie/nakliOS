@@ -117,7 +117,7 @@ export function createRecipes(aside, ui, { viewer, selection }) {
 
   function render() {
     aiControls.hidden = !ai.available;
-    aiStatus.textContent = ai.available ? `AI: ${ai.label} (${ai.route}).` : 'No AI is set up. Atelier works fully without it.';
+    aiStatus.textContent = ai.available ? `AI: ${ai.label} (${ai.route}).` : 'No AI is set up. nPhoto works fully without it.';
     const rev = ui.ctx.bus.state.revision;
     if (channels.open && rev !== chRev) { chRev = rev; refreshChannels(); }
   }

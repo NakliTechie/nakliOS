@@ -137,7 +137,7 @@ export function createFilmstrip(root, ui) {
   const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
   async function editExifFilter() {
     const inputs = Object.fromEntries(EXIF_FIELDS.map(([k, , t]) => [k, h('input', { type: t === 'number' ? 'number' : t === 'date' ? 'date' : 'text', value: exifFilter[k] ?? '', 'aria-label': k })]));
-    const v = await ui.dialogs.raw({ title: 'Filter by EXIF', body: h('div', { class: 'form' }, EXIF_FIELDS.map(([k, label]) => field(label, inputs[k])), h('p', { class: 'hint' }, 'Atelier reads each photo’s EXIF once and keeps it in library.json.')),
+    const v = await ui.dialogs.raw({ title: 'Filter by EXIF', body: h('div', { class: 'form' }, EXIF_FIELDS.map(([k, label]) => field(label, inputs[k])), h('p', { class: 'hint' }, 'nPhoto reads each photo’s EXIF once and keeps it in library.json.')),
       actions: [{ label: 'Clear', value: 'clear' }, { label: 'Cancel', value: null }, { label: 'Apply', value: 'apply', primary: true }] });
     if (!v) return;
     exifFilter = {};
@@ -299,7 +299,7 @@ export function createFilmstrip(root, ui) {
     if (!st.result.configured) {
       const hosted = ui.ctx.storage()?.kind === 'host';
       if (!hosted && !ui.ctx.syncTarget) {
-        const pick = await ui.dialogs.ask('Sync library', 'Choose a folder your devices share (for example a Dropbox or iCloud folder). Atelier keeps its library there; no account is involved.', [{ label: 'Cancel', value: false }, { label: 'Choose sync folder…', value: true, primary: true }], false);
+        const pick = await ui.dialogs.ask('Sync library', 'Choose a folder your devices share (for example a Dropbox or iCloud folder). nPhoto keeps its library there; no account is involved.', [{ label: 'Cancel', value: false }, { label: 'Choose sync folder…', value: true, primary: true }], false);
         if (!pick || !window.showDirectoryPicker) return;
         try { const handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'atelier-sync' }); const { directoryStore } = await import('../storage.js'); ui.ctx.syncTarget = directoryStore(handle, 'folder', handle.name); } catch { return; }
       }
@@ -330,7 +330,7 @@ export function createFilmstrip(root, ui) {
       const body = h('div', {}, h('p', {}, `${file.name} matches ${d.photos} photo${d.photos === 1 ? '' : 's'} in this folder, with ${d.virtualCopies} virtual cop${d.virtualCopies === 1 ? 'y' : 'ies'} and ${d.collections.length} collection${d.collections.length === 1 ? '' : 's'}.`),
         d.unmatchedCount ? h('p', { class: 'hint' }, `${d.unmatchedCount} catalog photo${d.unmatchedCount === 1 ? ' is' : 's are'} not in this folder, for example ${d.unmatched.slice(0, 3).join(', ')}.`) : null,
         d.skipped.length ? h('p', { class: 'hint' }, `Not imported: ${d.skipped.slice(0, 3).map((s) => `${s.what} (${s.reason})`).join('; ')}.`) : null,
-        h('p', { class: 'hint' }, 'Ratings, picks, labels and keywords are written to the photos’ sidecars. Develop settings fill only photos you have not edited in Atelier.'));
+        h('p', { class: 'hint' }, 'Ratings, picks, labels and keywords are written to the photos’ sidecars. Develop settings fill only photos you have not edited in nPhoto.'));
       const ok = await ui.dialogs.ask('Import Lightroom catalog', body, [{ label: 'Cancel', value: false }, { label: 'Import', value: true, primary: true }], false);
       if (!ok) return;
       const r = await send('import_lightroom_catalog', {});

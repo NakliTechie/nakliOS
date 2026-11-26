@@ -26,7 +26,7 @@ function nbOf(lib, ref) {
 export const COMMANDS = [
   {
     name: 'notebook.list',
-    description: 'List the notebooks in Lectella, newest first, with how many sources and notes each holds.',
+    description: 'List the notebooks in nResearch, newest first, with how many sources and notes each holds.',
     scope: 'read',
     ui: 'The notebook list in the left column.',
     input: none(),
@@ -86,15 +86,15 @@ export const COMMANDS = [
   },
   {
     name: 'source.add-reference',
-    description: 'Cite a passage from a Lorewell book in a notebook without copying the book: Lectella keeps the work id and location and reads the passage from Lorewell when it needs it.',
+    description: 'Cite a passage from an nBooks book in a notebook without copying the book: nResearch keeps the work id and location and reads the passage from nBooks when it needs it.',
     scope: 'write',
-    ui: 'The "Add" button on a result in the "From Lorewell" dialog.',
+    ui: 'The "Add" button on a result in the "From nBooks" dialog.',
     input: {
       type: 'object',
       properties: {
         notebook: str('Notebook name or id'),
-        work: str('Lorewell workId, from books.library.search'),
-        location: str('Lorewell passageId, from location.passageId in books.library.search'),
+        work: str('nBooks workId, from books.library.search'),
+        location: str('nBooks passageId, from location.passageId in books.library.search'),
         title: str('Book title'),
         author: str('Book author'),
         label: str('Where in the book, such as "Chapter 3"'),
@@ -109,17 +109,17 @@ export const COMMANDS = [
   },
   {
     name: 'source.find-lorewell',
-    description: 'Search the person\'s Lorewell library for passages to cite. Agents call books.library.search directly.',
+    description: 'Search the person\'s nBooks library for passages to cite. Agents call books.library.search directly.',
     scope: 'read',
-    ui: 'The "From Lorewell" button in the Sources column.',
+    ui: 'The "From nBooks" button in the Sources column.',
     input: none(),
-    personOnly: 'The first search asks you to let Lectella use Lorewell; you start it.',
+    personOnly: 'The first search asks you to let nResearch use nBooks; you start it.',
   },
   {
     name: 'source.open-lorewell',
-    description: 'Open the cited Lorewell passage in Lorewell\'s own reader. Agents call books.reader.open directly.',
+    description: 'Open the cited nBooks passage in the nBooks reader. Agents call books.reader.open directly.',
     scope: 'read',
-    ui: 'The "Open in Lorewell" button in the passage viewer of a Lorewell citation.',
+    ui: 'The "Open in nBooks" button in the passage viewer of an nBooks citation.',
     input: none(),
     personOnly: 'Bringing another app\'s window forward is your act.',
   },
@@ -295,9 +295,9 @@ export const COMMANDS = [
   },
   {
     name: 'note.edit-sonella',
-    description: 'Keep an audio overview as a WAV file in Lectella storage and send a copy to Sonella to trim, level or export as MP3 or Ogg.',
+    description: 'Keep an audio overview as a WAV file in nResearch storage and send a copy to nAudio to trim, level or export as MP3 or Ogg.',
     scope: 'write',
-    ui: 'The "Edit in Sonella" button in an audio overview note.',
+    ui: 'The "Edit in nAudio" button in an audio overview note.',
     input: none(),
     personOnly: 'Sending a file to another app is your act; NakliOS asks you first.',
   },
@@ -319,11 +319,11 @@ export const COMMANDS = [
   },
   {
     name: 'chat.lorewell',
-    description: 'Also search the Lorewell library for each chat question and answer from the best passages, cited like sources.',
+    description: 'Also search the nBooks library for each chat question and answer from the best passages, cited like sources.',
     scope: 'read',
-    ui: 'The "Also search Lorewell" box under the chat.',
+    ui: 'The "Also search nBooks" box under the chat.',
     input: none(),
-    personOnly: 'It sends Lorewell passages to the model you chose; you switch it on.',
+    personOnly: 'It sends nBooks passages to the model you chose; you switch it on.',
   },
   {
     name: 'chat.save-note',
@@ -357,7 +357,7 @@ export async function searchNotebook(lib, nbId, query, limit = 8) {
 export const railCommands = () => COMMANDS.filter((c) => c.run && !c.personOnly);
 
 /** The commands.json manifest the host reads while the app is closed. */
-export const ACCEPTS = [{ action: 'import', label: 'Add to Lectella', extensions: ['.pdf', '.md', '.markdown', '.txt'] }];
+export const ACCEPTS = [{ action: 'import', label: 'Add to nResearch', extensions: ['.pdf', '.md', '.markdown', '.txt'] }];
 
 export function manifest() {
   return { accepts: ACCEPTS, commands: railCommands().map(({ name, description, scope, input }) => ({ name, description, scope, input })) };
@@ -366,7 +366,7 @@ export function manifest() {
 /** @param {Library} lib @param {string} name @param {any} args */
 export async function run(lib, name, args) {
   const c = COMMANDS.find((x) => x.name === name);
-  if (!c) throw new Error(`Lectella has no command "${name}"`);
+  if (!c) throw new Error(`nResearch has no command "${name}"`);
   if (!c.run) throw new Error(`${name} is done in the page: ${c.personOnly}`);
   return c.run(lib, args ?? {});
 }
