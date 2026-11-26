@@ -261,8 +261,11 @@ group order, collapse (`Mod+F1`, remembered per app) and the keys. `key` names a
 `italic`, `underline`, `link`, `grow`, `shrink`, `clear`, `align-left`, `align-centre`, `align-right`,
 `align-justify`, `bullets`, `numbering`, `subscript`, `superscript`); the shell binds that key only for an app that
 gives an item for it, and never inside a plain text field. The shell sets `--shell-top-h` (title row, command row and
-ribbon, measured) for apps whose panes are fixed. Under 600 px the ribbon scrolls sideways; the "More" sheet comes
-with layer 3.
+ribbon, measured) for apps whose panes are fixed. When the ribbon is wider than its row, groups fold, last first,
+into a sheet under a More button at the ribbon's end until the rest fit (layer 3, built 2026-11-26). The folded
+groups keep their elements, so handlers, pressed states and keys work unchanged; the shell refits on a window or
+row resize, a tab change and when the ribbon is shown again. One group always stays; below its width the ribbon
+still scrolls sideways (D-B). `shell.ribbon.folded()`, `fit()` and `more()` serve harnesses.
 
 `doc.pages` (shell v3, 2026-11-26) puts an app's own entries on the File page, so the app needs no File menu of its
 own. An entry is `{ id, label, after, command, run() | render(el, close) }`. `after` names the built-in page it

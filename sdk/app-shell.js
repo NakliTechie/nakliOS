@@ -226,6 +226,15 @@
     '.nsh-menu button:hover{background:var(--shell-hover,rgba(0,0,0,.06))}',
     '.nsh-menu button[aria-checked="true"]{font-weight:600}',
     '.nsh-swatch{width:12px;height:12px;border-radius:3px;border:1px solid var(--shell-line,rgba(0,0,0,.2))}',
+    // layer 3: the More button and sheet. Groups that do not fit fold, last first, into a sheet under More.
+    '.nsh-more{margin-left:auto;flex:none}',
+    '.nsh-more[hidden]{display:none}',
+    '.nsh-sheet{position:fixed;z-index:1000;display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 18px;max-width:min(560px,calc(100vw - 16px));max-height:60vh;overflow:auto;',
+    'padding:10px 12px;border:1px solid var(--shell-line,rgba(0,0,0,.12));border-radius:8px;background:var(--shell-chrome,var(--shell-canvas,#fff));color:var(--shell-ink,#1d1d1f);',
+    'box-shadow:0 8px 24px rgba(0,0,0,.16);font:13px/1.2 var(--shell-font,system-ui,-apple-system,"Segoe UI",sans-serif)}',
+    '.nsh-sheet button,.nsh-sheet select{font:inherit;color:inherit}',
+    '.nsh-sheet .nsh-grp{flex-wrap:wrap;margin:0;padding:0;border:0;max-width:100%}',
+    '.nsh-sheet .nsh-grp::before{content:attr(aria-label);flex-basis:100%;margin-bottom:4px;font-size:11px;font-weight:600;opacity:.65}',
     '@media print{.nsh-title,.nsh-bs,.nsh-bar,.nsh-menu{display:none!important}}',
   ].join('\n');
 
@@ -875,6 +884,7 @@
     // A button runs item.run() or the app command item.command with item.args. The shell reads state() after every
     // refresh() to set pressed toggles and select values, so the ribbon always shows the selection's formatting.
     var bar = null, ribbon = null, tabBtns = [], ribbonItems = [], keyItems = {}, activeTab = null, openMenu = null;
+    var moreBtn = null, sheet = null, folded = [], fitWidth = -1;
     var ribbonKey = 'naklishell:ribbon:' + app.id;
     var ribbonCollapsed = false;
     try { ribbonCollapsed = localStorage.getItem(ribbonKey) === 'collapsed'; } catch (_) {}
@@ -992,7 +1002,56 @@
         (g.items || []).forEach(function (it) { var el = it && buildItem(it); if (el) grp.append(el); });
         if (grp.childNodes.length) ribbon.append(grp);
       });
+      closeSheet(); folded = []; fitWidth = -1;
+      if (moreBtn) ribbon.append(moreBtn);
       refreshRibbon();
+      fitRibbon();
+    }
+    // Layer 3, the More sheet: when the ribbon is wider than its row, fold groups, last first, into the sheet under
+    // More until the rest fit (at least one group stays). The folded groups keep their elements, so handlers, pressed
+    // states and keys work as before. Under one group's width the ribbon still scrolls sideways (D-B).
+    function fitRibbon(force) {
+      if (!ribbon || !moreBtn || ribbon.hidden || !ribbon.isConnected) return;
+      var w = ribbon.clientWidth;
+      if (!force && w === fitWidth) return;
+      fitWidth = w;
+      closeSheet();
+      folded.forEach(function (g) { ribbon.insertBefore(g, moreBtn); });
+      folded = [];
+      moreBtn.hidden = true;
+      if (ribbon.scrollWidth <= ribbon.clientWidth + 1) return;
+      moreBtn.hidden = false;
+      var groups = [].slice.call(ribbon.children).filter(function (n) { return n !== moreBtn; });
+      while (groups.length > 1 && ribbon.scrollWidth > ribbon.clientWidth + 1) { var g = groups.pop(); g.remove(); folded.unshift(g); }
+      if (!folded.length) moreBtn.hidden = true;
+    }
+    function sheetOutside(e) {
+      if (!sheet) return;
+      var t = e.target;
+      if (sheet.contains(t) || moreBtn.contains(t) || (t.closest && t.closest('.nsh-menu'))) return;
+      closeSheet();
+    }
+    function openSheet() {
+      if (sheet) { closeSheet(); moreBtn.focus(); return; }
+      closeMenu();
+      sheet = h('div', { class: 'nsh-sheet', role: 'group', 'aria-label': 'More commands' });
+      folded.forEach(function (g) { sheet.append(g); });
+      document.body.append(sheet);
+      var r = moreBtn.getBoundingClientRect();
+      sheet.style.top = (r.bottom + 2) + 'px';
+      sheet.style.left = Math.max(8, Math.min(r.right - sheet.offsetWidth, document.documentElement.clientWidth - sheet.offsetWidth - 8)) + 'px';
+      moreBtn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('pointerdown', sheetOutside, true);
+      sheet.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !openMenu) { e.preventDefault(); e.stopPropagation(); closeSheet(); moreBtn.focus(); } });
+      var first = sheet.querySelector('button:not(:disabled),select');
+      if (first) first.focus();
+    }
+    function closeSheet() {
+      if (!sheet) return;
+      folded.forEach(function (g) { g.remove(); });
+      sheet.remove(); sheet = null;
+      document.removeEventListener('pointerdown', sheetOutside, true);
+      if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
     }
     function refreshRibbon() {
       if (!ribbon) return;
@@ -1014,6 +1073,7 @@
       collapseBtn.replaceChildren(icon(ribbonCollapsed ? ICON.chevronDown : ICON.chevronUp));
       collapseBtn.title = (ribbonCollapsed ? 'Show the ribbon' : 'Collapse the ribbon') + ' (' + keyLabel(RIBBON_KEY) + ')';
       collapseBtn.setAttribute('aria-expanded', String(!ribbonCollapsed));
+      if (ribbonCollapsed) closeSheet(); else fitRibbon(true);
       topHeight();
     }
     function topHeight() {
@@ -1040,6 +1100,9 @@
       });
       collapseBtn = h('button', { class: 'nsh-btn', type: 'button', 'data-parity': 'view', 'aria-label': 'Collapse the ribbon', onclick: function () { setCollapsed(!ribbonCollapsed); } });
       ribbon = h('div', { class: 'nsh-ribbon', role: 'toolbar', 'aria-label': 'Ribbon' });
+      var moreCaret = icon(ICON.caret); moreCaret.setAttribute('class', 'nsh-caret');
+      moreBtn = h('button', { class: 'nsh-rb nsh-more', type: 'button', hidden: true, 'aria-haspopup': 'true', 'aria-expanded': 'false', 'data-parity': 'view',
+        title: 'More commands: the groups that do not fit', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { openSheet(); } }, [h('span', { text: 'More' }), moreCaret]);
       // File leaves the title row for the command row's first place (spec 2: File first, then Home)
       fileBtn.remove();
       bar = h('div', { class: 'nsh-bar' }, [
@@ -1048,7 +1111,9 @@
       ]);
       showTab((tabs.filter(function (t) { return t.id === opts.tab; })[0] || tabs.filter(function (t) { return t.id === 'home'; })[0] || tabs[0]).id);
       setCollapsed(ribbonCollapsed);
-      window.addEventListener('resize', function () { closeMenu(); topHeight(); });
+      window.addEventListener('resize', function () { closeMenu(); topHeight(); fitRibbon(); });
+      // The NakliOS window can resize the frame without a window resize event reaching every layout; watch the row too.
+      if (typeof ResizeObserver === 'function') new ResizeObserver(function () { fitRibbon(); }).observe(bar);
     }
     // ---- layer 4: the assistant
     var assistant = null, pane = null, askBtn = null, askState = null;
@@ -1596,7 +1661,7 @@
     // ---- mount
     var host = opts.mount || document.body;
     host.insertBefore(title, host.firstChild);
-    if (bar) { title.after(bar); topHeight(); }
+    if (bar) { title.after(bar); fitRibbon(true); topHeight(); }
     document.body.append(bs);
     if (pane) document.body.append(pane.el);
     st.name = cleanName(opts.name) || untitled();
@@ -1647,6 +1712,10 @@
         collapsed: function () { return ribbonCollapsed; },
         collapse: function (on) { setCollapsed(on !== false); },
         item: function (id) { var x = ribbonItems.filter(function (r) { return r.item.id === id; })[0]; return x ? x.el : null; },
+        // The groups folded under More, by id (layer 3), and a refit after an app changes the ribbon's room.
+        folded: function () { return folded.map(function (g) { return g.getAttribute('data-group'); }); },
+        fit: function () { fitRibbon(true); },
+        more: function () { openSheet(); return !!sheet; },
       } : null,
       // The rail commands for the file layer, ready to merge into an app's registration (spec 6.3).
       commands: function () {
