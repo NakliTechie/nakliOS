@@ -282,6 +282,10 @@ for the tooltip shortcut and the parity check.
   list.
 - A check script, `scripts/check-app-shell.mjs` in nakliOS, fails CI when an app's `commands.json` lacks a standard
   command, binds a core key to another command, or misses a shortcut the standard assigns.
+  Built 2026-11-26: it reads the core keys from `CORE_KEYS` in `sdk/app-shell.js`, requires `file.new`, `file.open`,
+  `file.save` and `file.save_as`, checks their keys and Print's, and lets an old name share a core key only when its
+  description says "(alias of <command>)". nakliOS CI runs it over every mirrored app that vendors the shell; each
+  app's daily vendor job runs it on its own `commands.json` (`--commands commands.json`, fetched from nakliOS main).
 
 ## 7. Build layers
 
