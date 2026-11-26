@@ -604,6 +604,10 @@
           "destination": "chunks/agent-surface.js"
         },
         {
+          "source": "chunks/analysis.js",
+          "destination": "chunks/analysis.js"
+        },
+        {
           "source": "chunks/arrow-reader.js",
           "destination": "chunks/arrow-reader.js"
         },
@@ -644,6 +648,10 @@
           "destination": "chunks/demo-workbook.js"
         },
         {
+          "source": "chunks/dofile.js",
+          "destination": "chunks/dofile.js"
+        },
+        {
           "source": "chunks/facet-charts.js",
           "destination": "chunks/facet-charts.js"
         },
@@ -678,6 +686,10 @@
         {
           "source": "chunks/maplibre-map.js",
           "destination": "chunks/maplibre-map.js"
+        },
+        {
+          "source": "chunks/naklios-host.js",
+          "destination": "chunks/naklios-host.js"
         },
         {
           "source": "chunks/observable-plot.js",
@@ -808,6 +820,10 @@
           "destination": "chunks/xlsx-export.js"
         },
         {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
           "source": "examples/events/events.jsonl",
           "destination": "examples/events/events.jsonl"
         },
@@ -904,6 +920,10 @@
           "destination": "guide/screenshots/lineage/01-lineage-panel.png"
         },
         {
+          "source": "guide/screenshots/lineage/02-contracts-and-openlineage.png",
+          "destination": "guide/screenshots/lineage/02-contracts-and-openlineage.png"
+        },
+        {
           "source": "guide/screenshots/manifest.json",
           "destination": "guide/screenshots/manifest.json"
         },
@@ -952,6 +972,14 @@
           "destination": "guide/screenshots/notebook/05-excel-export.png"
         },
         {
+          "source": "guide/screenshots/notebook/06-facets-and-drill.png",
+          "destination": "guide/screenshots/notebook/06-facets-and-drill.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/07-review-tray.png",
+          "destination": "guide/screenshots/notebook/07-review-tray.png"
+        },
+        {
           "source": "guide/screenshots/reports/01-superstore-region-margin.png",
           "destination": "guide/screenshots/reports/01-superstore-region-margin.png"
         },
@@ -976,28 +1004,101 @@
           "destination": "guide/screenshots/resolve/03-golden-table.png"
         },
         {
+          "source": "guide/screenshots/resolve/04-outstanding-explorer.png",
+          "destination": "guide/screenshots/resolve/04-outstanding-explorer.png"
+        },
+        {
+          "source": "guide/screenshots/resolve/05-link-types-and-chains.png",
+          "destination": "guide/screenshots/resolve/05-link-types-and-chains.png"
+        },
+        {
+          "source": "guide/screenshots/resolve/06-selection-explain.png",
+          "destination": "guide/screenshots/resolve/06-selection-explain.png"
+        },
+        {
+          "source": "guide/screenshots/statistics/01-analysis-dialog.png",
+          "destination": "guide/screenshots/statistics/01-analysis-dialog.png"
+        },
+        {
+          "source": "guide/screenshots/statistics/02-dofile-cell.png",
+          "destination": "guide/screenshots/statistics/02-dofile-cell.png"
+        },
+        {
           "source": "icon.svg",
           "destination": "icon.svg"
         },
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "manifest.webmanifest",
           "destination": "manifest.webmanifest"
         },
         {
+          "source": "opendta/integrity.json",
+          "destination": "opendta/integrity.json"
+        },
+        {
+          "source": "opendta/opendta.json",
+          "destination": "opendta/opendta.json"
+        },
+        {
+          "source": "opendta/opendta_bridge.py",
+          "destination": "opendta/opendta_bridge.py"
+        },
+        {
+          "source": "pyodide/contourpy-1.3.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/contourpy-1.3.0-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/cycler-0.12.1-py3-none-any.whl",
+          "destination": "pyodide/cycler-0.12.1-py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/fonttools-4.51.0-py3-none-any.whl",
+          "destination": "pyodide/fonttools-4.51.0-py3-none-any.whl"
+        },
+        {
           "source": "pyodide/integrity.json",
           "destination": "pyodide/integrity.json"
+        },
+        {
+          "source": "pyodide/kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/matplotlib-3.8.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/matplotlib-3.8.4-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/matplotlib_pyodide-0.2.3-py3-none-any.whl",
+          "destination": "pyodide/matplotlib_pyodide-0.2.3-py3-none-any.whl"
         },
         {
           "source": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
           "destination": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl"
         },
         {
+          "source": "pyodide/openblas-0.3.26.zip",
+          "destination": "pyodide/openblas-0.3.26.zip"
+        },
+        {
+          "source": "pyodide/packaging-24.2-py3-none-any.whl",
+          "destination": "pyodide/packaging-24.2-py3-none-any.whl"
+        },
+        {
           "source": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
           "destination": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/patsy-0.5.6-py2.py3-none-any.whl",
+          "destination": "pyodide/patsy-0.5.6-py2.py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl"
         },
         {
           "source": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
@@ -1024,6 +1125,10 @@
           "destination": "pyodide/pyodide_unix_timezones-1.0.0-py3-none-any.whl"
         },
         {
+          "source": "pyodide/pyparsing-3.1.2-py3-none-any.whl",
+          "destination": "pyodide/pyparsing-3.1.2-py3-none-any.whl"
+        },
+        {
           "source": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
           "destination": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl"
         },
@@ -1036,8 +1141,40 @@
           "destination": "pyodide/pytz-2024.1-py2.py3-none-any.whl"
         },
         {
+          "source": "pyodide/scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
           "source": "pyodide/six-1.16.0-py2.py3-none-any.whl",
           "destination": "pyodide/six-1.16.0-py2.py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "readstat-wasm/LICENSE-ReadStat",
+          "destination": "readstat-wasm/LICENSE-ReadStat"
+        },
+        {
+          "source": "readstat-wasm/index.d.mts",
+          "destination": "readstat-wasm/index.d.mts"
+        },
+        {
+          "source": "readstat-wasm/index.d.ts",
+          "destination": "readstat-wasm/index.d.ts"
+        },
+        {
+          "source": "readstat-wasm/index.mjs",
+          "destination": "readstat-wasm/index.mjs"
+        },
+        {
+          "source": "readstat-wasm/integrity.json",
+          "destination": "readstat-wasm/integrity.json"
+        },
+        {
+          "source": "readstat-wasm/readstat.mjs",
+          "destination": "readstat-wasm/readstat.mjs"
         },
         {
           "source": "readstat-wasm/readstat.wasm",
@@ -1292,6 +1429,162 @@
           "destination": "taxonomy/v0.x/proposed/README.md"
         },
         {
+          "source": "webr-repo/SOURCES.md",
+          "destination": "webr-repo/SOURCES.md"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Formula_1.2-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Formula_1.2-6.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/GPArotation_2026.8-2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/GPArotation_2026.8-2.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/MASS_7.3-66.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/MASS_7.3-66.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Matrix_1.7-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Matrix_1.7-6.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES.gz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES.gz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/RcppEigen_0.3.4.0.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/RcppEigen_0.3.4.0.2.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Rcpp_1.1.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Rcpp_1.1.2.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Rdpack_2.6.6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Rdpack_2.6.6.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/bdsmatrix_1.3-7.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/bdsmatrix_1.3-7.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/boot_1.3-32.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/boot_1.3-32.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/collapse_2.1.8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/collapse_2.1.8.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/digest_0.6.39.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/digest_0.6.39.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/dreamerr_1.5.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/dreamerr_1.5.0.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/fixest_0.14.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/fixest_0.14.2.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/generics_0.1.4.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/generics_0.1.4.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lattice_0.23-1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lattice_0.23-1.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lavaan_0.7-3.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lavaan_0.7-3.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lme4_2.0-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lme4_2.0-6.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lmtest_0.9-40.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lmtest_0.9-40.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/maxLik_1.6-10.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/maxLik_1.6-10.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/minqa_1.2.8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/minqa_1.2.8.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/miscTools_0.6-30.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/miscTools_0.6-30.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/mnormt_2.1.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/mnormt_2.1.1.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/nlme_3.1-171.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/nlme_3.1-171.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/nloptr_2.2.1.9000.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/nloptr_2.2.1.9000.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/numDeriv_2016.8-1.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/numDeriv_2016.8-1.1.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/pbivnorm_0.6.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/pbivnorm_0.6.0.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/plm_2.6-7.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/plm_2.6-7.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/psych_2.6.9.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/psych_2.6.9.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/quadprog_1.5-8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/quadprog_1.5-8.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/rbibutils_2.4.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/rbibutils_2.4.1.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/reformulas_0.4.4.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/reformulas_0.4.4.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/sandwich_3.1-3.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/sandwich_3.1-3.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/stringmagic_1.3.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/stringmagic_1.3.0.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/survival_3.8-12.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/survival_3.8-12.tgz"
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/zoo_1.9-1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/zoo_1.9-1.tgz"
+        },
+        {
+          "source": "webr-repo/integrity.json",
+          "destination": "webr-repo/integrity.json"
+        },
+        {
           "source": "webr/LICENSE.md",
           "destination": "webr/LICENSE.md"
         },
@@ -1318,6 +1611,10 @@
         {
           "source": "webr/vfs/etc/fonts/fonts.conf",
           "destination": "webr/vfs/etc/fonts/fonts.conf"
+        },
+        {
+          "source": "webr/vfs/etc/ssl/cert.pem",
+          "destination": "webr/vfs/etc/ssl/cert.pem"
         },
         {
           "source": "webr/vfs/usr/lib/R/doc.data.gz",

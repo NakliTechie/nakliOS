@@ -1,0 +1,380 @@
+Package: bdsmatrix
+Version: 1.3-7
+Depends: methods, R (>= 2.0.0)
+License: LGPL-2
+MD5sum: f26dc33a93c7d91c3d8ccd126d3c1870
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-12 17:16:31 UTC;
+        unix
+File: bdsmatrix_1.3-7.tgz
+
+Package: boot
+Version: 1.3-32
+Priority: recommended
+Depends: R (>= 3.0.0), graphics, stats
+Suggests: MASS, survival
+License: Unlimited
+MD5sum: 065265208bf9aeeec1f77bee67b1cff6
+Built: R 4.6.0; ; 2026-05-12 18:23:31 UTC; unix
+File: boot_1.3-32.tgz
+
+Package: collapse
+Version: 2.1.8
+Depends: R (>= 4.1.0)
+Imports: Rcpp (>= 1.0.1)
+LinkingTo: Rcpp
+Suggests: fastverse, data.table, magrittr, kit, xts, zoo, plm, fixest,
+        vars, RcppArmadillo, RcppEigen, tibble, dplyr, ggplot2, scales,
+        microbenchmark, testthat, covr, knitr, rmarkdown, withr, bit64
+License: GPL (>= 2) | file LICENSE
+MD5sum: 5b5f51eae2f0a1ce0b25b2e657e61353
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-09 15:21:33 UTC;
+        unix
+File: collapse_2.1.8.tgz
+
+Package: digest
+Version: 0.6.39
+Depends: R (>= 3.3.0)
+Imports: utils
+Suggests: tinytest, simplermarkdown, rbenchmark
+License: GPL (>= 2)
+MD5sum: dd041ecb4440c3188d8f7e7b4e411aa1
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-12 23:29:34 UTC;
+        unix
+File: digest_0.6.39.tgz
+
+Package: dreamerr
+Version: 1.5.0
+Imports: Formula, utils, stringmagic(>= 1.2.0)
+Suggests: knitr, rmarkdown, stats, graphics
+License: GPL-3
+MD5sum: 3b378ba186614572f852b8d4d4e303f5
+Built: R 4.6.0; ; 2026-05-13 00:07:07 UTC; unix
+File: dreamerr_1.5.0.tgz
+
+Package: fixest
+Version: 0.14.2
+Depends: R(>= 3.5.0)
+Imports: stats, graphics, grDevices, tools, utils, methods, numDeriv,
+        nlme, sandwich, Rcpp(>= 1.0.5), dreamerr(>= 1.4.0),
+        stringmagic(>= 1.2.0)
+LinkingTo: Rcpp
+Suggests: knitr, rmarkdown, data.table, plm, MASS, pander, ggplot2,
+        lfe, tinytex, pdftools, emmeans, estimability, AER, Matrix
+License: GPL-3
+MD5sum: b89c55410c2dda815194aa94a310e31a
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-09 22:20:36 UTC;
+        unix
+File: fixest_0.14.2.tgz
+
+Package: Formula
+Version: 1.2-6
+Depends: R (>= 2.0.0), stats
+Suggests: knitr, rmarkdown
+License: GPL-2 | GPL-3
+MD5sum: bd2d44be4e28f9ce327d2e427a3e698f
+Built: R 4.6.0; ; 2026-10-09 23:55:39 UTC; unix
+File: Formula_1.2-6.tgz
+
+Package: generics
+Version: 0.1.4
+Depends: R (>= 3.6)
+Imports: methods
+Suggests: covr, pkgload, testthat (>= 3.0.0), tibble, withr
+License: MIT + file LICENSE
+MD5sum: 218be80e8ad1725dfe54cb3c3412d23b
+Built: R 4.6.0; ; 2026-05-13 04:47:17 UTC; unix
+File: generics_0.1.4.tgz
+
+Package: GPArotation
+Version: 2026.8-2
+Depends: R (>= 3.5.0)
+Imports: stats,grDevices,graphics, utils
+License: GPL (>= 2)
+MD5sum: 4e72bf9e2f27650f71f2e356377821e9
+Built: R 4.6.0; ; 2026-10-10 03:10:40 UTC; unix
+File: GPArotation_2026.8-2.tgz
+
+Package: lattice
+Version: 0.23-1
+Priority: recommended
+Depends: R (>= 4.0.0)
+Imports: grid, grDevices, graphics, stats, utils
+Suggests: KernSmooth, MASS, latticeExtra, colorspace
+Enhances: chron, zoo
+License: GPL (>= 2)
+MD5sum: 650009c18932375176db0afc690ae06c
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 05:36:55 UTC;
+        unix
+File: lattice_0.23-1.tgz
+
+Package: lavaan
+Version: 0.7-3
+Depends: R(>= 3.4)
+Imports: methods, parallel, stats4, stats, utils, graphics, grDevices,
+        MASS, mnormt, pbivnorm, numDeriv, quadprog
+License: GPL (>= 2)
+MD5sum: 20a8ebd1d435f7a7805d8a9841ffacd5
+Built: R 4.6.0; ; 2026-10-10 05:37:13 UTC; unix
+File: lavaan_0.7-3.tgz
+
+Package: lme4
+Version: 2.0-6
+Depends: R (>= 3.6), Matrix, methods, stats
+Imports: MASS, Rdpack, boot, graphics, grid, lattice, minqa (>=
+        1.1.15), nlme (>= 3.1-123), nloptr (>= 1.0.4), parallel,
+        reformulas (>= 0.4.3.1), splines, utils
+LinkingTo: Matrix (>= 1.5-0), Rcpp (>= 1.1.1-1.1), RcppEigen (>=
+        0.3.3.9.4)
+Suggests: DHARMa, HSAUR3, MEMSS, car, dfoptim, future.apply, gamm4,
+        ggplot2, glmmTMB, gridExtra, knitr, merDeriv, mgcv, mlmRev,
+        numDeriv, optimx (>= 2013.8.6), pbkrtest, performance,
+        rmarkdown, rr2, see, semEff, statmod, testthat (>= 0.8.1),
+        tibble
+License: GPL (>= 2)
+MD5sum: afc1ea9855ba8a887a57e9d244efebb9
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 08:17:10 UTC;
+        unix
+File: lme4_2.0-6.tgz
+
+Package: lmtest
+Version: 0.9-40
+Depends: R (>= 3.0.0), stats, zoo
+Imports: graphics
+Suggests: car, strucchange, sandwich, dynlm, stats4, survival, AER
+License: GPL-2 | GPL-3
+MD5sum: 1986857597832a731f21c68772c2456e
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-13 11:22:34 UTC;
+        unix
+File: lmtest_0.9-40.tgz
+
+Package: MASS
+Version: 7.3-66
+Priority: recommended
+Depends: R (>= 4.4.0), grDevices, graphics, stats, utils
+Imports: methods
+Suggests: lattice, nlme, nnet, survival
+License: GPL-2 | GPL-3
+MD5sum: 85b17c99d6e9b9a3558e1ac3d5a1bc7a
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 10:27:13 UTC;
+        unix
+File: MASS_7.3-66.tgz
+
+Package: Matrix
+Version: 1.7-6
+Priority: recommended
+Depends: R (>= 4.4), methods
+Imports: grDevices, graphics, grid, lattice, stats, utils
+Suggests: MASS, datasets, sfsmisc, tools
+Enhances: SparseM, graph
+License: GPL (>= 2) | file LICENCE
+MD5sum: 8126d0a5013e40717c0da22a203b6ce3
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 10:28:16 UTC;
+        unix
+File: Matrix_1.7-6.tgz
+
+Package: maxLik
+Version: 1.6-10
+Depends: R (>= 2.4.0), miscTools (>= 0.6-8), methods
+Imports: sandwich, generics
+Suggests: MASS, clue, dlm, plot3D, tibble, tinytest, knitr
+License: GPL (>= 2)
+MD5sum: 8a44a45632d19f978f6449c9348329aa
+Built: R 4.6.0; ; 2026-10-10 10:31:17 UTC; unix
+File: maxLik_1.6-10.tgz
+
+Package: minqa
+Version: 1.2.8
+Imports: Rcpp (>= 0.9.10)
+LinkingTo: Rcpp
+License: GPL-2
+MD5sum: be3969af07ea65295f136cba270c8f86
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-13 13:48:36 UTC;
+        unix
+File: minqa_1.2.8.tgz
+
+Package: miscTools
+Version: 0.6-30
+Depends: R (>= 2.14.0)
+Imports: digest
+Suggests: Ecdat (>= 0.1-5)
+License: GPL (>= 2)
+MD5sum: 8dbf0256f58d9fc14a90bc8f0a45fbef
+Built: R 4.6.0; ; 2026-05-13 13:54:43 UTC; unix
+File: miscTools_0.6-30.tgz
+
+Package: mnormt
+Version: 2.1.1
+Depends: R (>= 2.2.0)
+License: GPL-2 | GPL-3
+MD5sum: d9266619150127203b0367a4fcf635ca
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-12 12:02:24 UTC;
+        unix
+File: mnormt_2.1.1.tgz
+
+Package: nlme
+Version: 3.1-171
+Priority: recommended
+Depends: R (>= 3.6.0)
+Imports: graphics, stats, utils, lattice
+Suggests: MASS
+License: GPL (>= 2)
+MD5sum: 55d1cbc062e3c15137fc8fbd4bacd871
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 18:59:05 UTC;
+        unix
+File: nlme_3.1-171.tgz
+
+Package: nloptr
+Version: 2.2.1.9000
+Suggests: knitr, rmarkdown, covr, tinytest
+License: LGPL (>= 3)
+MD5sum: 7feccba0177b0c478c6c4cc49b93a429
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-20 09:17:42 UTC;
+        unix
+File: nloptr_2.2.1.9000.tgz
+
+Package: numDeriv
+Version: 2016.8-1.1
+Depends: R (>= 2.11.1)
+License: GPL-2
+MD5sum: 4cedc70ba377c654e2d1a3c863ba0006
+Built: R 4.6.0; ; 2026-05-13 17:09:10 UTC; unix
+File: numDeriv_2016.8-1.1.tgz
+
+Package: pbivnorm
+Version: 0.6.0
+License: GPL (>= 2)
+MD5sum: ed857893b71ffc4ad4ee03723656b157
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-13 18:40:38 UTC;
+        unix
+File: pbivnorm_0.6.0.tgz
+
+Package: plm
+Version: 2.6-7
+Depends: R (>= 3.2.0)
+Imports: MASS, bdsmatrix, collapse (>= 1.8.9), zoo, nlme, sandwich,
+        lattice, lmtest, maxLik, Rdpack, Formula, stats
+Suggests: AER, car, statmod, urca, pder, texreg, knitr, rmarkdown,
+        fixest, lfe
+License: GPL (>= 2)
+MD5sum: d3626ae7225f341adc4aaedf96e8d22b
+Built: R 4.6.0; ; 2026-05-13 19:40:11 UTC; unix
+File: plm_2.6-7.tgz
+
+Package: psych
+Version: 2.6.9
+Imports:
+        mnormt,parallel,stats,graphics,grDevices,methods,lattice,nlme,GPArotation
+Suggests: psychTools, lavaan, lme4, Rcsdp, graph, knitr, Rgraphviz
+License: GPL (>= 2)
+MD5sum: e10924eed8a1777fc3c68468f68b21c1
+Built: R 4.6.0; ; 2026-10-11 03:11:37 UTC; unix
+File: psych_2.6.9.tgz
+
+Package: quadprog
+Version: 1.5-8
+Depends: R (>= 3.1.0)
+License: GPL (>= 2)
+MD5sum: f36663367072af1a357b98def99beacd
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-20 09:44:14 UTC;
+        unix
+File: quadprog_1.5-8.tgz
+
+Package: rbibutils
+Version: 2.4.1
+Depends: R (>= 2.10)
+Imports: utils, tools
+Suggests: testthat
+License: GPL-2
+MD5sum: 9e36d3a9fc20b8ca948d9f0af4529338
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-13 22:33:05 UTC;
+        unix
+File: rbibutils_2.4.1.tgz
+
+Package: Rcpp
+Version: 1.1.2
+Depends: R (>= 3.5.0)
+Imports: methods, utils
+Suggests: tinytest, inline, rbenchmark, pkgKitten (>= 0.1.2)
+License: GPL (>= 2)
+MD5sum: 8bd684a7371ad3ee690e210fce82c219
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-11 03:48:28 UTC;
+        unix
+File: Rcpp_1.1.2.tgz
+
+Package: RcppEigen
+Version: 0.3.4.0.2
+Depends: R (>= 3.6.0)
+Imports: Rcpp (>= 0.11.0), stats, utils
+LinkingTo: Rcpp
+Suggests: Matrix, inline, tinytest, pkgKitten, microbenchmark
+License: GPL (>= 2) | file LICENSE
+MD5sum: c5c4dd083bb369d2f34a4e420cc030e8
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-05-13 23:00:17 UTC;
+        unix
+File: RcppEigen_0.3.4.0.2.tgz
+
+Package: Rdpack
+Version: 2.6.6
+Depends: R (>= 2.15.0), methods
+Imports: tools, utils, rbibutils (> 2.4)
+Suggests: grDevices, testthat, rstudioapi, rprojroot, gbRd
+License: GPL (>= 2)
+MD5sum: ba7cdd4f50290ac42c728ad48b84ef8e
+Built: R 4.6.0; ; 2026-05-13 23:14:44 UTC; unix
+File: Rdpack_2.6.6.tgz
+
+Package: reformulas
+Version: 0.4.4
+Imports: stats, methods, Matrix, Rdpack
+Suggests: lme4, tinytest, glmmTMB, Formula
+License: GPL-3
+MD5sum: d119ca16b1912ea936b42b442196a211
+Built: R 4.6.0; ; 2026-05-13 23:35:46 UTC; unix
+File: reformulas_0.4.4.tgz
+
+Package: sandwich
+Version: 3.1-3
+Depends: R (>= 3.0.0)
+Imports: stats, utils, zoo
+Suggests: AER, car, geepack, lattice, lme4, lmtest, MASS, multiwayvcov,
+        parallel, pcse, plm, pscl, scatterplot3d, stats4, strucchange,
+        survival
+License: GPL-2 | GPL-3
+MD5sum: f4fb29d8c92023678bf91d62ff82ff8a
+Built: R 4.6.0; ; 2026-10-11 09:48:43 UTC; unix
+File: sandwich_3.1-3.tgz
+
+Package: stringmagic
+Version: 1.3.0
+Imports: Rcpp(>= 1.0.5), utils, stats
+LinkingTo: Rcpp
+Suggests: knitr, rmarkdown, data.table
+License: GPL (>= 2)
+MD5sum: 6f13e571f020b6aaf42ff9ccb6474dc6
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-12 14:33:48 UTC;
+        unix
+File: stringmagic_1.3.0.tgz
+
+Package: survival
+Version: 3.8-12
+Priority: recommended
+Depends: R (>= 4.1.0)
+Imports: graphics, Matrix, methods, splines, stats, utils
+License: LGPL (>= 2)
+MD5sum: 4af6cf600e60e1e40a29e6445cd56178
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-11 20:13:33 UTC;
+        unix
+File: survival_3.8-12.tgz
+
+Package: zoo
+Version: 1.9-1
+Depends: R (>= 3.1.0), stats
+Imports: utils, graphics, grDevices, lattice (>= 0.20-27)
+Suggests: AER, coda, chron, ggplot2 (>= 3.5.0), knitr, mondate, scales,
+        stinepack, strucchange, timeDate, timeSeries (>= 4021.104),
+        tinyplot, tis, tseries, xts
+License: GPL-2 | GPL-3
+MD5sum: 01b5f4c188696875ed0761deeb37097a
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-12 03:43:08 UTC;
+        unix
+File: zoo_1.9-1.tgz

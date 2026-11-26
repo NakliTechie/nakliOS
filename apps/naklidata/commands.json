@@ -1,0 +1,242 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in NakliData",
+      "extensions": [
+        ".csv",
+        ".tsv",
+        ".parquet",
+        ".json",
+        ".jsonl",
+        ".ndjson",
+        ".xlsx",
+        ".dta",
+        ".sav",
+        ".sas7bdat",
+        ".xpt",
+        ".sqlite",
+        ".db",
+        ".arrow",
+        ".ipc",
+        ".naklidata"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "schema.describe",
+      "description": "Describe the mounted tables, columns, semantic types, sensitivity tiers, measures, link types, and provenance in the open NakliData workbook.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "tables.list",
+      "description": "List the mounted tables in the open NakliData workbook with row counts and source identifiers.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "cells.list",
+      "description": "List the notebook cells and their editable source code in the open NakliData workbook without exposing raw result rows.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "lineage.read",
+      "description": "Read the source-to-cell-to-sink lineage graph of the open NakliData workbook.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "query.run",
+      "description": "Run a bounded, read-only SQL value query over public columns in the open NakliData workbook (requires the tab's values:read grant and redacts non-public columns).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Read-only SELECT projection over mounted tables, e.g. \"SELECT vendor_name, total_amount FROM invoices LIMIT 25\""
+          }
+        },
+        "required": ["sql"]
+      }
+    },
+    {
+      "name": "fs.list",
+      "description": "List supported data files and .naklidata workbooks in NakliData's hosted NakliOS storage namespace.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "description": "Optional folder prefix inside apps/naklidata/"
+          }
+        }
+      }
+    },
+    {
+      "name": "fs.open",
+      "description": "Mount a supported data file or open a .naklidata workbook from NakliData's hosted NakliOS storage namespace.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "App-relative file path inside apps/naklidata/, e.g. \"sales.csv\" or \"q3.naklidata\""
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "sql.propose",
+      "description": "Stage an editable, un-run SQL cell in NakliData's notebook and Review tray for the person to inspect and run.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "description": "SQL statement to stage as an un-run cell"
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional display title for the proposed SQL cell"
+          }
+        },
+        "required": ["sql"]
+      }
+    },
+    {
+      "name": "chart.propose",
+      "description": "Stage an editable chart cell over an existing result cell in NakliData's notebook and Review tray.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "inputCellId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Identifier of the upstream SQL cell"
+          },
+          "chartType": {
+            "type": "string",
+            "enum": ["bar", "line", "area", "scatter", "pie", "histogram", "stat", "table"],
+            "description": "Chart mark type"
+          },
+          "xColumn": {
+            "type": "string",
+            "description": "X or category column name"
+          },
+          "yColumn": {
+            "type": "string",
+            "description": "Y or numeric measure column name"
+          },
+          "groupColumn": {
+            "type": "string",
+            "description": "Optional color/series breakdown column name"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Chart title (1 to 80 characters)"
+          }
+        },
+        "required": ["inputCellId", "chartType", "title"]
+      }
+    },
+    {
+      "name": "quality.propose",
+      "description": "Stage a portable data-quality assertion cell in NakliData's notebook and Review tray without executing it.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "snake_case check identifier, e.g. \"invoice_no_complete\""
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable description of the check"
+          },
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Mounted table name"
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Owned column name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "completeness",
+              "uniqueness",
+              "accepted_values",
+              "valid_range",
+              "format",
+              "referential_validity"
+            ],
+            "description": "Assertion check kind"
+          }
+        },
+        "required": ["id", "description", "table", "column", "kind"]
+      }
+    },
+    {
+      "name": "cleaning.propose",
+      "description": "Stage a suggested table-cleaning step as an editable, un-run SQL cell in NakliData's notebook and Review tray.",
+      "scope": "write",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Mounted source identifier"
+          },
+          "tableId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Mounted table identifier"
+          },
+          "suggestionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Cleaning suggestion identifier from schema.describe"
+          }
+        },
+        "required": ["sourceId", "tableId", "suggestionId"]
+      }
+    }
+  ]
+}
