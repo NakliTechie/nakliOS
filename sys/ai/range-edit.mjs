@@ -62,7 +62,7 @@ export function rangeEditProposal(request, after) {
 
 export function rangeEditPrompt(request) {
   const r = rangeEditRequest(request);
-  return 'Edit the one granted snapshot file. The source remains unchanged until Editor reviews and applies the proposal. '
+  return 'Edit the one granted snapshot file. The source remains unchanged until nCode reviews and applies the proposal. '
     + 'Read the file first. Keep the edit anchored to the selected working-file lines.\n'
     + JSON.stringify({ file: r.path, project: r.project, backend: r.backend, baseline: r.version,
       lines: r.selection, instruction: r.instruction, context: r.context });

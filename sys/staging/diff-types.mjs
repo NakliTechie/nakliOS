@@ -215,7 +215,7 @@ export function normalizeKanzenAgent(diff) {
   const who = [diff?.caller, diff?.door].filter(Boolean).map(String).join(' via ');
   const change = diff?.destructive ? 'remove' : 'edit';
   const rows = lines.slice(0, 100).map((line) => ({
-    label: String(diff?.boardName || 'KanZen'), before: '', after: String(line).slice(0, 300), change,
+    label: String(diff?.boardName || 'nTasks'), before: '', after: String(line).slice(0, 300), change,
   }));
   if (diff?.note) rows.push({ label: 'note', before: '', after: String(diff.note).slice(0, 300), change: 'edit' });
   return { kind: 'kanzen-agent', summary: who ? `${summary} — agent (${who})` : `${summary} — agent`, rows };

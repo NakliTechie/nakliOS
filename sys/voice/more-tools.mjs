@@ -70,8 +70,11 @@ function appTools(apps) {
   const askers = commands.filter((command) => /^[a-z0-9-]+\.assistant\.ask$/.test(command.name));
   const appOf = (command) => command.name.split('.')[0];
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // The familiar names people say (nSlides, "en slides") for the apps with an assistant, by app id.
+  const SAID = { nslides: 'pellucia', nsheet: 'reckon', ndoc: 'draft', nboard: 'chartella', naudio: 'sonella', nvideo: 'montella' };
+  const said = (w) => SAID[w] || SAID[w.replace(/^en/, 'n')] || w;
   const pick = (app, suffix) => {
-    const want = norm(app);
+    const want = said(norm(app));
     const hit = askers.find((c) => norm(appOf(c)) === want) || askers.find((c) => norm(c.description).includes(want))
       || askers.find((c) => want && norm(appOf(c)).startsWith(want));
     if (!hit) throw new Error(`no app assistant for "${app}"; apps with one: ${askers.map(appOf).join(', ')}`);
@@ -79,9 +82,9 @@ function appTools(apps) {
   };
   const handOff = askers.length ? [{
     name: 'ask_app',
-    description: `Hand a whole job to an app's own assistant, which opens the app and does the work there, for example "make a five-slide deck about solar power" in pellucia. Apps: ${askers.map((c) => appOf(c)).join(', ')} (pellucia slides, reckon spreadsheets, draft documents, chartella whiteboards and diagrams, sonella audio, montella video). Pass the person's request in their words.`,
+    description: `Hand a whole job to an app's own assistant, which opens the app and does the work there, for example "make a five-slide deck about solar power" in nSlides. Apps by id: ${askers.map((c) => appOf(c)).join(', ')} (pellucia is nSlides, reckon nSheet, draft nDoc, chartella nBoard for whiteboards and diagrams, sonella nAudio, montella nVideo). Pass the id or the name, and the person's request in their words.`,
     parameters: { type: 'object', properties: {
-      app: { type: 'string', description: 'App id, e.g. pellucia' },
+      app: { type: 'string', description: 'App id or name, e.g. pellucia or nSlides' },
       request: { type: 'string', description: 'What to do, in the person\'s words' },
     }, required: ['app', 'request'] },
     async run({ app, request }) {
@@ -98,7 +101,7 @@ function appTools(apps) {
   if (!others.length) return [...tuned, ...handOff];
   return [...tuned, ...handOff, {
     name: 'find_app_action',
-    description: 'Find what another app can do, such as Reckon sheets, Draft documents, KanZen boards or Sheaf PDFs. Call this first, then run_app_action.',
+    description: 'Find what another app can do, such as nSheet sheets, nDoc documents, nTasks boards or nPDF files. Call this first, then run_app_action.',
     parameters: { type: 'object', properties: { about: { type: 'string', description: 'The app or the task, e.g. "kanzen card"' } }, required: ['about'] },
     async run({ about }) {
       const words = String(about || '').toLowerCase().split(/\W+/).filter(Boolean);

@@ -184,15 +184,17 @@ export function builtinTools({ host, timers, reminders = null, nav = globalThis.
     },
     {
       name: 'open_app',
-      description: 'Open a NakliOS app by its name, for example Notes, Files or Calendar.',
+      description: 'Open a NakliOS app by its name, for example Notes, Files, Calendar, nDoc or nSlides.',
       parameters: { type: 'object', properties: {
         name: { type: 'string', description: 'App name or id' },
       }, required: ['name'] },
       async run({ name }) {
         const apps = await host.listApps();
-        const want = norm(name);
-        const app = apps.find((a) => norm(a.id) === want) || apps.find((a) => norm(a.name) === want)
-          || apps.find((a) => norm(a.name).startsWith(want));
+        // Speech writes the familiar names (nDoc, nSlides) as "n doc" or "en doc"; norm drops the space, and a
+        // leading "en" before a name that starts with n is read as that n.
+        const find = (w) => apps.find((a) => norm(a.id) === w) || apps.find((a) => norm(a.name) === w)
+          || apps.find((a) => /^n/.test(norm(a.name)) && 'e' + norm(a.name) === w) || apps.find((a) => norm(a.name).startsWith(w));
+        const app = find(norm(name)) || find(norm(String(name || '').trim().split(/\s+/)[0]));
         if (!app) throw new Error(`No app called ${name}`);
         await host.openApp(app.id);
         return { id: app.id, name: app.name };

@@ -59,8 +59,9 @@ function routeToTool(text, offered) {
   if (has('get_battery') && /battery/.test(t)) return { name: 'get_battery', arguments: {} };
   if (has('get_network_status') && /\b(online|offline|network|connect(ed|ion)?|internet)\b/.test(t)) return { name: 'get_network_status', arguments: {} };
   // A job for an app's own assistant: "… in pellucia" (app-shell layer 4).
-  if (has('ask_app') && (m = t.match(/^(.*\S)\s+(?:in|using|with)\s+(pellucia|reckon|draft|chartella|sonella|montella)\W*$/))) return { name: 'ask_app', arguments: { app: m[2], request: m[1] } };
-  if (has('open_app') && (m = t.match(/\b(?:open|launch|start)\s+(?:the\s+)?([a-z][\w-]*)/))) return { name: 'open_app', arguments: { name: m[1] } };
+  if (has('ask_app') && (m = t.match(/^(.*\S)\s+(?:in|using|with)\s+(pellucia|reckon|draft|chartella|sonella|montella|e?n\s?(?:slides|sheet|doc|board|audio|video))\W*$/))) return { name: 'ask_app', arguments: { app: m[2], request: m[1] } };
+  // Up to two words, so "open n slides" (nSlides) reaches open_app whole; it falls back to the first word.
+  if (has('open_app') && (m = t.match(/\b(?:open|launch|start)\s+(?:the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s*[.!?]?\s*$/) || t.match(/\b(?:open|launch|start)\s+(?:the\s+)?([a-z][\w-]*)/))) return { name: 'open_app', arguments: { name: m[1] } };
   if (has('get_time') && /\b(time|date|day is it)\b/.test(t)) return { name: 'get_time', arguments: {} };
   return null;
 }
