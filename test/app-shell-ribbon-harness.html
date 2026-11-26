@@ -8,7 +8,10 @@ const st = { bold: false, size: '12', colour: null, canUndo: false, canRedo: fal
 const ran = [];
 const shell = naklishell.mount({
   app: { id: 'ribbontest', name: 'Ribbon test', ext: '.rt', docNoun: 'note' },
-  doc: { blank() {}, serialize() { return '{}'; }, load() {} },
+  doc: { blank() {}, serialize() { return '{}'; }, load() {},
+    // the app's own File page entries (spec 6.2): an action after Open, and a page of its own at the end
+    pages: [{ id: 'recover', label: 'Recover', after: 'open', command: 'note.recover', run: () => ran.push('recover') },
+      { id: 'about', label: 'About', render: (el) => { const p = document.createElement('p'); p.id = 'about-body'; p.textContent = 'About this note'; el.append(p); } }] },
   state: () => st,
   commands: { 'edit.undo': () => ran.push('undo'), 'edit.redo': () => ran.push('redo') },
   run: (name, args) => { ran.push(name + ' ' + JSON.stringify(args)); if (name === 'format.mark' && args.mark === 'bold') st.bold = !st.bold; return true; },
@@ -70,6 +73,17 @@ window.__result = (async () => {
     && bar.querySelector('.nsh-cmdrow-end').getBoundingClientRect().right <= row.getBoundingClientRect().right + 1;
   row.style.width = '';
   try { localStorage.removeItem('naklishell:ribbon:ribbontest'); } catch (_) {}
+  // The File page carries the app's entries where they asked to be: an action closes the page and runs; a page draws itself.
+  shell.showFile('open'); await wait(10);
+  const nav = [...document.querySelectorAll('.nsh-bs-nav button')];
+  r.filePagesOrder = nav.map(b => b.querySelector('span').textContent).join() === 'Back,New,Open,Recover,Save,Save as,About';
+  r.filePageParity = nav.find(b => b.dataset.page === 'recover').getAttribute('data-command') === 'note.recover';
+  nav.find(b => b.dataset.page === 'recover').click(); await wait(10);
+  r.filePageAction = ran.includes('recover') && document.querySelector('.nsh-bs').hidden;
+  shell.showFile('about'); await wait(10);
+  r.filePageOwn = !!document.querySelector('.nsh-bs-page #about-body') && document.querySelector('.nsh-bs-page h2').textContent === 'About'
+    && document.querySelector('.nsh-bs-nav [aria-current=page]').dataset.page === 'about';
+  shell.closeFile();
   r.version = naklishell.version === 3;
   return r;
 })();

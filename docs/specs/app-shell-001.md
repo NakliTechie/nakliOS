@@ -236,6 +236,7 @@ const shell = naklishell.mount({
     load(file, info),           // open a File; info.home says where it came from
     exports: [{ id: 'docx', label: 'Word document (.docx)', ext: '.docx', make() }],
     print(),
+    pages: [{ id: 'recover', label: 'Recover', after: 'open', command: 'deck.recover', run() }],
   },
   run(name, args),              // the app's existing command bus; the shell never edits the document itself
   state(),                      // { canUndo, canRedo, bold, italic, underline, font, size, align, … }
@@ -262,6 +263,13 @@ group order, collapse (`Mod+F1`, remembered per app) and the keys. `key` names a
 gives an item for it, and never inside a plain text field. The shell sets `--shell-top-h` (title row, command row and
 ribbon, measured) for apps whose panes are fixed. Under 600 px the ribbon scrolls sideways; the "More" sheet comes
 with layer 3.
+
+`doc.pages` (shell v3, 2026-11-26) puts an app's own entries on the File page, so the app needs no File menu of its
+own. An entry is `{ id, label, after, command, run() | render(el, close) }`. `after` names the built-in page it
+follows (`new`, `open`, `save`, `save_as`, `export`, `print`); without it the entry goes at the end. `run()` is an
+action: the File page closes and the action runs (Pellucia's Recover dialog, Sonella's Import audio). `render(el,
+close)` draws a page of its own in the File page's right side. `command` names the app command the entry mirrors,
+for the tooltip shortcut and the parity check.
 
 ### 6.3 Commands and the agent surface
 
