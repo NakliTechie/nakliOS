@@ -1,0 +1,8 @@
+{
+  "source": "https://github.com/NakliTechie/opendta-pyodide",
+  "tag": "v0.2.3",
+  "files": {
+    "opendta.json": "sha384-Na919Al1fl9n8OK37ixI0deBJJCzhewqzB4hqlsEDbr/7yZdV3MAOPy6J0oTSoz4",
+    "opendta_bridge.py": "sha384-3PfcCMcUWBQjCZPmz+skT50B7z5QiD1Q3PCITCT5mS+fFHBEmMPrjxXcRnwQJacS"
+  }
+}

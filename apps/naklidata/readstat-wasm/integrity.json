@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/NakliTechie/readstat-wasm",
+  "tag": "v0.1.0",
+  "files": {
+    "index.mjs": "sha384-Mq3L8HXbYTtvhLwmvzaEh/9Go3JAKCeWAjIdrkoVJ4cr9VwnpYYbyHenrLVRU631",
+    "index.d.ts": "sha384-nAY8EL6TPrPb/q3+RlYg/Bd0iW7E8T/XRYubIkwuZJc70W2jlGG28qHXzdzy9UPO",
+    "readstat.mjs": "sha384-f41UB7BdMQJ/rorvdY/q80eKBEl+fVkRRlJH/3Qg2GbYHEzQmJLxsRV5VKgJrY/+",
+    "readstat.wasm": "sha384-WCaFU5xGejHBzhqK09O7Bd+R1e53VL9K5qGGZz5RkW5UH+nuHkVP4tC6jgSWV0CQ",
+    "LICENSE-ReadStat": "sha384-CfVlpDrV0hkqkfbs5QTBMd3hQ3xjjTkYCT1YjPWxWvJdcEpY5qhaKzx2Xl0BYwrF"
+  }
+}

@@ -875,7 +875,7 @@
       "id": "naklidata",
       "repo": "NakliTechie/NakliData",
       "requestedRef": "naklios-dist",
-      "resolvedCommit": "4b511dea649abea4ce90841e5c72791e5beb29db",
+      "resolvedCommit": "b0106416e48a7ff49b3f3a6aa8571f90259ce575",
       "files": [
         {
           "source": "chunks/_demo.js",
@@ -886,8 +886,14 @@
         {
           "source": "chunks/agent-surface.js",
           "destination": "chunks/agent-surface.js",
-          "sha256": "d96880d1d922948d20440a86dfd2ab3a67ecc412fca390a8a2587cd7fd7af445",
-          "bytes": 95331
+          "sha256": "6213522011924c908fd09483fc7bcb776b6166a58b158ded6d9f16e784daaf2a",
+          "bytes": 97655
+        },
+        {
+          "source": "chunks/analysis.js",
+          "destination": "chunks/analysis.js",
+          "sha256": "88f34117c65668fcb1248df53ad041b930e41f2b79468de5f388937c577e8251",
+          "bytes": 20918
         },
         {
           "source": "chunks/arrow-reader.js",
@@ -910,13 +916,13 @@
         {
           "source": "chunks/codemirror.js",
           "destination": "chunks/codemirror.js",
-          "sha256": "1d3dcf07bab3cb03bde2c5422724f281ec584ff27e232e912388cb80b82ddef2",
-          "bytes": 433332
+          "sha256": "2acbb0730e0b15869a659616d1929080479c08e4282ca39d3a749931524ad800",
+          "bytes": 437252
         },
         {
           "source": "chunks/compare-tables.js",
           "destination": "chunks/compare-tables.js",
-          "sha256": "2b86b4b37d83d5ea96a67581c78ec7c3bdcf482e42c552223b2d6a92112393c3",
+          "sha256": "cea0be0b701b663c06884f5ea78906aea256f471ec8a77c090b1065e21e0a0ec",
           "bytes": 27035
         },
         {
@@ -948,6 +954,12 @@
           "destination": "chunks/demo-workbook.js",
           "sha256": "c0aedc2bd7148b7294d5f21dc298b1a86ab3a9c1768a8411fc08e506b5b897c6",
           "bytes": 1771
+        },
+        {
+          "source": "chunks/dofile.js",
+          "destination": "chunks/dofile.js",
+          "sha256": "94acaba8b1846dc2f781dff046ae8805320c2b4a55109611c435244a710a1fc1",
+          "bytes": 157191
         },
         {
           "source": "chunks/facet-charts.js",
@@ -982,13 +994,13 @@
         {
           "source": "chunks/link-paths.js",
           "destination": "chunks/link-paths.js",
-          "sha256": "f32a641bae8e97c6652869d6e633df09eb8b7bde4c333b16104ab855fead7af8",
-          "bytes": 31143
+          "sha256": "cc4ab52181096ee49aa6b675077f1113d0d1d0d1abff5dc2104c01a7b129288c",
+          "bytes": 32198
         },
         {
           "source": "chunks/map-data.js",
           "destination": "chunks/map-data.js",
-          "sha256": "f4dc79c009b4484815556b38a6f7aed491f101d876721691f6cbfe3ecd67973f",
+          "sha256": "4bded1ae54fe8e367630ac04f7d531e87075e627dfb5f6262665074aabda3c54",
           "bytes": 5161
         },
         {
@@ -1002,6 +1014,12 @@
           "destination": "chunks/maplibre-map.js",
           "sha256": "13607b63cb0774bd824f9659a56326c7614a1c35ed84e8e33d3151bde98db190",
           "bytes": 1021436
+        },
+        {
+          "source": "chunks/naklios-host.js",
+          "destination": "chunks/naklios-host.js",
+          "sha256": "37f4657828e182b8166f1b140e03659e95bfd97771a6e08d03d24be17c717455",
+          "bytes": 12140
         },
         {
           "source": "chunks/observable-plot.js",
@@ -1018,14 +1036,14 @@
         {
           "source": "chunks/persistence-validation.js",
           "destination": "chunks/persistence-validation.js",
-          "sha256": "878a8115006650ab70c0b607004b093e543d8b57c0e476f8be510c9ea379d408",
-          "bytes": 21098
+          "sha256": "12a531520cf21a86a573c39b5415526161ecfbc5a0240fe34d09ca7aca4e7701",
+          "bytes": 21108
         },
         {
           "source": "chunks/pyodide-runtime.js",
           "destination": "chunks/pyodide-runtime.js",
-          "sha256": "1e8e24a2bc621b89534bc9a0090d0af9a9e369482151724b559e33ef3efcb6a2",
-          "bytes": 5148
+          "sha256": "bd85f442e151d7de02c36a8aa8e4a85c9f60642a59d45d994f751d70175deb35",
+          "bytes": 13805
         },
         {
           "source": "chunks/query-builder.js",
@@ -1036,8 +1054,8 @@
         {
           "source": "chunks/readstat-reader.js",
           "destination": "chunks/readstat-reader.js",
-          "sha256": "a42dd18732d3f4652efc5556cbb03e0ce9c51d8e1f91ccc8c429490d136b4895",
-          "bytes": 41367
+          "sha256": "c0c9d006c9a7c35f106ac9cd440b1f95577ad93a023cea7e3ea498e9ce2bfb03",
+          "bytes": 43183
         },
         {
           "source": "chunks/reference-enrich.js",
@@ -1066,8 +1084,8 @@
         {
           "source": "chunks/review-tray.js",
           "destination": "chunks/review-tray.js",
-          "sha256": "2177aadb454311a2facf3782171ca242ac2cb08c3ec3f28896b1d5b3db6c7812",
-          "bytes": 8905
+          "sha256": "9bb21d97a10153a9f74be2f930d3c85a0fd955c633221982e3a6f9b37724cffb",
+          "bytes": 12505
         },
         {
           "source": "chunks/schema-override.js",
@@ -1108,8 +1126,8 @@
         {
           "source": "chunks/sink-execution.js",
           "destination": "chunks/sink-execution.js",
-          "sha256": "a28e13f76d52d0052de09f8f562f046577f4364eba21d41deb1cea33daae680b",
-          "bytes": 39000
+          "sha256": "d09ad6f0e3b98482c86b4a12ecaddc0f30be52868e2903d771bfcd0234898966",
+          "bytes": 40512
         },
         {
           "source": "chunks/sqlite-reader.js",
@@ -1192,8 +1210,14 @@
         {
           "source": "chunks/xlsx-export.js",
           "destination": "chunks/xlsx-export.js",
-          "sha256": "0c4aa0f17751f9eca7748c63fc415bd0720027a2aa80cad3fff2c3eb97c2800a",
+          "sha256": "06d0fa46d0bd2419e71c81330b558afa88f5ffdb6a9deb20dadaefee183288dc",
           "bytes": 49632
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "b603c2a81ce9a20f9658b2f60738f54c4c400a9ec880f1c8dc21d1b578c11f60",
+          "bytes": 7153
         },
         {
           "source": "examples/events/events.jsonl",
@@ -1240,212 +1264,260 @@
         {
           "source": "guide/index.html",
           "destination": "guide/index.html",
-          "sha256": "09a3ca249a79bc8afd26824f803c6ee63162e69a8e3c233987290b5f58ede8f8",
-          "bytes": 50404
+          "sha256": "398fd6261d08aa3428d64b7f3465c927669f18ead072dfc61cb76046b0cdd1da",
+          "bytes": 59162
         },
         {
           "source": "guide/screenshots/ai-sidecar/01-settings-byok.png",
           "destination": "guide/screenshots/ai-sidecar/01-settings-byok.png",
-          "sha256": "5e4927e00eef551029f2a2094748c37116e8fea93d5c78145eb05ac17ca0bc7e",
-          "bytes": 579549
+          "sha256": "bdf00e34dc06149732d3d1aed72a3fbfb62890dc9d38467826fa7c8292b7d92b",
+          "bytes": 571477
         },
         {
           "source": "guide/screenshots/ai-sidecar/02-result-ai-chips.png",
           "destination": "guide/screenshots/ai-sidecar/02-result-ai-chips.png",
-          "sha256": "d603eb8f53f50469f9649208ce9b93afab595323390016e91de69d099ebc639e",
-          "bytes": 585450
+          "sha256": "43788e5ae4cdb3bc6c1c458010a892473fd5198ca8baa88edbf3cf6660323ce5",
+          "bytes": 535092
         },
         {
           "source": "guide/screenshots/ai-sidecar/03-nl-to-sql.png",
           "destination": "guide/screenshots/ai-sidecar/03-nl-to-sql.png",
-          "sha256": "50afd36bdad8acee9ee5e44d68a7c5e4471f5c820f8c80e5150642a15c8d50eb",
-          "bytes": 329449
+          "sha256": "dba5e13353446535013084eefa7f8150c190acfec5bcf8e390572dca3af5c150",
+          "bytes": 312108
         },
         {
           "source": "guide/screenshots/data-and-schema/01-sources-mounted.png",
           "destination": "guide/screenshots/data-and-schema/01-sources-mounted.png",
-          "sha256": "96c5e212abc738d088d1be31793d47565a92dd9ad23c51d07bc7cddc152d0096",
-          "bytes": 440675
+          "sha256": "6fd38026c3ea9a73e1960b0c85869d8d2cc633cd40cefc603d7a0da18f546740",
+          "bytes": 438322
         },
         {
           "source": "guide/screenshots/data-and-schema/02-schema-panel.png",
           "destination": "guide/screenshots/data-and-schema/02-schema-panel.png",
-          "sha256": "e9296e592666a02a42e199c00fc5ce1f6ba513c4345f3555dbe690ea40147942",
-          "bytes": 137997
+          "sha256": "54b5b0a9073f634189ecfec0b4637ce44d1390b0da191dd184b766f72f39c7c2",
+          "bytes": 137204
         },
         {
           "source": "guide/screenshots/data-and-schema/03-type-override.png",
           "destination": "guide/screenshots/data-and-schema/03-type-override.png",
-          "sha256": "5d242676dbe1083f28aed9c579125a23545d501121492b092d545feee9142e66",
-          "bytes": 150342
+          "sha256": "1f35cdd502448d63b61c2b13bd3ed8b536cbef995f7d7586edc8134cd9a9566e",
+          "bytes": 151678
         },
         {
           "source": "guide/screenshots/facet/01-embedding-map.png",
           "destination": "guide/screenshots/facet/01-embedding-map.png",
-          "sha256": "4407d56c8b87009f63a3ec6a9990f51b08b5f07289607db86129e4378be74a6f",
-          "bytes": 433189
+          "sha256": "f5e2e0eafa4333c0b950c6597a5581538496b927938d26b1c86895f1ddbc28d9",
+          "bytes": 423203
         },
         {
           "source": "guide/screenshots/facet/02-network-graph.png",
           "destination": "guide/screenshots/facet/02-network-graph.png",
-          "sha256": "0954947ad8b35b4544d4e6c15b243868631caed9186499f0567e25d53ef36ad4",
-          "bytes": 538907
+          "sha256": "7fc8362082e8df3a87f6674a1149a33dcca7d1e15b0b8144675ca800840d6422",
+          "bytes": 543644
         },
         {
           "source": "guide/screenshots/facet/03-knowledge-graph.png",
           "destination": "guide/screenshots/facet/03-knowledge-graph.png",
-          "sha256": "eb9112569a4c14fce533d6b286913813c06dc65e717558346d62a48f539f13e9",
-          "bytes": 587657
+          "sha256": "9c5547da8cb7259cfa2f2c18e231fad5afc01077ada9ac1f2c0c4c9243cf4f2d",
+          "bytes": 590613
         },
         {
           "source": "guide/screenshots/facet/04-temporal-timeline.png",
           "destination": "guide/screenshots/facet/04-temporal-timeline.png",
-          "sha256": "22bddd11e9f192415872df997eeffd41b8d3d47b1c931af3eea5fdb318ca0332",
-          "bytes": 377599
+          "sha256": "54024ef2ceadd9da65a864487ed145e42baef133cda760f2303b358482949f54",
+          "bytes": 374714
         },
         {
           "source": "guide/screenshots/facet/05-distribution.png",
           "destination": "guide/screenshots/facet/05-distribution.png",
-          "sha256": "4a047c69de3abf6660cba2c128e58cddfb797a5ad07bb366edd44a72b671703d",
-          "bytes": 343901
+          "sha256": "4ae749b76c1543c6891df790234606cf83a714f92d7b8f5d81f6f1705d324a74",
+          "bytes": 345559
         },
         {
           "source": "guide/screenshots/getting-started/00-welcome.png",
           "destination": "guide/screenshots/getting-started/00-welcome.png",
-          "sha256": "691f0791364b381d053b1d33f2b6e1947e069ed30bbe55bc1d294fc2af908d87",
-          "bytes": 414043
+          "sha256": "3e0e61a7abe9196cbc977281bc2e99bdb59048cda322ebb8c374c3b7c9686fe6",
+          "bytes": 414545
         },
         {
           "source": "guide/screenshots/getting-started/01-empty-state.png",
           "destination": "guide/screenshots/getting-started/01-empty-state.png",
-          "sha256": "fab7ed48d9155ca768699429f232390de845bece5912290246e51ad2b2a76c80",
-          "bytes": 249526
+          "sha256": "c39a0ed48c79d24192782651f8c35fa9cf61171e13937e3a69eb895e552fd271",
+          "bytes": 253308
         },
         {
           "source": "guide/screenshots/getting-started/02-mount-url.png",
           "destination": "guide/screenshots/getting-started/02-mount-url.png",
-          "sha256": "dca248bcc75cfed3b9b5c515114080a63a849ec183aa4a9315528552ccf82a97",
-          "bytes": 235884
+          "sha256": "2e6346ba573e258f1e935db8578f69e2ac6b349c35ed80c9b2139416fab1438c",
+          "bytes": 232027
         },
         {
           "source": "guide/screenshots/getting-started/03-mount-s3.png",
           "destination": "guide/screenshots/getting-started/03-mount-s3.png",
-          "sha256": "036d7dec07a1bbf3817ffbe63a34ef2c4b73b5abe96cb052378436274b3d71ce",
-          "bytes": 209866
+          "sha256": "8d27b638b36714d2eb2e351a99ece877855f6a74a3a1d8c38e217685062b7a69",
+          "bytes": 210338
         },
         {
           "source": "guide/screenshots/lineage/01-lineage-panel.png",
           "destination": "guide/screenshots/lineage/01-lineage-panel.png",
-          "sha256": "bea7a1a16100714b2357ae768a9c2eaf58b557fb6d9edcff02f4568a78cfc76b",
-          "bytes": 429623
+          "sha256": "4680e09b9373dcd5873304319498b63b12b72e4c9eb56bfceedf9f12f2842666",
+          "bytes": 378535
+        },
+        {
+          "source": "guide/screenshots/lineage/02-contracts-and-openlineage.png",
+          "destination": "guide/screenshots/lineage/02-contracts-and-openlineage.png",
+          "sha256": "2df39ffd93fb7aaca98deaa538de78a6e924140e2bce4f61173ecdd27589c2bd",
+          "bytes": 499299
         },
         {
           "source": "guide/screenshots/manifest.json",
           "destination": "guide/screenshots/manifest.json",
-          "sha256": "abb7a60b42ab282876212000938661ae82db8351168d64f5cb95cf2079d07bda",
-          "bytes": 6049
+          "sha256": "a88ad09d088917245d4673b4b89c30e083049d720b5f2f2060ac9d85506b0315",
+          "bytes": 7696
         },
         {
           "source": "guide/screenshots/more-cells/01-input-cell.png",
           "destination": "guide/screenshots/more-cells/01-input-cell.png",
-          "sha256": "7c05692f9dc732031f87c54aaa760dccb50c71fa2f19cb14eb6461f176305662",
-          "bytes": 511550
+          "sha256": "d0436fb8c3c36e312237975dd0be3925b58777accc4a6854706bf2f1f0bf04df",
+          "bytes": 499258
         },
         {
           "source": "guide/screenshots/more-cells/02-dashboard-cell.png",
           "destination": "guide/screenshots/more-cells/02-dashboard-cell.png",
-          "sha256": "29c4145497eb635bd35365b000567006c3ba9242198681577c938871644673a2",
-          "bytes": 491688
+          "sha256": "b9f6cbf4a5ef9bc6b498bcbb1902ecd67cf025c92d0acc5c70f25c1509384cb1",
+          "bytes": 485802
         },
         {
           "source": "guide/screenshots/more-cells/03-stats-cell.png",
           "destination": "guide/screenshots/more-cells/03-stats-cell.png",
-          "sha256": "9b182eb3c52b078f1acb33cc5255cfc8a0def7eeee95a7b240a5c4ff98b35c3f",
-          "bytes": 493402
+          "sha256": "89a0bb2f7eafd61f014b4e6fefc52645d09403f63c196bd61e8e95b06e13596d",
+          "bytes": 485163
         },
         {
           "source": "guide/screenshots/more-cells/04-report-cell.png",
           "destination": "guide/screenshots/more-cells/04-report-cell.png",
-          "sha256": "2b91c21cf4164c7246587d246a9dbd9108775a74f6df31890caee396342e6239",
-          "bytes": 424858
+          "sha256": "b12396f22e1a1547722557de868e58ce89ae46cda50f124fe3d6b43aa34fa7f6",
+          "bytes": 414936
         },
         {
           "source": "guide/screenshots/more-cells/05-assertion-cell.png",
           "destination": "guide/screenshots/more-cells/05-assertion-cell.png",
-          "sha256": "31a7e262af96df5010b3c6568305fd99adcf5743d671bea0b1685e4a90115565",
-          "bytes": 467996
+          "sha256": "f40a48c88b6fffb4dc14600304ceb2921913f3b8a513c3837525f265e650aea5",
+          "bytes": 464048
         },
         {
           "source": "guide/screenshots/more-cells/06-cohort-cell.png",
           "destination": "guide/screenshots/more-cells/06-cohort-cell.png",
-          "sha256": "0bf526e0b64683ba4356593376d7c3ffc222b96c935bb3d923e0bcc5e5abef3c",
-          "bytes": 508246
+          "sha256": "317247db7d33e32427eb9653d15d23b0f3bae96fd1f7f2593896c11a8cd3e39c",
+          "bytes": 500400
         },
         {
           "source": "guide/screenshots/notebook/01-templates.png",
           "destination": "guide/screenshots/notebook/01-templates.png",
-          "sha256": "c0d044c458964e05884cfebb87614be0e2406a1ea7e6a521010f78ad373e2353",
-          "bytes": 451711
+          "sha256": "bfab5c6b19ecb5bfac3455b7b6bb9d61389b77e7f7569dfc1f88b7d3ff436abe",
+          "bytes": 460896
         },
         {
           "source": "guide/screenshots/notebook/02-sql-cell-result.png",
           "destination": "guide/screenshots/notebook/02-sql-cell-result.png",
-          "sha256": "efda0ccb59067ae7937f60700b03dedcae2f163e4f8877bdf1740a4563ca3988",
-          "bytes": 435298
+          "sha256": "139915d90d731ee8d16fb77f83219b0249458f737d91923a8c84b21168823bab",
+          "bytes": 423041
         },
         {
           "source": "guide/screenshots/notebook/03-chart-cell.png",
           "destination": "guide/screenshots/notebook/03-chart-cell.png",
-          "sha256": "d7bdab4d4dc35c981bfb5c55928ec1be5678809a6399d2a1e0124587dc473580",
-          "bytes": 448497
+          "sha256": "2b27b0a6235aa60007f78f34ab5db8d80e34044e87b5e0b6d5a48e56fc0e22d0",
+          "bytes": 436872
         },
         {
           "source": "guide/screenshots/notebook/04-add-cell-row.png",
           "destination": "guide/screenshots/notebook/04-add-cell-row.png",
-          "sha256": "38b5c16c56718fd6c0c33540c3124a6c685be5b7c4aaf96ebe7ea1717bfc997d",
-          "bytes": 429640
+          "sha256": "c337a042b400150d54170276259ac3425b124ca3723ff0e29ff20f504cd4e8a1",
+          "bytes": 428480
         },
         {
           "source": "guide/screenshots/notebook/05-excel-export.png",
           "destination": "guide/screenshots/notebook/05-excel-export.png",
-          "sha256": "38c2332a98d58f4db7451a46e51b23ac7a320a8220a2e54817fdc49b4f47ae0d",
-          "bytes": 453986
+          "sha256": "257d22b0cf4dfafcd3b736108c61b488fc9bcb68fd201ab77569259ef271c27d",
+          "bytes": 417843
+        },
+        {
+          "source": "guide/screenshots/notebook/06-facets-and-drill.png",
+          "destination": "guide/screenshots/notebook/06-facets-and-drill.png",
+          "sha256": "d6879768850ba9262c8aa255251c668a79255129e7a992cff76ae4367616e173",
+          "bytes": 443314
+        },
+        {
+          "source": "guide/screenshots/notebook/07-review-tray.png",
+          "destination": "guide/screenshots/notebook/07-review-tray.png",
+          "sha256": "f9a66da7c9f47813bf278dee7bfddcef8bd5bc89adc10f9ec80b325ddf385b9c",
+          "bytes": 474019
         },
         {
           "source": "guide/screenshots/reports/01-superstore-region-margin.png",
           "destination": "guide/screenshots/reports/01-superstore-region-margin.png",
-          "sha256": "4ab5447dd561a5878c48a908e8892a75cda834970cb692b7809ddb724ae8c4ab",
-          "bytes": 105779
+          "sha256": "150ed7f101bdb8812a83f5774067030dbda93230c5a4b4f20f26ffe70b335cc6",
+          "bytes": 112911
         },
         {
           "source": "guide/screenshots/reports/02-financial-segment-margin.png",
           "destination": "guide/screenshots/reports/02-financial-segment-margin.png",
-          "sha256": "3b5fc140bb1f97c3bedad1fc1d7ede9eba97840028aafc8eb26919b7425c6aa8",
-          "bytes": 123435
+          "sha256": "10d42d07fb037165feb1d32ba35bc2d560fea225c058e40e5abfb324268d4085",
+          "bytes": 131859
         },
         {
           "source": "guide/screenshots/reports/03-chinook-revenue-country.png",
           "destination": "guide/screenshots/reports/03-chinook-revenue-country.png",
-          "sha256": "72af3fd3ed8c07eba6e38d2bba929366d6493d049d7da47b5bca9ac189067dd6",
-          "bytes": 120611
+          "sha256": "c4bc6551f2f03b15f594e4029ae1f181b55ac8a7d6a39b1fb726f29d202b969f",
+          "bytes": 125676
         },
         {
           "source": "guide/screenshots/resolve/01-cluster-modal.png",
           "destination": "guide/screenshots/resolve/01-cluster-modal.png",
-          "sha256": "64c95c40f27d2d20014e202fb6a75dedae316f291e945ba31614266c0efd7318",
-          "bytes": 483476
+          "sha256": "0865250296f7bd1ff0b62616ed005011b2c37993ab099fe26804c7dc2cf2e7be",
+          "bytes": 456318
         },
         {
           "source": "guide/screenshots/resolve/02-semantic-panel.png",
           "destination": "guide/screenshots/resolve/02-semantic-panel.png",
-          "sha256": "0d632c1bbac3ee582dfa0fa7268a46db0221e822ae98f7abda7ed2ad16ce3b0b",
-          "bytes": 399074
+          "sha256": "28d22dcf2477906d06baee8bfc551fdc80d605447b6628e3a603fbaff596ebc4",
+          "bytes": 392068
         },
         {
           "source": "guide/screenshots/resolve/03-golden-table.png",
           "destination": "guide/screenshots/resolve/03-golden-table.png",
-          "sha256": "8725f3cbc202ff3e91da02a339e8988aa3c9abff03c1597af2b7d61f5f3f4d8c",
-          "bytes": 497708
+          "sha256": "b4ea039519de57a82ef49cdfec7a86aeda32aa33d886043c71f3f396ac33a746",
+          "bytes": 464196
+        },
+        {
+          "source": "guide/screenshots/resolve/04-outstanding-explorer.png",
+          "destination": "guide/screenshots/resolve/04-outstanding-explorer.png",
+          "sha256": "8bd4a708503fa1eb92520ffca82b9549c692efa5b8ceed42a02e67a04dd5a731",
+          "bytes": 528440
+        },
+        {
+          "source": "guide/screenshots/resolve/05-link-types-and-chains.png",
+          "destination": "guide/screenshots/resolve/05-link-types-and-chains.png",
+          "sha256": "bd338f1991f3112f213ab76d5d014f941d320508b7cf436173ca07fdf596b0b5",
+          "bytes": 563180
+        },
+        {
+          "source": "guide/screenshots/resolve/06-selection-explain.png",
+          "destination": "guide/screenshots/resolve/06-selection-explain.png",
+          "sha256": "6e54d7654318285aea34323312192e9768ee9c513a21625fcd30be26d04c9081",
+          "bytes": 439952
+        },
+        {
+          "source": "guide/screenshots/statistics/01-analysis-dialog.png",
+          "destination": "guide/screenshots/statistics/01-analysis-dialog.png",
+          "sha256": "10cdd119ead04aba7119ea1fac42a6111e585bc30499d4a4da5f8e64e4c6257d",
+          "bytes": 509542
+        },
+        {
+          "source": "guide/screenshots/statistics/02-dofile-cell.png",
+          "destination": "guide/screenshots/statistics/02-dofile-cell.png",
+          "sha256": "e79af74af81ad67307acdd2c4aa060d293a2fe825bdadbf27ab18a724f576196",
+          "bytes": 524150
         },
         {
           "source": "icon.svg",
@@ -1456,8 +1528,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "185db8af5825f1a3ac85fb4c98a8b1385d8b3dbfc8accdbdcbfa76c2c1384a05",
-          "bytes": 944138
+          "sha256": "f6e404ba0ec86b156670587b9254329ff263c37c90db8dcc70d8debe2bc551cd",
+          "bytes": 1019233,
+          "originalSourceSha256": "b100f2192410e6779ea91ddb47cfe0b6c5febde4b47a7366f0ac5dd038503b9e",
+          "sdkSha256": "52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d"
         },
         {
           "source": "manifest.webmanifest",
@@ -1466,10 +1540,64 @@
           "bytes": 438
         },
         {
+          "source": "opendta/integrity.json",
+          "destination": "opendta/integrity.json",
+          "sha256": "5236051db718d760d70712ce77d9d078cc32a8bc829fa9638af79b93fd77f1e1",
+          "bytes": 296
+        },
+        {
+          "source": "opendta/opendta.json",
+          "destination": "opendta/opendta.json",
+          "sha256": "cd0f3f61367505bd3b0b8684c35b1623aadbbe31ce2a0d809082ca1317bc0364",
+          "bytes": 4853832
+        },
+        {
+          "source": "opendta/opendta_bridge.py",
+          "destination": "opendta/opendta_bridge.py",
+          "sha256": "7ae7410e9eb1ae890d98a5f292b6329cf55a84cf5ae818870a7db6a2139e86a2",
+          "bytes": 18084
+        },
+        {
+          "source": "pyodide/contourpy-1.3.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/contourpy-1.3.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "f6ca0437a039c40691be53ff5bd3c9774868add8d5c2d032167495c6ff1f1c4b",
+          "bytes": 112207
+        },
+        {
+          "source": "pyodide/cycler-0.12.1-py3-none-any.whl",
+          "destination": "pyodide/cycler-0.12.1-py3-none-any.whl",
+          "sha256": "e33687b4269fe3eda13c2d38006f9a5daa602c95f5c4f8d0576aff0717d001a6",
+          "bytes": 8321
+        },
+        {
+          "source": "pyodide/fonttools-4.51.0-py3-none-any.whl",
+          "destination": "pyodide/fonttools-4.51.0-py3-none-any.whl",
+          "sha256": "0c9a46b9246333de02d0fe02c0580840d7136744121f256a870218ed7482b607",
+          "bytes": 1073094
+        },
+        {
           "source": "pyodide/integrity.json",
           "destination": "pyodide/integrity.json",
           "sha256": "d0864311c40adacbcb9ea822185dc10e01f8ad7b5ff565e92d8f01dd80726f5f",
           "bytes": 3337
+        },
+        {
+          "source": "pyodide/kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "d7652d88b3390d9d1d0175d6c79da675b42bac2cd748cc9b5766a3235da4b762",
+          "bytes": 35233
+        },
+        {
+          "source": "pyodide/matplotlib-3.8.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/matplotlib-3.8.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "50d4641b32e84ecb0a2c271728d4be73b1e0a0f5f29aa7dd6ea280f888b91340",
+          "bytes": 6714844
+        },
+        {
+          "source": "pyodide/matplotlib_pyodide-0.2.3-py3-none-any.whl",
+          "destination": "pyodide/matplotlib_pyodide-0.2.3-py3-none-any.whl",
+          "sha256": "070d6244e7ae44f8753d3a78cf5c30f93c8d781e620991af848dcfd44112839f",
+          "bytes": 26183
         },
         {
           "source": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
@@ -1478,10 +1606,34 @@
           "bytes": 3061133
         },
         {
+          "source": "pyodide/openblas-0.3.26.zip",
+          "destination": "pyodide/openblas-0.3.26.zip",
+          "sha256": "787ea9a8a5cd160204388d03324b3b7ce5c9aea14b5680cec987f837e76c5198",
+          "bytes": 6117592
+        },
+        {
+          "source": "pyodide/packaging-24.2-py3-none-any.whl",
+          "destination": "pyodide/packaging-24.2-py3-none-any.whl",
+          "sha256": "fbf6a5ace596eb8e28fe0089ecfc0bca2eb3930563e9ca06acb98ea5302b99f7",
+          "bytes": 71930
+        },
+        {
           "source": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
           "destination": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
           "sha256": "5502f0f94f93a482b851d0b8ca43be692c1b8d20215a168313656847ff74d63a",
           "bytes": 5707178
+        },
+        {
+          "source": "pyodide/patsy-0.5.6-py2.py3-none-any.whl",
+          "destination": "pyodide/patsy-0.5.6-py2.py3-none-any.whl",
+          "sha256": "e52b38b82b8e67a78d8f7b0e38a3a9a22ee16e029e853434e700e7acb617b67b",
+          "bytes": 121678
+        },
+        {
+          "source": "pyodide/pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "43eab147a9355385a99eeac18fb577d4af2fe4bd0bbd23d3ba3ddb92e72c2815",
+          "bytes": 987254
         },
         {
           "source": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
@@ -1520,6 +1672,12 @@
           "bytes": 2168
         },
         {
+          "source": "pyodide/pyparsing-3.1.2-py3-none-any.whl",
+          "destination": "pyodide/pyparsing-3.1.2-py3-none-any.whl",
+          "sha256": "9070866557845375d8180e9236021fdecb2b93be75a7c8de48841f1465133a60",
+          "bytes": 103246
+        },
+        {
           "source": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
           "destination": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
           "sha256": "02811ea3714f6697d639c07dc5ec63f5774dc7a688e4e1cbbe9beb2f33c3e6c9",
@@ -1538,10 +1696,58 @@
           "bytes": 505474
         },
         {
+          "source": "pyodide/scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "997c50a61564a8ce6a56ea98a42e7f4427e5eb98475a73233e83df6a184f415c",
+          "bytes": 13477451
+        },
+        {
           "source": "pyodide/six-1.16.0-py2.py3-none-any.whl",
           "destination": "pyodide/six-1.16.0-py2.py3-none-any.whl",
           "sha256": "f61235bc3a15086f0369585e5071ae9ba0bd244a111d12b37f683862e6850c0a",
           "bytes": 11053
+        },
+        {
+          "source": "pyodide/statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "b5d75ccdc68587cfbaaa4f5b48105dcb026b58d4d54723b7ac5bbd9a13972800",
+          "bytes": 4111969
+        },
+        {
+          "source": "readstat-wasm/LICENSE-ReadStat",
+          "destination": "readstat-wasm/LICENSE-ReadStat",
+          "sha256": "416b611ef9448b3c7c71f584b1ebf78baff8f553b4b5368f2af732255ca19a3e",
+          "bytes": 1091
+        },
+        {
+          "source": "readstat-wasm/index.d.mts",
+          "destination": "readstat-wasm/index.d.mts",
+          "sha256": "4f89e542dbaeea4493baaaeacb09b2a70435a7ec0a91b67bba58685df36b321f",
+          "bytes": 1679
+        },
+        {
+          "source": "readstat-wasm/index.d.ts",
+          "destination": "readstat-wasm/index.d.ts",
+          "sha256": "4f89e542dbaeea4493baaaeacb09b2a70435a7ec0a91b67bba58685df36b321f",
+          "bytes": 1679
+        },
+        {
+          "source": "readstat-wasm/index.mjs",
+          "destination": "readstat-wasm/index.mjs",
+          "sha256": "18b1c31f8d9f6b459388216162c63ee5927687c17a7ad809097685a922e79791",
+          "bytes": 4204
+        },
+        {
+          "source": "readstat-wasm/integrity.json",
+          "destination": "readstat-wasm/integrity.json",
+          "sha256": "c3c404f0b364782a1f7dfd42b80c44c85d6ff33a1a4b06d00de9507ec3349b8a",
+          "bytes": 574
+        },
+        {
+          "source": "readstat-wasm/readstat.mjs",
+          "destination": "readstat-wasm/readstat.mjs",
+          "sha256": "97c65a85b7277e5fd9ac01929722ca818ebcfa42786fc2f7112dd8704d1029ba",
+          "bytes": 60753
         },
         {
           "source": "readstat-wasm/readstat.wasm",
@@ -1594,8 +1800,8 @@
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "f1b3e226747c70319d776cca0401bcc92b07603bc5d0559f8ea2088b12b77e05",
-          "bytes": 14100
+          "sha256": "0ca9742177f1fd85c4b1133fa165488f3fa3266531f18b740019f829fe199c8b",
+          "bytes": 14127
         },
         {
           "source": "taxonomy.worker.js",
@@ -1922,6 +2128,240 @@
           "bytes": 1283
         },
         {
+          "source": "webr-repo/SOURCES.md",
+          "destination": "webr-repo/SOURCES.md",
+          "sha256": "312d80b94649ff7290601c38bee1cb8af8b94277ac483ff3d2be5177d73c7714",
+          "bytes": 7036
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Formula_1.2-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Formula_1.2-6.tgz",
+          "sha256": "2a09a7f9aea2da48c60f3bc1dd21b19d24eaa6312ae2fd5599e73ce670e16308",
+          "bytes": 65998
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/GPArotation_2026.8-2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/GPArotation_2026.8-2.tgz",
+          "sha256": "c16e8fd738d44f0d3c64acf236d51c99282c46cc600b4c55adcd0b333114ee18",
+          "bytes": 1750502
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/MASS_7.3-66.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/MASS_7.3-66.tgz",
+          "sha256": "2abe66de8f442fdc0cd221bdb0e774ea17f56ff963dc0275bcfcd2add27ee3b5",
+          "bytes": 873258
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Matrix_1.7-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Matrix_1.7-6.tgz",
+          "sha256": "a6caf93b993de359eab932fff8ac0c39d7e2f372b885458f0f98051a9be82237",
+          "bytes": 2934190
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES",
+          "sha256": "b71fa5c51bbb03859b284f2aa20105b76643e3146a6ad38fc4ee059193c87f7d",
+          "bytes": 11060
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES.gz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/PACKAGES.gz",
+          "sha256": "b23b8f9ad3ad8d6cc2231160609926eb0ef318b5d95531b540b3e81047eb8460",
+          "bytes": 3414
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/RcppEigen_0.3.4.0.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/RcppEigen_0.3.4.0.2.tgz",
+          "sha256": "1bd47af9b86ce34dd19630d3ac3288d677e1e56f725a0a459d906a4b675c46a1",
+          "bytes": 1857828
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Rcpp_1.1.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Rcpp_1.1.2.tgz",
+          "sha256": "87746dcb2b15bb70f944a9585287d5e2876fc7dcb120473d2cb27b9a2ed410b4",
+          "bytes": 2087828
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/Rdpack_2.6.6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/Rdpack_2.6.6.tgz",
+          "sha256": "98a070922d7ffc9036152a73f8a0e5feb0915105b3384eb6f777eb2235f7baf0",
+          "bytes": 525340
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/bdsmatrix_1.3-7.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/bdsmatrix_1.3-7.tgz",
+          "sha256": "2ad03d118361de87c01198c52509c016c5c420dd959b4d3a3e7bbd5c0fe06d52",
+          "bytes": 224212
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/boot_1.3-32.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/boot_1.3-32.tgz",
+          "sha256": "8ffe8cb4b051ae4d1d01753b25b84e0133cc2311bf68c42afe172e2482d851dd",
+          "bytes": 510819
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/collapse_2.1.8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/collapse_2.1.8.tgz",
+          "sha256": "1a74499a6f764fc039c8cb7abce363462eff86d4ada4d2464bc79ba11f5e61be",
+          "bytes": 2108868
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/digest_0.6.39.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/digest_0.6.39.tgz",
+          "sha256": "0531577e58efa9e61aeb4505c31766c53507d7bb59db9c4ce0ed2e7e9e862d07",
+          "bytes": 163663
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/dreamerr_1.5.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/dreamerr_1.5.0.tgz",
+          "sha256": "734f9b8893833d227336f07d63657e7a84393d519c2665b2d2f4dc8e4a3038da",
+          "bytes": 853346
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/fixest_0.14.2.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/fixest_0.14.2.tgz",
+          "sha256": "187b6896067d2b066847cd08f647114a36795f198fb60d8996197ff0fdacae7a",
+          "bytes": 5648195
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/generics_0.1.4.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/generics_0.1.4.tgz",
+          "sha256": "a9c7ca26beaef02a95fb0c971a9a1a5b8e09db3d99baf17796537d2bf9a396bc",
+          "bytes": 75687
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lattice_0.23-1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lattice_0.23-1.tgz",
+          "sha256": "b1f6c45be57330e13595bfeb87550c21e3b09d6ee2a58551c19911d345a72722",
+          "bytes": 1046940
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lavaan_0.7-3.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lavaan_0.7-3.tgz",
+          "sha256": "bd96d108ac57da4ea616cc6c4f0d9b0afebbcaf1a891a91bca95b159e2cdad30",
+          "bytes": 2440275
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lme4_2.0-6.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lme4_2.0-6.tgz",
+          "sha256": "b952a58300df9161b9ccc0d1cc42ee5a6365ffc565764140bf6ac682e8e857a1",
+          "bytes": 4985647
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/lmtest_0.9-40.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/lmtest_0.9-40.tgz",
+          "sha256": "ed0c0ff0caa1cab87b420102ea80cc515f35228c6e17d80ac515cbab8f62653e",
+          "bytes": 334286
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/maxLik_1.6-10.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/maxLik_1.6-10.tgz",
+          "sha256": "76db4bda1e122b3015dcfa27683015ca583ca76f55548880d570375135bba5e8",
+          "bytes": 1016784
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/minqa_1.2.8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/minqa_1.2.8.tgz",
+          "sha256": "717a589602cd8600369631ed65de78421b693df66ace2dc1af8ed99607ee4639",
+          "bytes": 85538
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/miscTools_0.6-30.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/miscTools_0.6-30.tgz",
+          "sha256": "f36a8454c1c301706504b998de6b038af0eac33e51b24606923a3b59c4174d96",
+          "bytes": 71601
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/mnormt_2.1.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/mnormt_2.1.1.tgz",
+          "sha256": "9b97007a9a397266dd66c3c2d53ca2985a6a0cb87bdbc041f6a148caf1e96842",
+          "bytes": 123156
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/nlme_3.1-171.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/nlme_3.1-171.tgz",
+          "sha256": "367d4c9dc2fcff190a7762b0db9a1b694dc3199258934c0be7071449079c552d",
+          "bytes": 1753155
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/nloptr_2.2.1.9000.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/nloptr_2.2.1.9000.tgz",
+          "sha256": "ff7eef53f2ae539a878b12b54ab06f01345b0313297284185c579d4fdb30efa3",
+          "bytes": 364263
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/numDeriv_2016.8-1.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/numDeriv_2016.8-1.1.tgz",
+          "sha256": "f5161c0658fcd60e45e70ffe83e2976b182128dcd5c9e4d0fb2a1466bf38a5c6",
+          "bytes": 103011
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/pbivnorm_0.6.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/pbivnorm_0.6.0.tgz",
+          "sha256": "05e4aa4d8bfe45b872d877b554ff2481373a771f4ccd8320051d42c7a7099877",
+          "bytes": 16936
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/plm_2.6-7.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/plm_2.6-7.tgz",
+          "sha256": "803364cc385d15e6b2bae8c58f68c318111e8b44f0527d2872216fcc496a4f14",
+          "bytes": 1449155
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/psych_2.6.9.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/psych_2.6.9.tgz",
+          "sha256": "086454f92febda2d911afc4b3f610c9d4cbd4b8617c81a8988694f363d72d5d2",
+          "bytes": 2132617
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/quadprog_1.5-8.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/quadprog_1.5-8.tgz",
+          "sha256": "083c85ecac583b8f287ca9b76bc559a1663f872d0cede3474c992e77c28a29b8",
+          "bytes": 28694
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/rbibutils_2.4.1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/rbibutils_2.4.1.tgz",
+          "sha256": "f9be998342d3075d87254c78c968a45ea018bbf9c7d7c9de8b57d4554f0f0143",
+          "bytes": 1070443
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/reformulas_0.4.4.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/reformulas_0.4.4.tgz",
+          "sha256": "aec634511cc48030c90777fa5f04a1cb879a65f73a09f5f0d799fb9d907412dc",
+          "bytes": 120851
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/sandwich_3.1-3.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/sandwich_3.1-3.tgz",
+          "sha256": "66d6f6797a6f7deea732ee7041ffe31c4e37151b5d960a92cbe803bfd1b88121",
+          "bytes": 1451297
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/stringmagic_1.3.0.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/stringmagic_1.3.0.tgz",
+          "sha256": "3057291b783db1b79937d0a4f03181648e356e3fd66c8782b120722ea7d80ca6",
+          "bytes": 3119134
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/survival_3.8-12.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/survival_3.8-12.tgz",
+          "sha256": "a1e35add8cb37a3e7096ffc7a3f4484b1a8a3d0c9d7b59947095837a09bf3935",
+          "bytes": 7297264
+        },
+        {
+          "source": "webr-repo/bin/emscripten/contrib/4.6/zoo_1.9-1.tgz",
+          "destination": "webr-repo/bin/emscripten/contrib/4.6/zoo_1.9-1.tgz",
+          "sha256": "c3dd43342691e817161b98de107c71b89b647af2a04d3b083f80c1c52bca949b",
+          "bytes": 814524
+        },
+        {
+          "source": "webr-repo/integrity.json",
+          "destination": "webr-repo/integrity.json",
+          "sha256": "89c6874cb81153c5d4adf321b4c399f18a3df5a1cadf0f9ba31989f0400834b8",
+          "bytes": 3607
+        },
+        {
           "source": "webr/LICENSE.md",
           "destination": "webr/LICENSE.md",
           "sha256": "0ac1bff20e1329e244669e318269e6b40f327aecc78c3f18376ac59e923dde23",
@@ -1962,6 +2402,12 @@
           "destination": "webr/vfs/etc/fonts/fonts.conf",
           "sha256": "a93efbf9eec83d72a463f1d52f54043a8afa6ae7cc05609deda73232525e7bc0",
           "bytes": 1089
+        },
+        {
+          "source": "webr/vfs/etc/ssl/cert.pem",
+          "destination": "webr/vfs/etc/ssl/cert.pem",
+          "sha256": "86a1f3366afac7c6f8ae9f3c779ac221129328c43f0ab2b8817eb2f362a5025c",
+          "bytes": 189462
         },
         {
           "source": "webr/vfs/usr/lib/R/doc.data.gz",

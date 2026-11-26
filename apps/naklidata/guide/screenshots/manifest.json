@@ -102,6 +102,24 @@
     "warnings": []
   },
   {
+    "section": "notebook",
+    "slug": "06-facets-and-drill",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "notebook",
+    "slug": "07-review-tray",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
     "section": "resolve",
     "slug": "01-cluster-modal",
     "backend": "browser",
@@ -129,8 +147,44 @@
     "warnings": []
   },
   {
+    "section": "resolve",
+    "slug": "04-outstanding-explorer",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "resolve",
+    "slug": "05-link-types-and-chains",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "resolve",
+    "slug": "06-selection-explain",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
     "section": "lineage",
     "slug": "01-lineage-panel",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "lineage",
+    "slug": "02-contracts-and-openlineage",
     "backend": "browser",
     "hero": false,
     "status": "ok",
@@ -145,10 +199,10 @@
     "status": "ok",
     "errors": 0,
     "warnings": [
-      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
-      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+      "[.WebGL-0x10c0058de00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x10c0058de00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x10c0058de00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x10c0058de00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
     ],
     "pixels": {
       "colored": 12203,
@@ -297,5 +351,26 @@
     "status": "ok",
     "errors": 0,
     "warnings": []
+  },
+  {
+    "section": "statistics",
+    "slug": "01-analysis-dialog",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "statistics",
+    "slug": "02-dofile-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 1,
+    "warnings": [
+      "LazyFiles on gzip forces download of the whole file when length is accessed",
+      "Warning message: \nURL http://127.0.0.1:53377/webr-repo/bin/emscripten/contrib/4.6/PACKAGES.rds: Download failed. See the Javascript console for further information"
+    ]
   }
 ]
