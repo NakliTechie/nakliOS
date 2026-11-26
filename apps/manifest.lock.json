@@ -8703,14 +8703,14 @@
       "id": "pellucia",
       "repo": "NakliTechie/pellucia",
       "requestedRef": "main",
-      "resolvedCommit": "06386fa213cb0dfd6868c83009bf02b821be8b61",
+      "resolvedCommit": "bd525ba431064b067b7e9548cf392c0aa3cec068",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "fdb521115bdc5d179b307082d216539c26f05a9784ffea9384ab96fcaaa11d88",
-          "bytes": 2507276,
-          "originalSourceSha256": "b69a71518d501a6a28019ec9fe602fbb190a8cd72fa5f85f70265abc4ecbd3b1",
+          "sha256": "c391b5abf93205681bd75185d87fac2ca7b45e7b70a52230ec001c97fc30845c",
+          "bytes": 2508809,
+          "originalSourceSha256": "e094164faea521e348ac61681036bcaf52fd13bfd9aa4b5af020085d982322e6",
           "sdkSha256": "52152ed70c3eadf8be3ab9799568b82a68357b0dfecb15c46b15c634e011800d"
         },
         {
