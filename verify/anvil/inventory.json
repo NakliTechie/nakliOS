@@ -429,7 +429,7 @@
     },
     "tool:app_command": {
       "owner": "tools-store.md",
-      "fingerprint": "0ad6cbafa571",
+      "fingerprint": "73ae4e56e085",
       "kind": "tool",
       "detail": "code code+gate"
     },
