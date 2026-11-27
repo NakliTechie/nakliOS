@@ -123,7 +123,7 @@
 <div class="wrap">
   <nav class="toc">
     <h2>Contents</h2>
-    <ul><li><a href="#getting-started">Getting started — bring your data in</a></li><li><a href="#data-and-schema">Your data &amp; the schema panel</a></li><li><a href="#notebook">The notebook — query, chart, build</a></li><li><a href="#reports">Reports from real datasets</a></li><li><a href="#resolve">Resolve — clean &amp; unify entities</a></li><li><a href="#lineage">Lineage &amp; provenance</a></li><li><a href="#facet">Facet — visual exploration</a></li><li><a href="#ai-sidecar">AI sidecar (bring your own key)</a></li><li><a href="#more-cells">The full cell palette</a></li></ul>
+    <ul><li><a href="#getting-started">Getting started — bring your data in</a></li><li><a href="#data-and-schema">Your data &amp; the schema panel</a></li><li><a href="#notebook">The notebook — query, chart, build</a></li><li><a href="#reports">Reports from real datasets</a></li><li><a href="#resolve">Resolve — clean &amp; unify entities</a></li><li><a href="#lineage">Lineage &amp; provenance</a></li><li><a href="#facet">Facet — visual exploration</a></li><li><a href="#ai-sidecar">AI sidecar (bring your own key)</a></li><li><a href="#more-cells">The full cell palette</a></li><li><a href="#statistics">Statistics &amp; Stata-compatible Do-files</a></li></ul>
   </nav>
 
   
@@ -222,6 +222,24 @@
             <p>Templates expand into real, editable SQL running in DuckDB-wasm. Here “Vendor concentration” sums taxable_amount per vendor; the result table renders inline directly below the query.</p>
           </figcaption>
         </figure>
+        <figure class="card" data-search="the notebook — query, chart, build facets, drill cells &amp; cell origin marks every generated cell carries an origin mark (template, builder, drill, link path, agent, ai sidecar). clicking facets on a sql result lists top values per column, and clicking a value, chart mark, or grouped source rows button inserts an un-run drill cell. notebook/06-facets-and-drill">
+          <a class="shot" href="screenshots/notebook/06-facets-and-drill.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/06-facets-and-drill.png" alt="Facets, drill cells &amp; cell origin marks">
+          </a>
+          <figcaption>
+            <h3>Facets, drill cells &amp; cell origin marks</h3>
+            <p>Every generated cell carries an origin mark (Template, Builder, Drill, Link path, Agent, AI sidecar). Clicking Facets on a SQL result lists top values per column, and clicking a value, chart mark, or grouped Source rows button inserts an un-run drill cell.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the notebook — query, chart, build proposals review tray &amp; generated-only filter when an agent proposes sql, cleaning steps, quality-check assertions, charts, semantic types, or excel exports, the notebook toolbar collects every pending proposal in one tray with read-only, table, and join fan-out checks. notebook/07-review-tray">
+          <a class="shot" href="screenshots/notebook/07-review-tray.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/07-review-tray.png" alt="Proposals review tray &amp; Generated-only filter">
+          </a>
+          <figcaption>
+            <h3>Proposals review tray &amp; Generated-only filter</h3>
+            <p>When an agent proposes SQL, cleaning steps, quality-check assertions, charts, semantic types, or Excel exports, the notebook toolbar collects every pending proposal in one tray with read-only, table, and join fan-out checks.</p>
+          </figcaption>
+        </figure>
         <figure class="card" data-search="the notebook — query, chart, build export to excel — fresh or template-led a result can become a fresh local workbook with a frozen header, named table, filters, and semantic formats. or choose a local .xlsx template, select one named table, inspect column differences, and explicitly proceed if renamed columns could affect structured formulas, charts, pivots, or slicers. notebook/05-excel-export">
           <a class="shot" href="screenshots/notebook/05-excel-export.png" target="_blank" rel="noopener">
             <img width="2800" height="1800" src="screenshots/notebook/05-excel-export.png" alt="Export to Excel — fresh or template-led">
@@ -240,13 +258,13 @@
             <p>Chart cells bind to a named SQL result and render locally. Pick the mark (bar/line/…) and the x / y shelves; the palette is NakliData’s Brickwork categorical colours.</p>
           </figcaption>
         </figure>
-        <figure class="card" data-search="the notebook — query, chart, build the add-cell palette every cell kind at a glance: sql, markdown, chart, pivot, map, embedding, cohort, assertion, input, dashboard, stats, and report. notebook/04-add-cell-row">
+        <figure class="card" data-search="the notebook — query, chart, build the add-cell palette every cell kind at a glance: sql, markdown, chart, pivot, map, embedding, network, temporal, distribution, cohort, assertion, input, dashboard, stats, python, r, do-file, analysis, and report. notebook/04-add-cell-row">
           <a class="shot" href="screenshots/notebook/04-add-cell-row.png" target="_blank" rel="noopener">
             <img width="2800" height="1800" src="screenshots/notebook/04-add-cell-row.png" alt="The add-cell palette">
           </a>
           <figcaption>
             <h3>The add-cell palette</h3>
-            <p>Every cell kind at a glance: SQL, Markdown, Chart, Pivot, Map, Embedding, Cohort, Assertion, Input, Dashboard, Stats, and Report.</p>
+            <p>Every cell kind at a glance: SQL, Markdown, Chart, Pivot, Map, Embedding, Network, Temporal, Distribution, Cohort, Assertion, Input, Dashboard, Stats, Python, R, Do-file, Analysis, and Report.</p>
           </figcaption>
         </figure></div>
       </section>
@@ -256,7 +274,7 @@
         <div class="cards">
         <figure class="card" data-search="reports from real datasets superstore (csv) — profit &amp; margin by region a superstore orders csv mounted as one table, then aggregated: sales, profit, and profit-margin % per region, worst margin last. the classic exec cut — revenue is not profit — straight out of a raw csv. reports/01-superstore-region-margin">
           <a class="shot" href="screenshots/reports/01-superstore-region-margin.png" target="_blank" rel="noopener">
-            <img width="1552" height="652" src="screenshots/reports/01-superstore-region-margin.png" alt="Superstore (CSV) — profit &amp; margin by region">
+            <img width="1552" height="738" src="screenshots/reports/01-superstore-region-margin.png" alt="Superstore (CSV) — profit &amp; margin by region">
           </a>
           <figcaption>
             <h3>Superstore (CSV) — profit &amp; margin by region</h3>
@@ -265,7 +283,7 @@
         </figure>
         <figure class="card" data-search="reports from real datasets financial sample (xlsx) — profit &amp; margin by segment microsoft’s financial sample workbook, parsed in-tab (sheetjs → the csv path). the same report shape over a spreadsheet: profit and margin by business segment, so a loss-making segment jumps out at a glance. reports/02-financial-segment-margin">
           <a class="shot" href="screenshots/reports/02-financial-segment-margin.png" target="_blank" rel="noopener">
-            <img width="1552" height="706" src="screenshots/reports/02-financial-segment-margin.png" alt="Financial Sample (XLSX) — profit &amp; margin by segment">
+            <img width="1552" height="804" src="screenshots/reports/02-financial-segment-margin.png" alt="Financial Sample (XLSX) — profit &amp; margin by segment">
           </a>
           <figcaption>
             <h3>Financial Sample (XLSX) — profit &amp; margin by segment</h3>
@@ -274,7 +292,7 @@
         </figure>
         <figure class="card" data-search="reports from real datasets chinook (sqlite) — revenue by country the canonical chinook sqlite database, read in-browser via sql.js (duckdb-wasm can’t open a registered sqlite file), then a revenue-by-country ranking over its invoice table. a whole .sqlite file becomes queryable tables — no server, no conversion. reports/03-chinook-revenue-country">
           <a class="shot" href="screenshots/reports/03-chinook-revenue-country.png" target="_blank" rel="noopener">
-            <img width="1552" height="868" src="screenshots/reports/03-chinook-revenue-country.png" alt="Chinook (SQLite) — revenue by country">
+            <img width="1552" height="906" src="screenshots/reports/03-chinook-revenue-country.png" alt="Chinook (SQLite) — revenue by country">
           </a>
           <figcaption>
             <h3>Chinook (SQLite) — revenue by country</h3>
@@ -312,19 +330,55 @@
             <h3>Golden-table export</h3>
             <p>Collapse a result to one row per canonical entity with survivorship rules (which value wins per column). Pick the entity key; the modal shows the GROUP BY survivorship SQL it will generate before you export.</p>
           </figcaption>
+        </figure>
+        <figure class="card" data-search="resolve — clean &amp; unify entities finance &amp; outstanding explorer a shared payment-status input control drives kpis, charts, detail tables, and reports together without mutating the underlying invoices or payments tables. resolve/04-outstanding-explorer">
+          <a class="shot" href="screenshots/resolve/04-outstanding-explorer.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/04-outstanding-explorer.png" alt="Finance &amp; Outstanding explorer">
+          </a>
+          <figcaption>
+            <h3>Finance &amp; Outstanding explorer</h3>
+            <p>A shared payment-status input control drives KPIs, charts, detail tables, and reports together without mutating the underlying invoices or payments tables.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="resolve — clean &amp; unify entities link types, multi-hop paths &amp; verified chains declare named links between tables, check exact cardinality in duckdb, plan fan-out-safe multi-hop queries (including named measures), and save reviewed plans as verified chains that go stale if tables or links change. resolve/05-link-types-and-chains">
+          <a class="shot" href="screenshots/resolve/05-link-types-and-chains.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/05-link-types-and-chains.png" alt="Link types, multi-hop paths &amp; verified chains">
+          </a>
+          <figcaption>
+            <h3>Link types, multi-hop paths &amp; verified chains</h3>
+            <p>Declare named links between tables, check exact cardinality in DuckDB, plan fan-out-safe multi-hop queries (including named measures), and save reviewed plans as verified chains that go stale if tables or links change.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="resolve — clean &amp; unify entities explain selection (distributional comparison) select values in any result table and click explain to rank every other column by total variation distance between selected rows and the rest — numbers and paired bars only, never generated prose. resolve/06-selection-explain">
+          <a class="shot" href="screenshots/resolve/06-selection-explain.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/06-selection-explain.png" alt="Explain selection (distributional comparison)">
+          </a>
+          <figcaption>
+            <h3>Explain selection (distributional comparison)</h3>
+            <p>Select values in any result table and click Explain to rank every other column by total variation distance between selected rows and the rest — numbers and paired bars only, never generated prose.</p>
+          </figcaption>
         </figure></div>
       </section>
       <section id="lineage" class="guide-section">
         <h2>Lineage &amp; provenance</h2>
-        <p class="section-intro">Every cell records where its data came from. The Lineage panel shows the source→cell graph — which mounted tables feed which cells — so you can trace any result back to the files it was built from.</p>
+        <p class="section-intro">Every cell records where its data came from. The Lineage panel shows the source→cell graph and exports OpenLineage 2.0 run events, while Data quality projects saved checks into Great Expectations, Soda, and dbt schemas.</p>
         <div class="cards">
-        <figure class="card" data-search="lineage &amp; provenance the lineage panel the provenance graph for the notebook: it shows which mounted sources (invoices, vendors, …) feed which cells, so any result is traceable back to its inputs. lineage/01-lineage-panel">
+        <figure class="card" data-search="lineage &amp; provenance the lineage panel &amp; openlineage export the provenance graph shows which mounted sources feed which cells and saves openlineage 2.0 complete run events with proven direct-projection column lineage. lineage/01-lineage-panel">
           <a class="shot" href="screenshots/lineage/01-lineage-panel.png" target="_blank" rel="noopener">
-            <img width="2800" height="1800" src="screenshots/lineage/01-lineage-panel.png" alt="The Lineage panel">
+            <img width="2800" height="1800" src="screenshots/lineage/01-lineage-panel.png" alt="The Lineage panel &amp; OpenLineage export">
           </a>
           <figcaption>
-            <h3>The Lineage panel</h3>
-            <p>The provenance graph for the notebook: it shows which mounted sources (invoices, vendors, …) feed which cells, so any result is traceable back to its inputs.</p>
+            <h3>The Lineage panel &amp; OpenLineage export</h3>
+            <p>The provenance graph shows which mounted sources feed which cells and saves OpenLineage 2.0 COMPLETE run events with proven direct-projection column lineage.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="lineage &amp; provenance data quality contracts — great expectations, soda &amp; dbt save reusable completeness, uniqueness, accepted-values, range, format, and referential checks as assertion cells, then project them to great expectations suites, sodacl checks, or dbt v2 schema files. lineage/02-contracts-and-openlineage">
+          <a class="shot" href="screenshots/lineage/02-contracts-and-openlineage.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/lineage/02-contracts-and-openlineage.png" alt="Data quality contracts — Great Expectations, Soda &amp; dbt">
+          </a>
+          <figcaption>
+            <h3>Data quality contracts — Great Expectations, Soda &amp; dbt</h3>
+            <p>Save reusable completeness, uniqueness, accepted-values, range, format, and referential checks as assertion cells, then project them to Great Expectations suites, SodaCL checks, or dbt v2 schema files.</p>
           </figcaption>
         </figure></div>
       </section>
@@ -469,6 +523,29 @@
           </figcaption>
         </figure></div>
       </section>
+      <section id="statistics" class="guide-section">
+        <h2>Statistics &amp; Stata-compatible Do-files</h2>
+        <p class="section-intro">Built-in statistical analyses write transparent R code over same-origin WebR and a 35-package CRAN statistics pack, while Do-file cells run Stata-shaped data prep on DuckDB, estimators in WebR, and Mata / extended Stata commands in OpenDTA on Pyodide.</p>
+        <div class="cards">
+        <figure class="card" data-search="statistics &amp; stata-compatible do-files statistical analysis dialog pick a welch or paired t-test, one-way anova, chi-square, linear or logistic regression, factor analysis, or cronbach’s alpha over a mounted table or sql result — it previews and inserts editable r code you run yourself. statistics/01-analysis-dialog">
+          <a class="shot" href="screenshots/statistics/01-analysis-dialog.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/statistics/01-analysis-dialog.png" alt="Statistical analysis dialog">
+          </a>
+          <figcaption>
+            <h3>Statistical analysis dialog</h3>
+            <p>Pick a Welch or paired t-test, one-way ANOVA, chi-square, linear or logistic regression, factor analysis, or Cronbach’s alpha over a mounted table or SQL result — it previews and inserts editable R code you run yourself.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="statistics &amp; stata-compatible do-files do-file cell (stata-compatible workflow) run stata-style data commands on duckdb, econometrics (regress, logit, probit, xtreg, ivregress, reghdfe) with robust/clustered standard errors in webr, and mata or extended commands in opendta on pyodide. statistics/02-dofile-cell">
+          <a class="shot" href="screenshots/statistics/02-dofile-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/statistics/02-dofile-cell.png" alt="Do-file cell (Stata-compatible workflow)">
+          </a>
+          <figcaption>
+            <h3>Do-file cell (Stata-compatible workflow)</h3>
+            <p>Run Stata-style data commands on DuckDB, econometrics (regress, logit, probit, xtreg, ivregress, reghdfe) with robust/clustered standard errors in WebR, and Mata or extended commands in OpenDTA on Pyodide.</p>
+          </figcaption>
+        </figure></div>
+      </section>
 
   <p id="nomatch">No features match that search.</p>
 
@@ -483,7 +560,7 @@
   </div>
 
   <footer class="foot">
-    <a href="../">Open NakliData</a> · 33 screens · generated from <code>guide/capture.mjs</code> + <code>guide/build.mjs</code> · this is a build artifact — edit the generator and re-run, don’t hand-edit this file.
+    <a href="../">Open NakliData</a> · 41 screens · generated from <code>guide/capture.mjs</code> + <code>guide/build.mjs</code> · this is a build artifact — edit the generator and re-run, don’t hand-edit this file.
   </footer>
 </div>
 
