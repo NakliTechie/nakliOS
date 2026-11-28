@@ -14,7 +14,9 @@ import { sha256Hex } from '../identity/crypto.mjs';
 // Grant (scope net:<host-glob>, tools ['net.fetch']); see plan/egress-transport-spec.md §6.
 // 'tex' is the shared TeX service: one event per compile, with the project path and outcome.
 // 'auth' is sign-in to outside accounts (sys/host/auth.mjs): app, provider, scopes and outcome, never a token.
-export const DOORS = Object.freeze(['ui', 'call', 'brief', 'net', 'tex', 'auth']);
+// 'ai' is inference disclosure metadata (model, provider, token counts, cost, never prompts).
+// 'fs' is filesystem audit metadata (op, path hash, backend, byte count, never file contents).
+export const DOORS = Object.freeze(['ui', 'call', 'brief', 'net', 'tex', 'auth', 'ai', 'fs']);
 
 // Canonical JSON (sorted keys) so a hash is stable across engines.
 function stable(v) {

@@ -63,6 +63,7 @@ prefix today.
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
+| `capabilities.experimental_orgManaged` | field | experimental | Two host rails enforce signed org policy in production and an app surfaces `EPOLICY` copy cleanly. | True when the host is enrolled in an organisation control plane; always false for individual users. |
 | `ready` | function | stable | — | Signal "loaded"; carries the feature flags this SDK build supports. |
 | `title` | function | stable | — | Set the host window title. |
 | `close` | function | stable | — | Ask the host to close this window. |

@@ -178,6 +178,9 @@
     net: false,
     netBackend: null,
     review: false,
+    // experimental_orgManaged: true when the host is enrolled in an organisation control plane
+    // (policy refusals carry error code EPOLICY). Always false for individual MIT users.
+    experimental_orgManaged: false,
   };
 
   // Request/reply correlation for fs RPCs

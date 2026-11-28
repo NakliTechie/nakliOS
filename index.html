@@ -6583,6 +6583,9 @@ function aiVaultWhen(iso){
 }
 
 function aiEndpointApiKey(baseUrl = aiSettings.endpoint.baseUrl){
+  if (typeof orgEnrollmentApiUrl === 'string' && orgEnrollmentApiUrl && typeof orgEnrollmentSeatToken === 'string' && orgEnrollmentSeatToken && String(baseUrl || '').startsWith(orgEnrollmentApiUrl)) {
+    return orgEnrollmentSeatToken;
+  }
   const credentialId = aiCredentialId(baseUrl);
   if (!credentialId) return '';
   const sessionKeys = aiReadCredentialStore(sessionStorage, AI_SESSION_KEY);
@@ -7805,7 +7808,7 @@ async function aiHostSubmit(source, msg, appId){
       const aiCheck = orgPolicyActive.checkAiRequest({
         runtime: model.runtime,
         modelId: model.modelId || model.key || null,
-        isOrgGateway: Boolean(orgEnrollmentApiUrl && model.runtime === 'endpoint' && String(state.ai?.endpointUrl || '').startsWith(orgEnrollmentApiUrl)),
+        isOrgGateway: Boolean(orgEnrollmentApiUrl && model.runtime === 'endpoint' && String(model.baseUrl || '').startsWith(orgEnrollmentApiUrl)),
       });
       if (!aiCheck.ok) throw Object.assign(new Error(aiCheck.reason), { code: aiCheck.code || 'EPOLICY' });
     }
@@ -15080,25 +15083,66 @@ async function hostDoor(){
     },
   });
 }
-// Organisation control-plane policy loader (Batch E): zero-network no-op unless enrolled in localStorage.
+// Organisation control-plane policy loader (Batch E): zero-network no-op unless enrolled or #enroll= link opened.
 let orgPolicyActive = null;
 let orgEnrollmentApiUrl = '';
+let orgEnrollmentSeatToken = '';
+let orgEntitlementMeta = null;
 async function refreshOrgPolicy(){
   try {
-    const raw = localStorage.getItem('nakliOS.orgEnrollment.v1');
-    if (!raw) { orgPolicyActive = null; orgEnrollmentApiUrl = ''; return; }
-    const [{ createEntitlementStore }, { createOrgPolicy }] = await Promise.all([
+    const hasHashEnroll = typeof location !== 'undefined' && /(?:#|&)enroll=/.test(location.hash || '');
+    const hasStored = !!localStorage.getItem('nakliOS.orgEnrollment.v1');
+    if (!hasHashEnroll && !hasStored) {
+      orgPolicyActive = null; orgEnrollmentApiUrl = ''; orgEnrollmentSeatToken = ''; orgEntitlementMeta = null;
+      return;
+    }
+    const [{ createEntitlementStore, parseEnrollHash }, { createOrgPolicy }] = await Promise.all([
       import('./sys/org/entitlements.mjs'),
       import('./sys/host/policy.mjs'),
     ]);
     const store = createEntitlementStore({ storage: localStorage });
-    orgEnrollmentApiUrl = store.getEnrollment()?.apiUrl || '';
+    if (hasHashEnroll) {
+      const fromHash = parseEnrollHash(location.hash);
+      if (fromHash) {
+        store.enroll(fromHash);
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+      }
+    }
+    const enr = store.getEnrollment();
+    orgEnrollmentApiUrl = enr?.apiUrl || '';
+    orgEnrollmentSeatToken = enr?.seatToken || '';
     const loaded = await store.load();
+    orgEntitlementMeta = loaded;
     orgPolicyActive = loaded.managed && loaded.entitlement ? createOrgPolicy(loaded.entitlement) : null;
-    if (orgPolicyActive?.managed && !orgPolicyActive.allowDoor()) stopDoor();
+    if (orgPolicyActive?.managed && loaded.entitlement) {
+      const aiPol = loaded.entitlement.rails?.ai;
+      if (aiPol && aiPol.unified_inference && (aiPol.mode === 'gateway_only' || (aiPol.mode === 'any' && !aiSettings.endpoint?.baseUrl))) {
+        aiSettings.modelKey = 'endpoint';
+        aiSettings.endpoint.baseUrl = orgEnrollmentApiUrl + '/v1';
+        if (Array.isArray(aiPol.allowed_models) && aiPol.allowed_models.length && !aiPol.allowed_models.includes(aiSettings.endpoint.model)) {
+          aiSettings.endpoint.model = aiPol.allowed_models[0];
+        }
+      }
+      if (!orgPolicyActive.allowDoor()) stopDoor();
+      void store.sendHeartbeat({ policyVersion: loaded.entitlement.policy_version });
+    }
     broadcastCapabilities();
   } catch (_) { /* unmanaged or offline without cache */ }
 }
+window.nakliOSOrg = {
+  status: () => ({ managed: Boolean(orgPolicyActive?.managed), orgId: orgPolicyActive?.orgId || null, seatId: orgPolicyActive?.seatId || null, policyVersion: orgPolicyActive?.policyVersion || 0, source: orgEntitlementMeta?.source || 'unmanaged' }),
+  async enroll(apiUrl, seatToken) {
+    const { createEntitlementStore } = await import('./sys/org/entitlements.mjs');
+    createEntitlementStore({ storage: localStorage }).enroll({ apiUrl, seatToken });
+    return refreshOrgPolicy();
+  },
+  async unenroll() {
+    const { createEntitlementStore } = await import('./sys/org/entitlements.mjs');
+    createEntitlementStore({ storage: localStorage }).unenroll();
+    return refreshOrgPolicy();
+  },
+  refresh: refreshOrgPolicy,
+};
 void refreshOrgPolicy();
 
 // Start and stop may interleave (a quick on-off-on); the generation makes a stale start drop its own connection.
