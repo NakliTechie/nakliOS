@@ -1,12 +1,12 @@
 {
-  "tag": "dsh-v0.2.2-rc.3",
-  "commit": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
-  "archiveSha256": "bf6d668e52a26edf98aa2ef7960e240c8d9afcefbad2b09887a2cb1e14001dd5",
+  "tag": "dsh-v0.2.2-rc.5",
+  "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+  "archiveSha256": "4e24e132a9fc267d5cdc5724525873db2575680e073fd2db4519b92553614215",
   "files": {
     "apps/web/product-isolation.ts": "ac0c91c4aea898a82315422ceb9fdc35b15da3c04686c8b523a5a95e855115c4",
     "apps/web/src/preview.ts": "6fb2d673b3e66b280d3e6f3d678e65545ccce02fd2672a5acdf8e4f3c3543c31",
     "apps/web/vite.config.ts": "e41b4bfe2d446abad967fa1cce50c340f628236c8a4c04105441ae7068fc5307",
-    "package.json": "23d0b7ff113a11437900ab0a3c55fcd86f6d62027f4ff3e1aeb5ae08bee8db9c",
+    "package.json": "1d36929c6e7613f31ba4c108483683d49b65f0c399a5c1dadb0ad08af68ccc42",
     "packages/experimental/webworker-packer/src/pack.ts": "78bafba8832d107b24ac35aecc32991f5497b5b4fbbc5b8fcfae812a05abcd83",
     "packages/experimental/webworker-packer/src/repository.ts": "0fe81855b63528ffe3eb604d9d0359dab562d00f89b780ce855daa9436ae5191",
     "packages/experimental/webworker-runtime/src/worker-host.ts": "f030fc671d03d32001f26d3dd6f31002017a86573a6a1ac2a526f30e5caabb87",

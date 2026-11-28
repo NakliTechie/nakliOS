@@ -356,8 +356,8 @@
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
-    searchProvider: naklios
     fetchProvider: naklios
+    searchProvider: naklios
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
